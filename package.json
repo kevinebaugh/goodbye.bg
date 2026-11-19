@@ -1,0 +1,20 @@
+{
+  "name": "goodbye.bg",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Background removal that runs in your browser. Your photos never upload.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/build.mjs && node scripts/serve.mjs",
+    "serve": "node scripts/serve.mjs",
+    "deploy": "node scripts/build.mjs && wrangler pages deploy dist --project-name goodbye-bg --branch main"
+  },
+  "devDependencies": {
+    "@imgly/background-removal-data": "1.4.5",
+    "fflate": "0.8.2",
+    "onnxruntime-web": "1.21.0",
+    "wrangler": "4.157.0"
+  }
+}

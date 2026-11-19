@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ad</title>
+<!--
+  This page loads inside a sandboxed iframe on index.html (no allow-same-origin).
+  It gets an opaque origin, so ad code here cannot read the main page, its canvases,
+  or the user's photos.
+
+  To turn ads on:
+  1. Paste the ad network's tag below (Carbon Ads or EthicalAds fit best: no tracking pixels).
+  2. Add the network's hosts to the /ad.html Content-Security-Policy in _headers.
+  3. Set ADS = true in app.js.
+-->
+<style>html,body{margin:0;background:transparent;font:13px system-ui,sans-serif}</style>
+</head>
+<body>
+<!-- ad tag goes here -->
+</body>
+</html>
