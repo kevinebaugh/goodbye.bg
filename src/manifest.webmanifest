@@ -1,0 +1,20 @@
+{
+  "name": "goodbye.bg",
+  "short_name": "goodbye.bg",
+  "description": "Say goodbye to the background. Runs on your device.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fbfaf7",
+  "theme_color": "#e0442b",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }],
+  "share_target": {
+    "action": "/share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": { "title": "title", "text": "text", "url": "url", "files": [{ "name": "images", "accept": ["image/*", ".heic", ".heif"] }] }
+  },
+  "file_handlers": [
+    { "action": "/", "accept": { "image/*": [".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif", ".bmp", ".svg", ".heic", ".heif"] } }
+  ]
+}

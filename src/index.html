@@ -3,45 +3,46 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>goodbye.bg — remove image backgrounds, privately</title>
-<meta name="description" content="Free background remover that runs in your browser. Your photos never upload. Full size, no account, no watermark.">
+<title>goodbye.bg — say goodbye to the background</title>
+<meta name="description" content="Free background remover that runs in your browser. Drop, paste, or link a photo. It never uploads. Full size, no account, no watermark.">
+<meta name="theme-color" content="#e0442b">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header class="top">
-  <a class="mark" href="./">goodbye<span>.bg</span></a>
-  <p class="promise">Runs on your device. Your photos never upload.</p>
+  <a class="mark" href="./">goodbye<span>.bg</span><i class="wave" aria-hidden="true">👋</i></a>
 </header>
 
 <main id="main">
-  <section class="drop" id="drop">
-    <h1>Drop a photo.<br>Lose the background.</h1>
-    <label class="big" for="file">Choose photos</label>
-    <p class="hint">Or drag them here, or paste with <kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>V</kbd>.</p>
-    <p class="fine">Free. Full size. No account. No watermark.</p>
-  </section>
-
-  <section class="work" id="work" hidden>
-    <div class="tools">
-      <div class="bgs" role="group" aria-label="Background">
-        <button type="button" class="chip clear" data-bg="" aria-pressed="true" title="Transparent"><span class="sr">Transparent</span></button>
-        <button type="button" class="chip white" data-bg="#ffffff" aria-pressed="false" title="White"><span class="sr">White</span></button>
-        <button type="button" class="chip black" data-bg="#000000" aria-pressed="false" title="Black"><span class="sr">Black</span></button>
-        <label class="chip pick" title="Pick a color"><span class="sr">Pick a color</span><input type="color" id="color" value="#2f6fde"></label>
-      </div>
-      <div class="acts">
-        <label class="btn" for="file">Add more</label>
-        <button type="button" class="btn" id="clear">Start over</button>
-        <button type="button" class="btn primary" id="all" hidden>Download all</button>
-      </div>
+  <section class="hero" id="hero">
+    <h1>Say goodbye<br>to the background.</h1>
+    <p class="sub">Drop, paste, or pick a photo. It never leaves your device.</p>
+    <div class="row">
+      <label class="big" for="file">Choose photos</label>
+      <button type="button" class="big ghost" id="paste" hidden>Paste</button>
     </div>
-    <div class="grid" id="grid"></div>
-    <p class="fine center">Press and hold a photo to see the original.</p>
+    <form class="link" id="linkform" autocomplete="off">
+      <input id="link" type="text" inputmode="url" placeholder="…or paste an image link" aria-label="Image link">
+      <button type="submit" class="go" aria-label="Get image">→</button>
+    </form>
   </section>
 
-  <input id="file" type="file" accept="image/*" multiple hidden>
+  <div class="tools" id="tools" hidden>
+    <label class="toggle"><input type="checkbox" id="white"> White background</label>
+    <span class="spacer"></span>
+    <button type="button" class="btn primary" id="all" hidden>Download all</button>
+  </div>
+  <div class="grid" id="grid"></div>
+
+  <input id="file" type="file" accept="image/*,.heic,.heif,.avif,.svg" multiple hidden>
 </main>
+
+<div class="dropzone" aria-hidden="true">
+  <span class="c tl"></span><span class="c tr"></span><span class="c bl"></span><span class="c br"></span>
+  <p>Let go!<small>We'll handle the goodbyes.</small></p>
+</div>
 
 <aside class="ad" id="ad" hidden>
   <span class="adlabel">Ad</span>
@@ -50,9 +51,8 @@
 </aside>
 
 <footer class="foot">
-  <p><strong>Privacy:</strong> your photos stay in this browser tab. We have no server that could receive them. We set no cookies and run no analytics. The ad sits in a sealed frame that cannot see your photos.</p>
-  <p id="status" class="status" aria-live="polite">Loading the model…</p>
-  <p><a href="https://github.com/kevinebaugh/goodbye.bg">Source code</a> · AGPL-3.0</p>
+  <p>Photos from your device stay in this tab. No uploads, no cookies, no analytics. If you paste a link, our server fetches that public image for you and keeps nothing.</p>
+  <p><span id="status" aria-live="polite">Warming up…</span> · <a href="https://github.com/kevinebaugh/goodbye.bg">Source</a> · No backgrounds were harmed. Well, a few.</p>
 </footer>
 
 <div class="toast" id="toast" role="status" hidden></div>

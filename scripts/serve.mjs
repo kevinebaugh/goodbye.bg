@@ -4,11 +4,12 @@ import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
+import { onRequestGet as fetchFn } from "../functions/api/fetch.js";
 
 const dist = new URL("../dist/", import.meta.url).pathname;
 const port = Number(process.env.PORT) || 8788;
 const types = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css",
-  ".json": "application/json", ".wasm": "application/wasm", ".svg": "image/svg+xml", ".bin": "application/octet-stream" };
+  ".json": "application/json", ".wasm": "application/wasm", ".svg": "image/svg+xml", ".bin": "application/octet-stream", ".webmanifest": "application/manifest+json" };
 
 // Parse Cloudflare Pages' _headers format: a path line, then indented "Name: value" lines.
 const rules = [];
@@ -21,6 +22,13 @@ const match = (pattern, path) => pattern.endsWith("*") ? path.startsWith(pattern
 
 createServer(async (req, res) => {
   const path = decodeURIComponent(new URL(req.url, "http://x").pathname);
+  // Run the Pages Function locally, same code as production.
+  if (path === "/api/fetch") {
+    const r = await fetchFn({ request: new Request(new URL(req.url, `http://localhost:${port}`), { headers: req.headers }) });
+    res.writeHead(r.status, Object.fromEntries(r.headers));
+    if (r.body) for await (const chunk of r.body) res.write(chunk);
+    res.end(); return;
+  }
   const file = normalize(join(dist, path.endsWith("/") ? path + "index.html" : path));
   if (!file.startsWith(dist)) { res.writeHead(403).end(); return; }
   try {
