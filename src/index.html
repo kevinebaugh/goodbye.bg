@@ -6,6 +6,23 @@
 <title>goodbye.bg — say goodbye to the background</title>
 <meta name="description" content="Free background remover that runs in your browser. Drop, paste, or link a photo. It never uploads. Full size, no account, no watermark.">
 <meta name="theme-color" content="#5b61d6">
+<link rel="canonical" href="%SITE%/">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "goodbye.bg",
+  "url": "%SITE%/",
+  "description": "Free background remover that runs in your browser. Photos never upload.",
+  "applicationCategory": "MultimediaApplication",
+  "operatingSystem": "Any",
+  "browserRequirements": "Requires a modern browser with WebAssembly",
+  "isAccessibleForFree": true,
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "featureList": ["Remove image background", "Transparent PNG", "White background", "Batch download as zip", "No upload"],
+  "license": "https://www.gnu.org/licenses/agpl-3.0.html"
+}
+</script>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <!-- Link previews (iMessage, Slack, social). Absolute URLs: switch to https://goodbye.bg once the domain is live. -->
@@ -65,7 +82,7 @@
 
 <footer class="foot">
   <p>Photos from your device stay in this tab. No uploads, no cookies, no analytics. If you paste a link, our server fetches that public image for you and keeps nothing.</p>
-  <p><a href="https://github.com/kevinebaugh/goodbye.bg">Source</a></p>
+  <p><a href="remove-bg-alternative/">remove.bg alternative</a> · <a href="how-to-remove-background/">How to</a> · <a href="https://github.com/kevinebaugh/goodbye.bg">Source</a></p>
 </footer>
 
 <div class="toast" id="toast" role="status" hidden></div>

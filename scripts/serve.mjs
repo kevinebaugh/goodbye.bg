@@ -9,7 +9,8 @@ import { onRequestGet as fetchFn } from "../functions/api/fetch.js";
 const dist = new URL("../dist/", import.meta.url).pathname;
 const port = Number(process.env.PORT) || 8788;
 const types = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css",
-  ".json": "application/json", ".wasm": "application/wasm", ".svg": "image/svg+xml", ".png": "image/png", ".bin": "application/octet-stream", ".webmanifest": "application/manifest+json" };
+  ".json": "application/json", ".wasm": "application/wasm", ".svg": "image/svg+xml", ".png": "image/png", ".bin": "application/octet-stream", ".webmanifest": "application/manifest+json",
+  ".txt": "text/plain; charset=utf-8", ".xml": "application/xml" };
 
 // Parse Cloudflare Pages' _headers format: a path line, then indented "Name: value" lines.
 const rules = [];
