@@ -74,7 +74,7 @@ this is a test, not a growth channel.
   `"remove.bg closing"`, `"sites like remove.bg"`, `"remove.bg replacement"`. No broad match, no
   Display or Performance Max (they burn a small budget on junk placements).
 - Negative keywords: `api`, `photoshop`, `download app`, `jobs`.
-- Final URL: the remove.bg alternative page from the SEO work, with `?ref=gads`.
+- Final URL: `https://goodbye.bg/remove-bg-alternative/?ref=gads` (until the domain is live: `https://goodbye-bg-git.pages.dev/remove-bg-alternative/?ref=gads`).
 - Skip Microsoft Ads at this budget; add it if Google clicks turn into repeat visits.
 - Start on 28 November, or the day goodbye.bg is live if that comes sooner. Run through December.
 
