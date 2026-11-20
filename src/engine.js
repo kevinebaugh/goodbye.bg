@@ -6,7 +6,8 @@
 const RT = "./rt/%ORT%/";            // versioned by the build, so upgrades never mix with cached files
 const MODEL = "./m/isnet/";
 const RES = 1024;
-let ort, session, failMode = "";
+let ort, session, failMode = "", debug = false;
+const dbg = (step, data = {}) => debug && postMessage({ type: "dbg", step, data });
 
 // Fetch a split file (Cloudflare Pages allows 25 MiB per file). Each part retries on its own.
 async function fetchParts(dir, progress) {
@@ -53,25 +54,27 @@ async function run(input, warmUp = false) {
 onmessage = async ({ data }) => {
   if (data.type === "init") {
     try {
-      failMode = data.ep === "webgpu" ? data.fail || "" : "";
+      failMode = data.ep === "webgpu" ? data.fail || "" : ""; debug = !!data.debug;
+      dbg("init", { ep: data.ep });
       ort = await import(RT + "ort.webgpu.min.mjs");
       ort.env.wasm.wasmPaths = new URL(RT, location.href).href;
       ort.env.wasm.wasmBinary = await fetchParts(RT + "wasm/");
       ort.env.wasm.numThreads = self.crossOriginIsolated ? Math.min(4, navigator.hardwareConcurrency || 2) : 1;
       let bytes = await fetchParts(MODEL, (f) => postMessage({ type: "progress", f }));
-      postMessage({ type: "loaded" });
+      postMessage({ type: "loaded" }); dbg("model-fetched");
       session = await ort.InferenceSession.create(bytes, { executionProviders: [data.ep], graphOptimizationLevel: "all" });
-      bytes = null; ort.env.wasm.wasmBinary = undefined; // the runtime has its own copies now; free ours (phones are tight)
+      dbg("session"); bytes = null; ort.env.wasm.wasmBinary = undefined; // the runtime has its own copies now; free ours (phones are tight)
       if (data.ep === "webgpu") {
         // Warm-up: compiles the shaders now instead of on the first photo, and proves the GPU works.
         if (failMode === "init") throw new Error("Forced GPU warm-up failure (?gpufail=init)");
         const probe = new Float32Array(3 * RES * RES);
         for (let i = 0; i < probe.length; i++) probe[i] = ((i % RES) / RES - 0.5) * 0.9;
-        const { ms } = await run(probe, true);
+        dbg("warmup"); const { ms } = await run(probe, true); dbg("warm", { ms });
         console.info(`goodbye.bg: GPU warm-up ${ms} ms`);
       }
       postMessage({ type: "ready" });
     } catch (e) {
+      dbg("init-failed", { error: String(e?.message || e).slice(0, 200) });
       postMessage({ type: "failed", error: String(e?.message || e) });
     }
   } else if (data.type === "run") {

@@ -48,6 +48,17 @@ const baseName = (s) => (s || "image").split(/[\\/?#]/).filter(Boolean).pop()?.r
    ?gpufail=init|run|hang simulates a broken GPU for testing. */
 
 const params = new URLSearchParams(location.search);
+
+// ?debug=1: report each step to /api/diag (server log only) to find where a phone crashes.
+// Step names and numbers only, never photo data. Off for everyone else.
+const DEBUG = params.has("debug"), dbgId = Math.random().toString(36).slice(2, 7);
+let dbgN = 0;
+function dbg(step, data = {}) {
+  if (!DEBUG) return;
+  const body = JSON.stringify({ id: dbgId, n: ++dbgN, t: Math.round(performance.now()), step, ...data });
+  navigator.sendBeacon?.("/api/diag", body) || fetch("/api/diag", { method: "POST", body, keepalive: true }).catch(() => {});
+}
+dbg("load", { ua: navigator.userAgent.slice(0, 160), dpr: devicePixelRatio, w: innerWidth, h: innerHeight, mem: navigator.deviceMemory, coi: self.crossOriginIsolated });
 const GPU_WARMUP_TIMEOUT = 30_000, GPU_RUN_TIMEOUT = 15_000; // longer counts as hung
 let worker = null, engineName = "", engineReady = null, gpuBroken = false, jobId = 0;
 const jobs = new Map();
@@ -79,7 +90,8 @@ function startEngine(name) {
     const fail = (e) => { clearTimeout(timer); reject(e instanceof Error ? e : new Error(String(e))); };
     w.onerror = (e) => { e.preventDefault?.(); fail(e.message || "Engine worker crashed"); for (const j of jobs.values()) j.reject(new Error("Engine worker crashed")); jobs.clear(); };
     w.onmessage = ({ data }) => {
-      if (data.type === "progress") status(`Downloading model: ${Math.floor(data.f * 10) * 10}%`);
+      if (data.type === "dbg") dbg("worker:" + data.step, data.data);
+      else if (data.type === "progress") status(`Downloading model: ${Math.floor(data.f * 10) * 10}%`);
       else if (data.type === "loaded") {
         status("Starting up…");
         if (name === "gpu") timer = setTimeout(() => fail("GPU warm-up timed out"), GPU_WARMUP_TIMEOUT);
@@ -91,7 +103,8 @@ function startEngine(name) {
         data.type === "result" ? j.resolve(data) : j.reject(new Error(data.error));
       }
     };
-    w.postMessage({ type: "init", ep: name === "gpu" ? "webgpu" : "wasm", fail: params.get("gpufail") });
+    dbg("engine-start", { name });
+    w.postMessage({ type: "init", ep: name === "gpu" ? "webgpu" : "wasm", fail: params.get("gpufail"), debug: DEBUG });
   });
 }
 
@@ -102,10 +115,10 @@ function loadModel() {
       try { await startEngine(name); }
       catch (e) {
         if (name !== "gpu") throw e;
-        console.warn("GPU engine failed to start, switching to CPU.", e);
+        console.warn("GPU engine failed to start, switching to CPU.", e); dbg("gpu-start-failed", { error: String(e?.message || e).slice(0, 200) });
         gpuBroken = true; await startEngine("cpu");
       }
-      status(`Ready.`);
+      status(`Ready.`); dbg("ready", { engine: engineName });
       console.info(`goodbye.bg: engine ${engineName}`);
     })();
     engineReady.catch(() => { engineReady = null; });
@@ -125,6 +138,7 @@ function infer(input) {
 
 async function segment(bitmap) {
   await loadModel();
+  dbg("segment", { w: bitmap.width, h: bitmap.height });
   const c = new OffscreenCanvas(RES, RES), x = c.getContext("2d");
   x.drawImage(bitmap, 0, 0, RES, RES);
   const px = x.getImageData(0, 0, RES, RES).data, n = RES * RES;
@@ -135,16 +149,17 @@ async function segment(bitmap) {
     input[i + 2 * n] = (px[i * 4 + 2] - 128) / 256;
   }
   let res;
+  dbg("infer");
   try { res = await infer(input); }
   catch (e) {
     if (engineName !== "gpu" || params.get("engine") === "gpu") throw e;
-    console.warn("GPU run failed, switching to CPU.", e);
+    console.warn("GPU run failed, switching to CPU.", e); dbg("gpu-run-failed", { error: String(e?.message || e).slice(0, 200) });
     gpuBroken = true; stopEngine("GPU failed");
     await loadModel();
     res = await infer(input);
   }
   const m = res.mask;
-  lastMs = res.ms;
+  lastMs = res.ms; dbg("inferred", { ms: res.ms });
   const id = new ImageData(RES, RES);
   for (let i = 0; i < n; i++) {
     const k = i * 4;
@@ -283,6 +298,7 @@ function reveal(it) {
 }
 
 function fullBlob(it) {
+  dbg("png", { w: it.w, h: it.h });
   const f = frame(it), full = render(it, it.w, it.h);
   if (f.w === it.w && f.h === it.h) return full.convertToBlob({ type: "image/png" });
   const out = new OffscreenCanvas(f.w, f.h);
@@ -314,8 +330,10 @@ async function addSources(list, origin = "") {
     try {
       const { blob, name } = await toBlob(src);
       it.name = baseName(name);
+      dbg("decode", { bytes: blob.size, type: blob.type });
       let bmp = await decode(blob);
       let { width: w, height: h } = bmp;
+      dbg("decoded", { w, h });
       if (Math.max(w, h) > MAX_SIDE || w * h > MAX_PIXELS) {
         const k = Math.min(MAX_SIDE / Math.max(w, h), Math.sqrt(MAX_PIXELS / (w * h)));
         w = Math.floor(w * k); h = Math.floor(h * k);
@@ -462,7 +480,8 @@ async function run() {
       clearInterval(it.quip);
       it.el.busy.hidden = true; it.el.dl.disabled = false; it.el.crop.hidden = !it.mask.box;
       it.el.up.hidden = it.el.down.hidden = false; it.ms = lastMs;
-      reveal(it); sync();
+      dbg("shown");
+      dbg("reveal"); reveal(it); sync();
       if (PHONE) png(it);
       it.el.card.dataset.ms = lastMs;
     }
