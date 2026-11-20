@@ -174,12 +174,12 @@ body.app.has-work .foot { padding: 8px 16px 10px; }
 /* Empty page: hero and footer stay together near the middle (main must not stretch here). */
 body.app:not(.has-work) main { flex: none; margin-top: auto; }
 
-/* Small cards (many photos on a phone): smaller controls, and no rating icons, so the image stays clear. */
+/* Small cards (many photos on a phone): smaller controls; the tiniest drop the rating icons. */
+@container (max-width: 150px) { .rates { display: none; } }
 .card { container-type: inline-size; }
 @container (max-width: 180px) {
   .bar { padding: 8px; }
   .bar .btn { font-size: 13px; padding: 7px 6px; min-width: 0; }
-  .rates { display: none; }
   .x, .crop { width: 24px; height: 24px; top: 6px; }
   .x { right: 6px; font-size: 14px; } .crop { left: 6px; }
   .crop svg { width: 13px; height: 13px; }
