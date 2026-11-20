@@ -106,6 +106,11 @@ body.hot .c { animation: squeeze .8s ease-in-out infinite alternate; }
 .foot { max-width: 520px; margin: 0 auto; padding: 24px 16px; font-size: 11.5px; line-height: 1.45; color: var(--muted); opacity: .7; text-align: center; display: grid; gap: 4px; }
 .foot a { color: inherit; }
 .foot p { margin: 0; }
+/* Empty page: the hero and footer sit together, a little above the middle, instead of the footer
+   hugging the bottom of a tall window. Once photos arrive, the grid takes the space. */
+body:not(.has-work) main { flex: none; margin-top: auto; }
+body:not(.has-work) .hero { margin-top: 0; }
+body:not(.has-work) .foot { margin: 56px auto auto; padding-bottom: max(24px, 8vh); }
 
 .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 12px; font-size: 15px; font-weight: 600; max-width: 90vw; z-index: 30; animation: pop .25s cubic-bezier(.2,1.4,.4,1); }
 
