@@ -32,7 +32,9 @@ function toast(msg, ms = 3500) {
   const t = $("toast"); t.textContent = msg; t.hidden = false;
   clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), ms);
 }
-function status(msg) { $("status").textContent = msg; }
+// Setup progress goes to the console only. People need to know when something fails, not how it is going.
+let lastStatus = "";
+function status(msg) { if (msg !== lastStatus) console.info(`goodbye.bg: ${(lastStatus = msg)}`); }
 const nextFrame = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
 const baseName = (s) => (s || "image").split(/[\\/?#]/).filter(Boolean).pop()?.replace(/\.[^.]+$/, "").slice(0, 80) || "image";
 
@@ -67,7 +69,7 @@ async function fetchModel(dir) {
           const { done, value } = await reader.read();
           if (done) break;
           chunks.push(value); partGot += value.length;
-          status(`Getting ready, one time only: ${Math.round(((got + partGot) / manifest.size) * 100)}%`);
+          status(`Downloading model: ${Math.floor(((got + partGot) / manifest.size) * 10) * 10}%`);
         }
         parts.push(...chunks); got += partGot;
         break;
@@ -109,7 +111,7 @@ async function loadModel() {
     status("Ready.");
     return session;
   })();
-  try { return await loading; } catch (e) { loading = null; status("Could not load. Reload the page to try again."); throw e; }
+  try { return await loading; } catch (e) { loading = null; throw e; }
 }
 
 async function segment(bitmap) {
@@ -410,7 +412,7 @@ $("all").addEventListener("click", async () => {
     files[name] = [new Uint8Array(await (await fullBlob(it)).arrayBuffer()), { level: 0 }];
   }
   save(`goodbye-bg-${done.length}-images.zip`, new Blob([zipSync(files)], { type: "application/zip" }));
-  toast("All yours. Backgrounds gone. 👋");
+  console.info("goodbye.bg: All yours. Backgrounds gone. 👋");
 });
 
 $("white").addEventListener("change", (e) => { white = e.target.checked; for (const it of items) if (it.bmp) drawCard(it); });
@@ -498,3 +500,4 @@ if (ADS) $("ad").hidden = false;
 
 // Start loading the model right away so the first photo is fast.
 loadModel().catch((e) => { console.error(e); toast("Could not load. Check your connection and reload.", 8000); });
+console.info("goodbye.bg: No backgrounds were harmed. Well, a few.");
