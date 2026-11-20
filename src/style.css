@@ -66,8 +66,6 @@ body.has-work .hero h1, body.has-work .sub { display: none; }
 
 .tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 24px 0 14px; }
 .spacer { flex: 1; }
-.toggle { display: inline-flex; gap: 8px; align-items: center; cursor: pointer; font-weight: 600; }
-.toggle input { accent-color: var(--accent); width: 18px; height: 18px; }
 .btn { border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 8px 16px; cursor: pointer; font-weight: 700; font-size: 15px; }
 .btn:hover { border-color: var(--ink); }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
@@ -76,7 +74,7 @@ body.has-work .hero h1, body.has-work .sub { display: none; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 16px; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; display: flex; flex-direction: column; animation: pop .35s cubic-bezier(.2,1.4,.4,1); }
 @keyframes pop { from { transform: scale(.92); opacity: 0; } }
-.pic { position: relative; aspect-ratio: 4 / 3; min-height: 0; overflow: hidden; display: grid; place-items: center; padding: 12px; cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none;
+.pic { position: relative; aspect-ratio: 4 / 3; min-height: 0; overflow: hidden; display: grid; place-items: center; padding: 12px; user-select: none; -webkit-user-select: none;
   background: repeating-conic-gradient(var(--check-a) 0 25%, var(--check-b) 0 50%) 0 0 / 16px 16px; }
 .pic canvas { max-width: 100%; max-height: 100%; display: block; }
 .busy { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 10px; padding: 16px; text-align: center;
@@ -85,7 +83,11 @@ body.has-work .hero h1, body.has-work .sub { display: none; }
 .failed .busy { color: var(--danger); font-weight: 600; }
 .failed .busy::before { content: "🙈"; animation: none; }
 .x { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; border-radius: 50%; border: 0; background: var(--ink); color: var(--paper); cursor: pointer; opacity: 0; transition: opacity .15s; font-size: 16px; line-height: 1; }
-.card:hover .x, .x:focus-visible { opacity: .85; }
+.crop { position: absolute; top: 8px; left: 8px; width: 28px; height: 28px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer;
+  background: var(--ink); color: var(--paper); opacity: 0; transition: opacity .15s, background .15s, color .15s; }
+.crop[aria-pressed="false"] { background: var(--card); color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--ink); }
+.card:hover .x, .x:focus-visible, .card:hover .crop, .crop:focus-visible { opacity: .85; }
+@media (hover: none) { .x, .crop { opacity: .85; } } /* phones: no hover, so always show them */
 .bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-top: 1px solid var(--line); }
 .name { font-size: 14px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 
@@ -141,3 +143,19 @@ body:not(.has-work) .foot { margin: 56px auto auto; padding-bottom: max(24px, 8v
 .page thead th { font-weight: 800; }
 .page tbody th { font-weight: 600; color: var(--muted); }
 .page td:nth-child(2) { font-weight: 600; }
+
+/* The app is one screen: no page scrolling and no touch gestures (no zoom, no pan). Taps still work.
+   The text pages (remove.bg alternative, how-to) scroll normally. */
+html:has(body.app) { height: 100%; overflow: hidden; }
+body.app { height: 100dvh; min-height: 0; overflow: hidden; }
+body.app, body.app * { touch-action: none; }
+body.app input { touch-action: manipulation; }
+body.app main { flex: 1; min-height: 0; display: flex; flex-direction: column; padding-bottom: 8px; }
+body.app.has-work .tools { padding: 12px 0 10px; }
+body.app.has-work .grid { flex: 1; min-height: 0; grid-template-columns: repeat(var(--cols, 1), var(--p, 300px));
+  grid-auto-rows: max-content; justify-content: center; align-content: center; gap: 12px; padding-top: 12px; }
+body.app.has-work .tools:not([hidden]) + .grid { padding-top: 0; }
+body.app .grid .pic { aspect-ratio: auto; height: var(--p, 300px); }
+body.app .grid.scroll { overflow-y: auto; align-content: start; }
+body.app .grid.scroll, body.app .grid.scroll * { touch-action: pan-y; }
+body.app.has-work .foot { padding: 8px 16px 10px; }

@@ -24,7 +24,6 @@ const QUIPS = [
 
 const $ = (id) => document.getElementById(id);
 const items = [];
-let white = false;
 let running = false, uid = 0, lastMs = 0;
 
 /* ---------- small helpers ---------- */
@@ -32,6 +31,7 @@ function toast(msg, ms = 3500) {
   const t = $("toast"); t.textContent = msg; t.hidden = false;
   clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), ms);
 }
+function hideToast() { clearTimeout(toast.t); $("toast").hidden = true; }
 // Setup progress goes to the console only. People need to know when something fails, not how it is going.
 let lastStatus = "";
 function status(msg) { if (msg !== lastStatus) console.info(`goodbye.bg: ${(lastStatus = msg)}`); }
@@ -152,13 +152,34 @@ async function segment(bitmap) {
   despeck(id);
   const mask = new OffscreenCanvas(RES, RES);
   mask.getContext("2d").putImageData(id, 0, 0);
+  mask.box = subjectBox(id);
   return mask;
+}
+
+// The subject's bounding box (mostly opaque pixels), as fractions of the image. null if nothing is left.
+function subjectBox(img) {
+  let x0 = RES, y0 = RES, x1 = -1, y1 = -1;
+  for (let y = 0; y < RES; y++) for (let x = 0; x < RES; x++) {
+    if (img.data[(y * RES + x) * 4 + 3] < 128) continue;
+    if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  return x1 < 0 ? null : { x0: x0 / RES, y0: y0 / RES, x1: (x1 + 1) / RES, y1: (y1 + 1) / RES };
+}
+
+// What a card shows and saves, in image pixels: the subject with a little room when cropped, else the whole photo.
+function frame(it) {
+  const b = it.mask?.box;
+  if (!it.crop || !b) return { x: 0, y: 0, w: it.w, h: it.h };
+  const pad = 0.04 * Math.max((b.x1 - b.x0) * it.w, (b.y1 - b.y0) * it.h);
+  const x0 = Math.max(0, Math.floor(b.x0 * it.w - pad)), y0 = Math.max(0, Math.floor(b.y0 * it.h - pad));
+  const x1 = Math.min(it.w, Math.ceil(b.x1 * it.w + pad)), y1 = Math.min(it.h, Math.ceil(b.y1 * it.h + pad));
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
 }
 
 // Remove small islands that are not part of the main subject.
 function despeck(img) {
   const n = RES * RES, d = img.data, lab = new Int32Array(n), stack = new Int32Array(n), sizes = [0];
-  const on = (i) => d[i * 4 + 3] >= 25;
+  const on = (i) => d[i * 4 + 3] >= 64; // faint pixels do not join islands to the subject
   for (let i = 0; i < n; i++) {
     if (lab[i] || !on(i)) continue;
     const L = sizes.length; let sp = 0, cnt = 0;
@@ -175,7 +196,7 @@ function despeck(img) {
   const big = Math.max(...sizes);
   for (let i = 0; i < n; i++) {
     const l = lab[i];
-    if ((l && sizes[l] < big * 0.015) || (!l && d[i * 4 + 3] > 0)) d[i * 4 + 3] = 0;
+    if ((l && sizes[l] < big * 0.015) || (!l && d[i * 4 + 3] < 25)) d[i * 4 + 3] = 0; // keep soft edges
   }
 }
 
@@ -199,31 +220,31 @@ function render(it, W, H) {
   for (let i = 3; i < id.data.length; i += 4) id.data[i] = LUT[a[i]];
   fx.putImageData(id, 0, 0);
 
-  if (!white) return fg;
-  const out = new OffscreenCanvas(W, H), ox = out.getContext("2d");
-  ox.fillStyle = "#fff"; ox.fillRect(0, 0, W, H); ox.drawImage(fg, 0, 0);
-  return out;
+  return fg;
 }
 
 function drawCard(it) {
-  const k = Math.min(1, PREVIEW_SIDE / Math.max(it.w, it.h));
-  const W = Math.max(1, Math.round(it.w * k)), H = Math.max(1, Math.round(it.h * k)), c = it.el.canvas;
+  const f = it.mask ? frame(it) : { x: 0, y: 0, w: it.w, h: it.h };
+  const k = Math.min(1, PREVIEW_SIDE / Math.max(f.w, f.h));
+  const W = Math.max(1, Math.round(f.w * k)), H = Math.max(1, Math.round(f.h * k)), c = it.el.canvas;
   c.width = W; c.height = H;
   const x = c.getContext("2d");
   x.clearRect(0, 0, W, H);
-  if (it.mask && !it.showOriginal) x.drawImage(render(it, W, H), 0, 0);
-  else x.drawImage(it.bmp, 0, 0, W, H);
+  if (!it.mask) return x.drawImage(it.bmp, 0, 0, W, H);
+  const full = render(it, Math.max(1, Math.round(it.w * k)), Math.max(1, Math.round(it.h * k)));
+  x.drawImage(full, f.x * k, f.y * k, f.w * k, f.h * k, 0, 0, W, H);
 }
 
-// The background waves goodbye: a quick diagonal wipe from original to cutout.
-// Purely visual. Download is already enabled, and it skips for reduced motion.
+// The background wipes away, then the view eases in to the crop.
 function reveal(it) {
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) return drawCard(it);
-  drawCard(it);
-  const c = it.el.canvas, x = c.getContext("2d"), W = c.width, H = c.height;
-  const cut = render(it, W, H), slant = H * 0.4, t0 = performance.now(), D = 450;
-  const step = (now) => {
-    if (it.showOriginal) return drawCard(it);
+  const c = it.el.canvas, x = c.getContext("2d");
+  const K = Math.min(1, PREVIEW_SIDE / Math.max(it.w, it.h)), W = Math.round(it.w * K), H = Math.round(it.h * K);
+  c.width = W; c.height = H;
+  const cut = render(it, W, H), slant = H * 0.4, D = 450, Z = 420, f = frame(it);
+  const zoom = f.w !== it.w || f.h !== it.h;
+  let t0 = performance.now();
+  const wipe = (now) => {
     const t = 1 - (1 - Math.min(1, (now - t0) / D)) ** 3, edge = t * (W + slant);
     x.clearRect(0, 0, W, H);
     x.drawImage(it.bmp, 0, 0, W, H);
@@ -231,12 +252,28 @@ function reveal(it) {
     x.beginPath(); x.moveTo(0, 0); x.lineTo(edge, 0); x.lineTo(edge - slant, H); x.lineTo(0, H); x.closePath(); x.clip();
     x.clearRect(0, 0, W, H); x.drawImage(cut, 0, 0);
     x.restore();
-    if (t < 1) requestAnimationFrame(step);
+    if (t < 1) requestAnimationFrame(wipe);
+    else if (zoom) { t0 = performance.now(); requestAnimationFrame(ease); }
+    else drawCard(it);
   };
-  requestAnimationFrame(step);
+  const ease = (now) => {
+    const t = 1 - (1 - Math.min(1, (now - t0) / Z)) ** 3, l = (a, b) => a + (b - a) * t;
+    const rx = l(0, f.x) * K, ry = l(0, f.y) * K, rw = l(it.w, f.w) * K, rh = l(it.h, f.h) * K;
+    const s = Math.min(PREVIEW_SIDE / Math.max(rw, rh), 4);
+    c.width = Math.max(1, Math.round(rw * s)); c.height = Math.max(1, Math.round(rh * s));
+    x.drawImage(cut, rx, ry, rw, rh, 0, 0, c.width, c.height);
+    if (t < 1) requestAnimationFrame(ease); else drawCard(it);
+  };
+  requestAnimationFrame(wipe);
 }
 
-const fullBlob = (it) => render(it, it.w, it.h).convertToBlob({ type: "image/png" });
+function fullBlob(it) {
+  const f = frame(it), full = render(it, it.w, it.h);
+  if (f.w === it.w && f.h === it.h) return full.convertToBlob({ type: "image/png" });
+  const out = new OffscreenCanvas(f.w, f.h);
+  out.getContext("2d").drawImage(full, f.x, f.y, f.w, f.h, 0, 0, f.w, f.h);
+  return out.convertToBlob({ type: "image/png" });
+}
 
 // Phones save through the share sheet ("Save Image" puts it in Photos) instead of downloading to Files.
 // The share sheet only opens straight from a tap, so phones make each PNG as soon as the cut is done.
@@ -253,7 +290,7 @@ async function addSources(list, origin = "") {
   if (!list.length) { toast("No image found there. Try a photo file, a copied image, or an image link."); return; }
   show();
   for (const src of list) {
-    const it = { id: ++uid, name: "image", bmp: null, w: 0, h: 0, mask: null, showOriginal: false };
+    const it = { id: ++uid, name: "image", bmp: null, w: 0, h: 0, mask: null, crop: true };
     items.push(it);
     $("grid").prepend(makeCard(it));
     it.name = baseName(src instanceof Blob ? src.name : String(src).startsWith("data:") ? "pasted" : String(src));
@@ -359,21 +396,24 @@ function makeCard(it) {
   busy.textContent = it.bmp ? QUIPS[line] : "Fetching…";
   it.quip = setInterval(() => { if (it.bmp && !it.failed) busy.textContent = QUIPS[++line % QUIPS.length]; }, 1600);
   const x = document.createElement("button"); x.type = "button"; x.className = "x"; x.textContent = "×"; x.setAttribute("aria-label", "Remove");
-  pic.append(canvas, busy, x);
+  const crop = document.createElement("button"); crop.type = "button"; crop.className = "crop"; crop.hidden = true;
+  crop.setAttribute("aria-label", "Crop to subject"); crop.setAttribute("aria-pressed", "true");
+  crop.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M2 6h14a2 2 0 0 1 2 2v14"/></svg>';
+  pic.append(canvas, busy, crop, x);
   const bar = document.createElement("div"); bar.className = "bar";
   const name = document.createElement("span"); name.className = "name"; name.textContent = "…";
   const dl = document.createElement("button"); dl.type = "button"; dl.className = "btn primary"; dl.textContent = PHONE ? "Save" : "Download"; dl.disabled = true;
   bar.append(name, dl);
   card.append(pic, bar);
 
-  const peek = (v) => { if (it.mask) { it.showOriginal = v; drawCard(it); } };
-  pic.addEventListener("pointerdown", (e) => { if (e.target === x) return; pic.setPointerCapture(e.pointerId); peek(true); });
-  for (const t of ["pointerup", "pointercancel", "pointerleave"]) pic.addEventListener(t, () => peek(false));
-  pic.addEventListener("contextmenu", (e) => e.preventDefault());
+  crop.addEventListener("click", () => {
+    it.crop = !it.crop; crop.setAttribute("aria-pressed", String(it.crop));
+    it.png = null; drawCard(it); if (PHONE) png(it);
+  });
   x.addEventListener("click", () => { clearInterval(it.quip); items.splice(items.indexOf(it), 1); card.remove(); sync(); });
   dl.addEventListener("click", async () => deliver([{ name: outName(it), blob: await png(it) }]));
 
-  it.el = { card, canvas, busy, dl, name };
+  it.el = { card, canvas, busy, dl, name, crop };
   return card;
 }
 
@@ -393,9 +433,10 @@ async function run() {
       await nextFrame();
       try { it.mask = await segment(it.bmp); }
       catch (e) { console.error(e); fail(it, "Could not process this image."); continue; }
+      if (!it.mask.box) { it.mask = null; fail(it, "No clear subject in this photo."); continue; }
       if (!items.includes(it)) continue;
       clearInterval(it.quip);
-      it.el.busy.hidden = true; it.el.dl.disabled = false;
+      it.el.busy.hidden = true; it.el.dl.disabled = false; it.el.crop.hidden = !it.mask.box;
       reveal(it); sync();
       if (PHONE) png(it);
       it.el.card.dataset.ms = lastMs;
@@ -405,12 +446,32 @@ async function run() {
 }
 
 function show() { document.body.classList.add("has-work"); }
+// Everything fits on one screen: cards are square and sized so they all fit the space left.
+// Only past a minimum size (dozens of photos on a phone) does the grid scroll.
+const GAP = 12, MIN_PIC = 96, MAX_PIC = 640;
+function layout() {
+  const g = $("grid"), n = g.children.length;
+  if (!n) return;
+  const bar = g.querySelector(".bar")?.offsetHeight || 52, W = g.clientWidth, H = g.clientHeight;
+  let best = { p: 0, c: 1 };
+  for (let c = 1; c <= n; c++) {
+    const r = Math.ceil(n / c), p = Math.floor(Math.min((W - GAP * (c - 1)) / c, (H - GAP * (r - 1)) / r - bar));
+    if (p > best.p) best = { p, c };
+  }
+  const scroll = best.p < MIN_PIC, p = Math.min(MAX_PIC, Math.max(best.p, MIN_PIC));
+  const c = scroll ? Math.max(1, Math.floor((W + GAP) / (p + GAP))) : best.c;
+  g.classList.toggle("scroll", scroll);
+  g.style.setProperty("--cols", c); g.style.setProperty("--p", `${p}px`);
+}
+new ResizeObserver(layout).observe($("grid"));
+
 function sync() {
   const done = items.filter((i) => i.mask).length;
   $("all").hidden = done < 2;
   $("all").textContent = `${PHONE ? "Save" : "Download"} all (${done})`;
-  $("tools").hidden = items.length === 0;
+  $("tools").hidden = done < 2;
   if (!items.length) document.body.classList.remove("has-work");
+  requestAnimationFrame(layout);
 }
 
 /* ---------- saving ---------- */
@@ -453,12 +514,8 @@ $("all").addEventListener("click", async () => {
     used.add(name);
     files[name] = [new Uint8Array(await (await fullBlob(it)).arrayBuffer()), { level: 0 }];
   }
+  hideToast();
   save(`goodbye-bg-${done.length}-images.zip`, new Blob([zipSync(files)], { type: "application/zip" }));
-});
-
-$("white").addEventListener("change", (e) => {
-  white = e.target.checked;
-  for (const it of items) { it.png = null; if (it.bmp) drawCard(it); if (PHONE && it.mask) png(it); }
 });
 
 // Never zoom. Safari ignores user-scalable=no, so stop its pinch gestures here (CSS stops double-tap zoom).
