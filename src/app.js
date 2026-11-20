@@ -13,6 +13,14 @@ const PREVIEW_SIDE = 900;    // card preview size
 const CUTOFF = 0.5, SOFTNESS = 0.6;
 const ADS = false;           // set true once ad.html holds a real ad tag
 
+const QUIPS = [
+  "Asking the background to leave…",
+  "Showing the backdrop the door…",
+  "Packing the background's bags…",
+  "It's not you, background. It's us.",
+  "Waving goodbye…",
+  "Cutting ties with the background…",
+];
 
 const $ = (id) => document.getElementById(id);
 const items = [];
@@ -216,6 +224,11 @@ function reveal(it) {
 }
 
 const fullBlob = (it) => render(it, it.w, it.h).convertToBlob({ type: "image/png" });
+
+// Phones save through the share sheet ("Save Image" puts it in Photos) instead of downloading to Files.
+// The share sheet only opens straight from a tap, so phones make each PNG as soon as the cut is done.
+const PHONE = matchMedia("(pointer: coarse)").matches && "canShare" in navigator;
+const png = (it) => (it.png ||= fullBlob(it));
 const outName = (it) => `${it.name}-goodbye-bg.png`;
 
 /* ---------- getting images in ----------
@@ -243,6 +256,7 @@ async function addSources(list, origin = "") {
         bmp = await createImageBitmap(bmp, { resizeWidth: w, resizeHeight: h, resizeQuality: "high" });
       }
       Object.assign(it, { bmp, w, h });
+      it.el.busy.textContent = QUIPS[Math.floor(Math.random() * QUIPS.length)];
       drawCard(it);
     } catch (e) {
       console.warn(e);
@@ -328,12 +342,14 @@ function makeCard(it) {
   const canvas = document.createElement("canvas");
   canvas.setAttribute("role", "img"); canvas.setAttribute("aria-label", "Image");
   const busy = document.createElement("div"); busy.className = "busy";
-  busy.setAttribute("role", "status"); busy.setAttribute("aria-label", "Working");
+  let line = Math.floor(Math.random() * QUIPS.length);
+  busy.textContent = it.bmp ? QUIPS[line] : "Fetching…";
+  it.quip = setInterval(() => { if (it.bmp && !it.failed) busy.textContent = QUIPS[++line % QUIPS.length]; }, 1600);
   const x = document.createElement("button"); x.type = "button"; x.className = "x"; x.textContent = "×"; x.setAttribute("aria-label", "Remove");
   pic.append(canvas, busy, x);
   const bar = document.createElement("div"); bar.className = "bar";
   const name = document.createElement("span"); name.className = "name"; name.textContent = "…";
-  const dl = document.createElement("button"); dl.type = "button"; dl.className = "btn primary"; dl.textContent = "Download"; dl.disabled = true;
+  const dl = document.createElement("button"); dl.type = "button"; dl.className = "btn primary"; dl.textContent = PHONE ? "Save" : "Download"; dl.disabled = true;
   bar.append(name, dl);
   card.append(pic, bar);
 
@@ -341,14 +357,15 @@ function makeCard(it) {
   pic.addEventListener("pointerdown", (e) => { if (e.target === x) return; pic.setPointerCapture(e.pointerId); peek(true); });
   for (const t of ["pointerup", "pointercancel", "pointerleave"]) pic.addEventListener(t, () => peek(false));
   pic.addEventListener("contextmenu", (e) => e.preventDefault());
-  x.addEventListener("click", () => { items.splice(items.indexOf(it), 1); card.remove(); sync(); });
-  dl.addEventListener("click", async () => save(outName(it), await fullBlob(it)));
+  x.addEventListener("click", () => { clearInterval(it.quip); items.splice(items.indexOf(it), 1); card.remove(); sync(); });
+  dl.addEventListener("click", async () => deliver([{ name: outName(it), blob: await png(it) }]));
 
   it.el = { card, canvas, busy, dl, name };
   return card;
 }
 
 function fail(it, msg) {
+  clearInterval(it.quip);
   it.failed = true;
   it.el.card.classList.add("failed");
   it.el.busy.textContent = msg;
@@ -364,8 +381,10 @@ async function run() {
       try { it.mask = await segment(it.bmp); }
       catch (e) { console.error(e); fail(it, "Could not process this image."); continue; }
       if (!items.includes(it)) continue;
+      clearInterval(it.quip);
       it.el.busy.hidden = true; it.el.dl.disabled = false;
       reveal(it); sync();
+      if (PHONE) png(it);
       it.el.card.dataset.ms = lastMs;
     }
   } finally { running = false; }
@@ -376,7 +395,7 @@ function show() { document.body.classList.add("has-work"); }
 function sync() {
   const done = items.filter((i) => i.mask).length;
   $("all").hidden = done < 2;
-  $("all").textContent = `Download all (${done})`;
+  $("all").textContent = `${PHONE ? "Save" : "Download"} all (${done})`;
   $("tools").hidden = items.length === 0;
   if (!items.length) document.body.classList.remove("has-work");
 }
@@ -389,8 +408,31 @@ function save(filename, blob) {
   setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
 }
 
+// Share sheet on phones when it can take these files; a normal download otherwise.
+async function share(files) {
+  if (!PHONE) return false;
+  const list = files.map((f) => new File([f.blob], f.name, { type: f.blob.type }));
+  if (!navigator.canShare({ files: list })) return false;
+  try { await navigator.share({ files: list }); }
+  catch (e) { if (e.name !== "AbortError") { console.warn("Share failed, downloading instead.", e); return false; } }
+  return true;
+}
+async function deliver(files) {
+  if (!(await share(files))) save(files[0].name, files[0].blob);
+}
+
 $("all").addEventListener("click", async () => {
   const done = items.filter((i) => i.mask), files = {}, used = new Set();
+  if (PHONE) {
+    const list = [];
+    for (const it of done) {
+      let name = outName(it);
+      for (let k = 2; used.has(name); k++) name = `${it.name}-goodbye-bg-${k}.png`;
+      used.add(name); list.push({ name, blob: await png(it) });
+    }
+    if (await share(list)) return;
+    used.clear();
+  }
   for (const [n, it] of done.entries()) {
     toast(`Preparing ${n + 1} of ${done.length}…`, 60_000);
     let name = outName(it);
@@ -401,7 +443,14 @@ $("all").addEventListener("click", async () => {
   save(`goodbye-bg-${done.length}-images.zip`, new Blob([zipSync(files)], { type: "application/zip" }));
 });
 
-$("white").addEventListener("change", (e) => { white = e.target.checked; for (const it of items) if (it.bmp) drawCard(it); });
+$("white").addEventListener("change", (e) => {
+  white = e.target.checked;
+  for (const it of items) { it.png = null; if (it.bmp) drawCard(it); if (PHONE && it.mask) png(it); }
+});
+
+// Never zoom. Safari ignores user-scalable=no, so stop its pinch gestures here (CSS stops double-tap zoom).
+for (const t of ["gesturestart", "gesturechange"]) document.addEventListener(t, (e) => e.preventDefault(), { passive: false });
+document.addEventListener("touchmove", (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
 
 /* ---------- ways in ---------- */
 
@@ -420,8 +469,9 @@ addEventListener("paste", async (e) => {
 });
 
 // 3. Paste button, for phones and tablets with no keyboard.
-if (navigator.clipboard?.read) {
-  $("paste").hidden = false;
+// Shown from the start so the buttons don't shift on load; hidden only where it can't work.
+if (!navigator.clipboard?.read) $("paste").hidden = true;
+else {
   $("paste").addEventListener("click", async () => {
     try {
       const out = [];

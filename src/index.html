@@ -2,11 +2,24 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>goodbye.bg — say goodbye to the background</title>
 <meta name="description" content="Free background remover that runs in your browser. Drop, paste, or link a photo. It never uploads. Full size, no account, no watermark.">
 <meta name="theme-color" content="#5b61d6">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<!-- Link previews (iMessage, Slack, social). Absolute URLs: switch to https://goodbye.bg once the domain is live. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="goodbye.bg">
+<meta property="og:url" content="https://goodbye-bg-git.pages.dev/">
+<meta property="og:title" content="Say goodbye to the background">
+<meta property="og:description" content="Free background remover that runs in your browser. Photos never leave your device. No account, no watermark.">
+<meta property="og:image" content="https://goodbye-bg-git.pages.dev/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="goodbye.bg: Say goodbye to the background.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="apple-mobile-web-app-title" content="goodbye.bg">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -21,7 +34,7 @@
     <p class="sub">Drop, paste, or pick a photo. It never leaves your device.</p>
     <div class="row">
       <label class="big" for="file">Choose photos</label>
-      <button type="button" class="big ghost" id="paste" hidden>Paste</button>
+      <button type="button" class="big ghost" id="paste">Paste</button>
     </div>
     <form class="link" id="linkform" autocomplete="off">
       <input id="link" type="text" inputmode="url" placeholder="…or paste an image link" aria-label="Image link">
