@@ -12,6 +12,14 @@ const PART = 20 * 1024 * 1024; // Cloudflare Pages allows 25 MiB per file
 rmSync(dist, { recursive: true, force: true });
 cpSync(join(root, "src"), dist, { recursive: true });
 
+// Public origin for canonical links, the sitemap and structured data. Switch to https://goodbye.bg
+// once the domain resolves (and 301 pages.dev to it; see docs/seo.md).
+const SITE = process.env.SITE || "https://goodbye-bg-git.pages.dev";
+for (const f of ["index.html", "robots.txt", "sitemap.xml", "remove-bg-alternative/index.html", "how-to-remove-background/index.html"]) {
+  const p = join(dist, f);
+  writeFileSync(p, readFileSync(p, "utf8").replaceAll("%SITE%", SITE));
+}
+
 // ONNX Runtime Web (MIT): WebGPU build. It also runs on the CPU through WebAssembly.
 mkdirSync(join(dist, "ort"));
 for (const f of ["ort.webgpu.min.mjs", "ort-wasm-simd-threaded.jsep.mjs", "ort-wasm-simd-threaded.jsep.wasm"]) {

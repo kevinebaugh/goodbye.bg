@@ -13,6 +13,12 @@
 /index.html
   Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; worker-src 'self' blob:; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
 
+# Text pages: no scripts at all.
+/remove-bg-alternative/
+  Content-Security-Policy: default-src 'self'; script-src 'none'; style-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+/how-to-remove-background/
+  Content-Security-Policy: default-src 'self'; script-src 'none'; style-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+
 # The ad frame. Add the ad network's hosts here when you turn ads on.
 /ad.html
   Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'self'

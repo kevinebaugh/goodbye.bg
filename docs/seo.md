@@ -1,0 +1,88 @@
+# SEO plan
+
+Goal: rank above remove.bg for "remove image background" and close variants. remove.bg shuts down on
+1 December 2026, so its traffic is up for grabs and searchers will look for a replacement. The window is
+now through early 2027.
+
+Status: items marked **done** are on `main` (see `src/robots.txt`, `src/sitemap.xml`, the JSON-LD in
+`src/index.html`, and the pages under `src/remove-bg-alternative/` and `src/how-to-remove-background/`).
+
+## 1. Keywords, in priority order
+
+| Keyword | Target page | Why |
+|---|---|---|
+| remove.bg alternative, remove.bg shutting down, remove.bg replacement | `/remove-bg-alternative/` | Low competition, high intent, rising fast until and after 1 Dec 2026. Easiest win. |
+| remove image background, remove background from image, background remover | `/` | The big head terms. Ranks only with links and time; the app page itself must carry them. |
+| transparent background, make background transparent, transparent PNG | `/how-to-remove-background/` and `/` | Same job, different words. |
+| remove background free, no upload, private, offline, no watermark | `/` | Our real differences. Low volume, high conversion. |
+| remove background from photo on iPhone / Android | `/how-to-remove-background/` | Long tail, later its own pages if it shows up in Search Console. |
+
+## 2. App page title and description (not applied yet)
+
+The `<title>` and `<meta name="description">` in `src/index.html` sit next to the share tags, so they were
+left for whoever owns that file. Recommended:
+
+- Title (under 60 chars): `Remove Image Background Free, Private – goodbye.bg`
+- Description (under 155 chars): `Remove the background from any image for free. Runs in your browser, so photos never upload. Full size, transparent PNG, no account, no watermark.`
+- Keep the visible H1 "Say goodbye to the background." It already contains "background"; the title does the keyword work.
+
+## 3. Content that can win
+
+1. **done** `/remove-bg-alternative/`: "remove.bg shuts down 1 December 2026, here is a free private alternative",
+   a short comparison table, and a visible FAQ. Linked from the app footer.
+2. **done** `/how-to-remove-background/`: three steps, transparent vs white, what works well and what doesn't.
+3. Later, only if Search Console shows the queries: `/transparent-background/`, `/remove-background-iphone/`,
+   `/remove-background-android/`. Each needs real, distinct content. Thin near-duplicates hurt.
+4. Update the alternative page on 1 December 2026 ("remove.bg has shut down") and set `dateModified`.
+
+## 4. Technical
+
+- **done** `robots.txt`: allow all, disallow `/api/` and `/m/` (model files), point to the sitemap.
+- **done** `sitemap.xml` with the three pages.
+- **done** Canonical link on every page, absolute, trailing slash.
+- **done** JSON-LD: `WebApplication` on `/` (free offer, no ratings: never invent `aggregateRating`),
+  `FAQPage` on the alternative page where the same questions are visible. Since 2023 Google shows FAQ rich
+  results only for government and health sites, so this helps understanding, not snippets.
+- **done** Strict CSP on the new pages (no scripts at all).
+- **Site origin lives in one place**: `SITE` in `scripts/build.mjs` fills `%SITE%` in the files above. It
+  is `https://goodbye-bg-git.pages.dev` until goodbye.bg resolves. When the domain is live:
+  1. Change `SITE` to `https://goodbye.bg`, and change the hard-coded `og:url` and `og:image` in
+     `src/index.html` to match. Push.
+  2. 301 every `goodbye-bg-git.pages.dev` path to the same path on goodbye.bg (a Cloudflare Bulk Redirect,
+     or a `functions/_middleware.js` host check). Without it the two hosts split ranking.
+  3. Add goodbye.bg to Google Search Console (DNS verification, no tag on the page) and Bing Webmaster Tools,
+     submit the sitemap, and use the Change of Address tool if pages.dev was verified there first.
+- Preview deployments (`<branch>.goodbye-bg-git.pages.dev`) must stay out of the index. Cloudflare adds
+  `X-Robots-Tag: noindex` to them; check with `curl -I` after each new branch.
+- **Core Web Vitals.** The page itself is tiny and has no third-party code, so LCP and CLS are fine. The
+  risk is the 88 MB model: `app.js` starts loading it at page load, which competes with first paint and
+  costs mobile data for visitors who only read. Start the download on first interaction (pointer over or
+  focus on "Choose photos", paste, drop) or after `requestIdleCallback`, and keep the result fast for the
+  first photo. Measure with PageSpeed Insights on mobile after the change.
+- Later: `hreflang` only if the page gets translated. Not before.
+
+## 5. Off-site (where most of the ranking comes from)
+
+In order:
+
+1. **Directories and lists of remove.bg alternatives.** Search "remove.bg alternative", "remove.bg shutting
+   down", "free background remover" and ask the authors of the top 20 articles to add goodbye.bg. Lead with
+   the angle: free, full size, no upload, open source.
+2. **Hacker News** "Show HN: goodbye.bg, a background remover that runs in your browser". Post on a weekday
+   morning US time, close to the shutdown news. Link the source.
+3. **Product Hunt** launch the same week. Have screenshots and a 20 s clip ready.
+4. **Reddit**: r/InternetIsBeautiful, r/webdev, r/photography, r/graphic_design, threads asking what to use
+   after remove.bg. Answer the question; don't spam.
+5. **Open source listings**: GitHub topics (`background-removal`, `onnx`, `webgpu`), awesome lists
+   (awesome-privacy, awesome-selfhosted style lists, awesome-webgpu), AlternativeTo (as an alternative to
+   remove.bg), Privacy Guides forum, "privacy-friendly tools" lists.
+6. **Tool directories**: There's An AI For That, Futurepedia, SaaSHub, Toolify. Free, quick, nofollow mostly,
+   but they bring traffic and get scraped into other lists.
+7. A short technical write-up ("running a background remover entirely in the browser with ONNX Runtime
+   Web") on a dev blog or dev.to. These earn real links from developers.
+
+## 6. Measure
+
+- Search Console: impressions and position for the keywords above, weekly. No analytics on the site; Search
+  Console needs none.
+- Re-check the SERP for "remove image background" and "remove.bg alternative" in a private window monthly.
