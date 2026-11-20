@@ -55,10 +55,6 @@ main { flex: 1; width: 100%; max-width: 1100px; margin: 0 auto; padding: 0 24px 
 .big { background: var(--accent); color: var(--accent-ink); border: 2px solid var(--accent); font-weight: 700; font-size: 18px; padding: 12px 28px; border-radius: 999px; cursor: pointer; transition: transform .15s; }
 .big:hover { transform: translateY(-2px) rotate(-1deg); }
 .big.ghost { background: transparent; color: var(--ink); }
-.link { display: flex; width: min(100%, 420px); border: 1px solid var(--line); border-radius: 999px; background: var(--card); padding: 4px 4px 4px 16px; }
-.link input { flex: 1; border: 0; background: none; min-width: 0; outline: none; font: inherit; font-size: 16px; color: inherit; } /* 16px stops iOS zooming on focus */
-.link:focus-within { border-color: var(--accent); }
-.go { border: 0; background: var(--ink); color: var(--paper); border-radius: 999px; width: 36px; height: 36px; cursor: pointer; font-weight: 700; }
 
 /* Once photos arrive, the hero steps aside. */
 body.has-work .hero { margin-top: 0; gap: 12px; }
@@ -88,8 +84,8 @@ body.has-work .hero h1, body.has-work .sub { display: none; }
 .crop[aria-pressed="false"] { background: var(--card); color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--ink); }
 .card:hover .x, .x:focus-visible, .card:hover .crop, .crop:focus-visible { opacity: .85; }
 @media (hover: none) { .x, .crop { opacity: .85; } } /* phones: no hover, so always show them */
-.bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-top: 1px solid var(--line); }
-.name { font-size: 14px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.bar { display: flex; padding: 10px 12px; border-top: 1px solid var(--line); }
+.bar .btn { flex: 1; }
 
 /* Full-window drop target with corner brackets. */
 .dropzone { position: fixed; inset: 0; z-index: 20; display: none; place-items: center; pointer-events: none;
@@ -149,7 +145,6 @@ body:not(.has-work) .foot { margin: 56px auto auto; padding-bottom: max(24px, 8v
 html:has(body.app) { height: 100%; overflow: hidden; }
 body.app { height: 100dvh; min-height: 0; overflow: hidden; }
 body.app, body.app * { touch-action: none; }
-body.app input { touch-action: manipulation; }
 body.app main { flex: 1; min-height: 0; display: flex; flex-direction: column; padding-bottom: 8px; }
 body.app.has-work .tools { padding: 12px 0 10px; }
 body.app.has-work .grid { flex: 1; min-height: 0; grid-template-columns: repeat(var(--cols, 1), var(--p, 300px));
@@ -159,3 +154,5 @@ body.app .grid .pic { aspect-ratio: auto; height: var(--p, 300px); }
 body.app .grid.scroll { overflow-y: auto; align-content: start; }
 body.app .grid.scroll, body.app .grid.scroll * { touch-action: pan-y; }
 body.app.has-work .foot { padding: 8px 16px 10px; }
+/* Empty page: hero and footer stay together near the middle (main must not stretch here). */
+body.app:not(.has-work) main { flex: none; margin-top: auto; }

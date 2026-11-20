@@ -294,11 +294,9 @@ async function addSources(list, origin = "") {
     items.push(it);
     $("grid").prepend(makeCard(it));
     it.name = baseName(src instanceof Blob ? src.name : String(src).startsWith("data:") ? "pasted" : String(src));
-    it.el.name.textContent = it.name;
     try {
       const { blob, name } = await toBlob(src);
       it.name = baseName(name);
-      it.el.name.textContent = it.name;
       let bmp = await decode(blob);
       let { width: w, height: h } = bmp;
       if (Math.max(w, h) > MAX_SIDE) {
@@ -401,9 +399,8 @@ function makeCard(it) {
   crop.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M2 6h14a2 2 0 0 1 2 2v14"/></svg>';
   pic.append(canvas, busy, crop, x);
   const bar = document.createElement("div"); bar.className = "bar";
-  const name = document.createElement("span"); name.className = "name"; name.textContent = "…";
   const dl = document.createElement("button"); dl.type = "button"; dl.className = "btn primary"; dl.textContent = PHONE ? "Save" : "Download"; dl.disabled = true;
-  bar.append(name, dl);
+  bar.append(dl);
   card.append(pic, bar);
 
   crop.addEventListener("click", () => {
@@ -413,7 +410,7 @@ function makeCard(it) {
   x.addEventListener("click", () => { clearInterval(it.quip); items.splice(items.indexOf(it), 1); card.remove(); sync(); });
   dl.addEventListener("click", async () => deliver([{ name: outName(it), blob: await png(it) }]));
 
-  it.el = { card, canvas, busy, dl, name, crop };
+  it.el = { card, canvas, busy, dl, crop };
   return card;
 }
 
@@ -534,7 +531,6 @@ addEventListener("paste", async (e) => {
   const links = files.length ? [] : linksFrom(dt.getData("text/html"), dt.getData("text/plain"));
   if (!files.length && !links.length) return; // let normal text paste happen
   e.preventDefault();
-  if (e.target === $("link")) $("link").value = "";
   addSources(files.length ? files : links);
 });
 
@@ -567,13 +563,6 @@ addEventListener("drop", async (e) => {
   if (e.dataTransfer) addSources(await fromDataTransfer(e.dataTransfer));
 });
 
-// 5. Type or paste a link and press Enter.
-$("linkform").addEventListener("submit", (e) => {
-  e.preventDefault();
-  const v = $("link").value.trim(); if (!v) return;
-  $("link").value = "";
-  addSources(linksFrom("", v).length ? linksFrom("", v) : [v.startsWith("http") ? v : "https://" + v]);
-});
 
 // 6. Links into the site: goodbye.bg/?url=https://… (bookmarklets, other apps).
 if (params.get("url")) addSources([params.get("url")]);

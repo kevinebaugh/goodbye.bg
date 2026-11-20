@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>goodbye.bg — say goodbye to the background</title>
-<meta name="description" content="Free background remover that runs in your browser. Drop, paste, or link a photo. It never uploads. Full size, no account, no watermark.">
+<meta name="description" content="Free background remover that runs in your browser. Your photos stay on your device. Full size, no account, no watermark.">
 <meta name="theme-color" content="#69d2e7">
 <link rel="canonical" href="%SITE%/">
 <script type="application/ld+json">
@@ -19,7 +19,7 @@
   "browserRequirements": "Requires a modern browser with WebAssembly",
   "isAccessibleForFree": true,
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-  "featureList": ["Remove image background", "Transparent PNG", "White background", "Batch download as zip", "No upload"],
+  "featureList": ["Remove image background", "Transparent PNG", "Crop to subject", "Batch download as zip", "No upload"],
   "license": "https://www.gnu.org/licenses/agpl-3.0.html"
 }
 </script>
@@ -30,7 +30,7 @@
 <meta property="og:site_name" content="goodbye.bg">
 <meta property="og:url" content="https://goodbye-bg-git.pages.dev/">
 <meta property="og:title" content="Say goodbye to the background">
-<meta property="og:description" content="Free background remover that runs in your browser. Photos never leave your device. No account, no watermark.">
+<meta property="og:description" content="Free background remover that runs in your browser. Your photos stay on your device. No account, no watermark.">
 <meta property="og:image" content="https://goodbye-bg-git.pages.dev/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -48,15 +48,11 @@
 <main id="main">
   <section class="hero" id="hero">
     <h1>Say goodbye<br>to the background.</h1>
-    <p class="sub">Drop, paste, or pick a photo. It never leaves your device.</p>
+    <p class="sub">Drop, paste, or pick a photo. Your photos stay on your device.</p>
     <div class="row">
       <label class="big" for="file">Choose photos</label>
       <button type="button" class="big ghost" id="paste">Paste</button>
     </div>
-    <form class="link" id="linkform" autocomplete="off">
-      <input id="link" type="text" inputmode="url" placeholder="…or paste an image link" aria-label="Image link">
-      <button type="submit" class="go" aria-label="Get image">→</button>
-    </form>
   </section>
 
   <div class="tools" id="tools" hidden>
@@ -80,7 +76,7 @@
 </aside>
 
 <footer class="foot">
-  <p>Photos from your device stay in this tab. No uploads, no cookies, no analytics. If you paste a link, our server fetches that public image for you and keeps nothing.</p>
+  <p>Photos from your device are processed in this tab and never uploaded. If you paste a link, our server fetches that public image for you and keeps nothing.</p>
   <p><a href="remove-bg-alternative/">remove.bg alternative</a> · <a href="how-to-remove-background/">How to</a> · <a href="https://github.com/kevinebaugh/goodbye.bg">Source</a></p>
 </footer>
 
