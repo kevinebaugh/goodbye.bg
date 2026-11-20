@@ -41,10 +41,13 @@ async function fetchParts(dir, progress) {
 async function run(input, warmUp = false) {
   if (!warmUp && failMode === "run") throw new Error("Forced GPU run failure (?gpufail=run)");
   if (!warmUp && failMode === "hang") return new Promise(() => {});
+  dbg("run-start", { warmUp });
   const t0 = performance.now();
   // Ask for the final mask only. The model has 12 more side outputs, and computing them holds hundreds of MB.
   const out = await session.run({ [session.inputNames[0]]: new ort.Tensor("float32", input, [1, 3, RES, RES]) }, [session.outputNames[0]]);
+  dbg("run-done");
   const mask = Float32Array.from(await out[session.outputNames[0]].getData());
+  dbg("mask-read");
   const ms = Math.round(performance.now() - t0);
   // A broken GPU can return garbage instead of throwing. NaN or infinity counts as a failure.
   for (let i = 0; i < mask.length; i += 61) if (!Number.isFinite(mask[i])) throw new Error("Engine returned invalid values");
@@ -64,7 +67,7 @@ onmessage = async ({ data }) => {
       postMessage({ type: "loaded" }); dbg("model-fetched");
       session = await ort.InferenceSession.create(bytes, { executionProviders: [data.ep], graphOptimizationLevel: "all" });
       dbg("session"); bytes = null; ort.env.wasm.wasmBinary = undefined; // the runtime has its own copies now; free ours (phones are tight)
-      if (data.ep === "webgpu") {
+      if (data.ep === "webgpu" && !data.noWarm) {
         // Warm-up: compiles the shaders now instead of on the first photo, and proves the GPU works.
         if (failMode === "init") throw new Error("Forced GPU warm-up failure (?gpufail=init)");
         const probe = new Float32Array(3 * RES * RES);

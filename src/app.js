@@ -104,7 +104,7 @@ function startEngine(name) {
       }
     };
     dbg("engine-start", { name });
-    w.postMessage({ type: "init", ep: name === "gpu" ? "webgpu" : "wasm", fail: params.get("gpufail"), debug: DEBUG });
+    w.postMessage({ type: "init", ep: name === "gpu" ? "webgpu" : "wasm", fail: params.get("gpufail"), debug: DEBUG, noWarm: params.has("nowarm") });
   });
 }
 
@@ -140,8 +140,8 @@ async function segment(bitmap) {
   await loadModel();
   dbg("segment", { w: bitmap.width, h: bitmap.height });
   const c = new OffscreenCanvas(RES, RES), x = c.getContext("2d");
-  x.drawImage(bitmap, 0, 0, RES, RES);
-  const px = x.getImageData(0, 0, RES, RES).data, n = RES * RES;
+  x.drawImage(bitmap, 0, 0, RES, RES); dbg("drawn");
+  const px = x.getImageData(0, 0, RES, RES).data, n = RES * RES; dbg("pixels");
   const input = new Float32Array(3 * n); // ISNet input: (x - 128) / 256
   for (let i = 0; i < n; i++) {
     input[i] = (px[i * 4] - 128) / 256;
