@@ -64,9 +64,22 @@ is still true. Direct sponsors keep it true as written.
 most while people pick their replacement. Turn on one below-the-results slot in January, with a direct
 sponsor if one bites, and EthicalAds otherwise.
 
+## Budget: $1/day (decided 2026-11-20)
+
+At $1/day, spend it only where nobody else bids: the shutdown searches. About 2 to 4 clicks a day, so
+this is a test, not a growth channel.
+- One Google Ads Search campaign, $1/day, manual CPC with a $0.35 max bid, United States plus the
+  UK/EU countries remove.bg served.
+- Exact and phrase match only: `[remove.bg alternative]`, `"remove.bg shutting down"`,
+  `"remove.bg closing"`, `"sites like remove.bg"`, `"remove.bg replacement"`. No broad match, no
+  Display or Performance Max (they burn a small budget on junk placements).
+- Negative keywords: `api`, `photoshop`, `download app`, `jobs`.
+- Final URL: the remove.bg alternative page from the SEO work, with `?ref=gads`.
+- Skip Microsoft Ads at this budget; add it if Google clicks turn into repeat visits.
+- Start on 28 November, or the day goodbye.bg is live if that comes sooner. Run through December.
+
 ## Decisions for Kevin
 
-1. Budget and start date for Google and Microsoft Ads. Suggested: $20/day each, from the day the domain
-   is live, or by 28 November at the latest.
+1. ~~Budget~~: $1/day on Google Search, as above.
 2. OK to add the cookie-free `ref` counter, the only server-side counting on the site.
 3. Ads on the site: off until January, then a direct sponsor or EthicalAds.
