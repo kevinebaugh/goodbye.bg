@@ -337,7 +337,8 @@ async function addSources(list, origin = "") {
       if (Math.max(w, h) > MAX_SIDE || w * h > MAX_PIXELS) {
         const k = Math.min(MAX_SIDE / Math.max(w, h), Math.sqrt(MAX_PIXELS / (w * h)));
         w = Math.floor(w * k); h = Math.floor(h * k);
-        bmp = await createImageBitmap(bmp, { resizeWidth: w, resizeHeight: h, resizeQuality: "high" });
+        // No resized copy: it.w/it.h are the working size, and every draw scales the original on the fly.
+        // (A full-size resized copy crashed iPhone Safari next to a GPU run.)
       }
       Object.assign(it, { bmp, w, h });
       it.el.busy.textContent = QUIPS[Math.floor(Math.random() * QUIPS.length)];
@@ -519,7 +520,8 @@ async function retry(it) {
   busy.textContent = QUIPS[Math.floor(Math.random() * QUIPS.length)]; busy.hidden = false; dl.disabled = true;
   try {
     const sx = Math.round(x0 * it.w), sy = Math.round(y0 * it.h), sw = Math.max(1, Math.round((x1 - x0) * it.w)), sh = Math.max(1, Math.round((y1 - y0) * it.h));
-    const part = await createImageBitmap(it.bmp, sx, sy, sw, sh);
+    const sc = it.bmp.width / it.w; // the bitmap may be larger than the working size
+    const part = await createImageBitmap(it.bmp, Math.round(sx * sc), Math.round(sy * sc), Math.max(1, Math.round(sw * sc)), Math.max(1, Math.round(sh * sc)));
     const m = await segment(part);
     if (m.box) { it.mask = m; it.maskRect = { x: sx / it.w, y: sy / it.h, w: sw / it.w, h: sh / it.h }; it.ms = lastMs; it.png = null; }
   } catch (e) { console.warn("Retry failed", e); }
