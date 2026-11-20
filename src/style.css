@@ -77,6 +77,8 @@ body.has-work .hero h1, body.has-work .sub { display: none; }
   background: color-mix(in srgb, var(--card) 70%, transparent); font-weight: 700; }
 .busy::before { content: "👋"; font-size: 30px; animation: wave 1.2s ease-in-out infinite; transform-origin: 70% 80%; }
 .failed .busy { color: var(--danger); font-weight: 600; }
+.queued .busy { background: color-mix(in srgb, var(--card) 45%, transparent); }
+.queued .busy::before { content: none; } /* waiting cards stay still */
 .failed .busy::before { content: "🙈"; animation: none; }
 .x { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; border-radius: 50%; border: 0; background: var(--ink); color: var(--paper); cursor: pointer; opacity: 0; transition: opacity .15s; font-size: 16px; line-height: 1; }
 .crop { position: absolute; top: 8px; left: 8px; width: 28px; height: 28px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer;
@@ -156,7 +158,7 @@ body.app, body.app * { touch-action: none; }
 body.app main { flex: 1; min-height: 0; display: flex; flex-direction: column; padding-bottom: 8px; }
 body.app.has-work .tools { padding: 12px 0 10px; }
 body.app.has-work .grid { flex: 1; min-height: 0; grid-template-columns: repeat(var(--cols, 1), var(--p, 300px));
-  grid-auto-rows: max-content; justify-content: center; align-content: center; gap: 12px; padding-top: 12px; }
+  grid-auto-rows: max-content; justify-content: center; align-content: start; gap: 12px; padding-top: 12px; }
 body.app.has-work .tools:not([hidden]) + .grid { padding-top: 0; }
 body.app .grid .pic { aspect-ratio: auto; height: var(--p, 300px); }
 body.app .grid.scroll { overflow-y: auto; align-content: start; }
@@ -164,3 +166,18 @@ body.app .grid.scroll, body.app .grid.scroll * { touch-action: pan-y; }
 body.app.has-work .foot { padding: 8px 16px 10px; }
 /* Empty page: hero and footer stay together near the middle (main must not stretch here). */
 body.app:not(.has-work) main { flex: none; margin-top: auto; }
+
+/* Small cards (many photos on a phone): smaller controls, and no rating icons, so the image stays clear. */
+.card { container-type: inline-size; }
+@container (max-width: 180px) {
+  .bar { padding: 8px; }
+  .bar .btn { font-size: 13px; padding: 7px 6px; min-width: 0; }
+  .rates { display: none; }
+  .x, .crop { width: 24px; height: 24px; top: 6px; }
+  .x { right: 6px; font-size: 14px; } .crop { left: 6px; }
+  .crop svg { width: 13px; height: 13px; }
+  .busy { font-size: 12px; gap: 6px; padding: 8px; }
+  .busy::before { font-size: 22px; }
+}
+/* Phones with photos on screen: the grid gets the room; the privacy note is on the empty page and in the headline. */
+@media (max-width: 600px) { body.app.has-work .foot p:first-child { display: none; } }

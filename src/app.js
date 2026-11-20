@@ -243,10 +243,10 @@ const LUT = (() => {
 
 // The cut-out at W x H: the photo with the mask as its alpha. One canvas; the browser applies the mask
 // by compositing, so a big photo costs one copy of itself, not four (iPhones run out of memory).
-function render(it, W, H) {
+function render(it, W, H, bmp = it.bmp) {
   const c = new OffscreenCanvas(W, H), x = c.getContext("2d");
   x.imageSmoothingQuality = "high";
-  x.drawImage(it.bmp, 0, 0, W, H);
+  x.drawImage(bmp, 0, 0, W, H);
   x.globalCompositeOperation = "destination-in"; // keep the photo only where the mask is opaque
   const r = it.maskRect || FULL; // a retry's mask covers only the zoomed-in part; the rest goes clear
   x.drawImage(it.mask, r.x * W, r.y * H, r.w * W, r.h * H);
@@ -255,7 +255,8 @@ function render(it, W, H) {
 
 function drawCard(it) {
   const f = it.mask ? frame(it) : { x: 0, y: 0, w: it.w, h: it.h };
-  const k = Math.min(1, PREVIEW_SIDE / Math.max(f.w, f.h));
+  // Never draw bigger than the preview bitmap holds (a tight crop would otherwise blow up to full size).
+  const k = Math.min(1, PREVIEW_SIDE / Math.max(f.w, f.h), it.bmp.width / it.w);
   const W = Math.max(1, Math.round(f.w * k)), H = Math.max(1, Math.round(f.h * k)), c = it.el.canvas;
   c.width = W; c.height = H;
   const x = c.getContext("2d");
@@ -304,13 +305,21 @@ function reveal(it) {
   requestAnimationFrame(wipe);
 }
 
-function fullBlob(it) {
+// Each photo keeps only a small preview bitmap plus its original file. The full-size image is decoded
+// just for a download or a retry and released right after: five 19 MP photos held as bitmaps (75 MB
+// each) were enough, next to the engine, to crash an iPhone.
+const fullBitmap = (it) => decode(it.blob);
+
+async function fullBlob(it) {
   dbg("png", { w: it.w, h: it.h });
-  const f = frame(it), full = render(it, it.w, it.h);
-  if (f.w === it.w && f.h === it.h) return full.convertToBlob({ type: "image/png" });
-  const out = new OffscreenCanvas(f.w, f.h);
-  out.getContext("2d").drawImage(full, f.x, f.y, f.w, f.h, 0, 0, f.w, f.h);
-  return out.convertToBlob({ type: "image/png" });
+  const big = await fullBitmap(it);
+  try {
+    const f = frame(it), full = render(it, it.w, it.h, big);
+    if (f.w === it.w && f.h === it.h) return await full.convertToBlob({ type: "image/png" });
+    const out = new OffscreenCanvas(f.w, f.h);
+    out.getContext("2d").drawImage(full, f.x, f.y, f.w, f.h, 0, 0, f.w, f.h);
+    return await out.convertToBlob({ type: "image/png" });
+  } finally { big.close(); }
 }
 
 // Phones save through the share sheet ("Save Image" puts it in Photos) instead of downloading to Files.
@@ -325,38 +334,46 @@ const outName = (it) => `${it.name}-goodbye-bg.png`;
    Every way in ends at addSources(list), where each entry is a File/Blob or a string
    (http(s) link, data: URL, or blob: URL). */
 
+const PREVIEW_MAX = 1600; // longest side of the bitmap kept per photo (previews and the model input)
+
 async function addSources(list, origin = "") {
   list = list.filter(Boolean).slice(0, MAX_BATCH);
   if (!list.length) { toast("No image found there. Try a photo file, a copied image, or an image link."); return; }
   show();
-  for (const src of list) {
-    const it = { id: ++uid, name: "image", bmp: null, w: 0, h: 0, mask: null, crop: true };
+  // All cards appear at once, so the layout settles once instead of jumping with every photo.
+  const batch = list.map((src) => {
+    const it = { id: ++uid, name: "image", bmp: null, blob: null, w: 0, h: 0, mask: null, crop: true };
     items.push(it);
     $("grid").prepend(makeCard(it));
     it.name = baseName(src instanceof Blob ? src.name : String(src).startsWith("data:") ? "pasted" : String(src));
+    return [it, src];
+  });
+  sync();
+  for (const [it, src] of batch) { // one decode at a time: a full-size decode is big
+    if (!items.includes(it)) continue;
     try {
       const { blob, name } = await toBlob(src);
       it.name = baseName(name);
       dbg("decode", { bytes: blob.size, type: blob.type });
-      let bmp = await decode(blob);
-      let { width: w, height: h } = bmp;
+      const full = await decode(blob);
+      let { width: w, height: h } = full;
       dbg("decoded", { w, h });
       if (Math.max(w, h) > MAX_SIDE || w * h > MAX_PIXELS) {
         const k = Math.min(MAX_SIDE / Math.max(w, h), Math.sqrt(MAX_PIXELS / (w * h)));
         w = Math.floor(w * k); h = Math.floor(h * k);
-        // No resized copy: it.w/it.h are the working size, and every draw scales the original on the fly.
-        // (A full-size resized copy crashed iPhone Safari next to a GPU run.)
       }
-      Object.assign(it, { bmp, w, h });
-      it.el.busy.textContent = QUIPS[Math.floor(Math.random() * QUIPS.length)];
+      const k = Math.min(1, PREVIEW_MAX / Math.max(w, h));
+      const bmp = k < 1 ? await createImageBitmap(full, { resizeWidth: Math.round(w * k), resizeHeight: Math.round(h * k), resizeQuality: "high" }) : full;
+      if (bmp !== full) full.close();
+      Object.assign(it, { bmp, blob, w, h });
       drawCard(it);
     } catch (e) {
       console.warn(e);
       fail(it, e.message || "Could not open this image.");
     }
+    run();
   }
   sync();
-  run();
 }
 
 async function toBlob(src) {
@@ -434,9 +451,7 @@ function makeCard(it) {
   const canvas = document.createElement("canvas");
   canvas.setAttribute("role", "img"); canvas.setAttribute("aria-label", "Image");
   const busy = document.createElement("div"); busy.className = "busy";
-  let line = Math.floor(Math.random() * QUIPS.length);
-  busy.textContent = it.bmp ? QUIPS[line] : "Fetching…";
-  it.quip = setInterval(() => { if (it.bmp && !it.failed) busy.textContent = QUIPS[++line % QUIPS.length]; }, 1600);
+  card.classList.add("queued"); // waits quietly; only the photo being worked on waves and talks
   const x = document.createElement("button"); x.type = "button"; x.className = "x"; x.textContent = "×"; x.setAttribute("aria-label", "Remove");
   const crop = document.createElement("button"); crop.type = "button"; crop.className = "crop"; crop.hidden = true;
   crop.setAttribute("aria-label", "Crop to subject"); crop.setAttribute("aria-pressed", "true");
@@ -468,6 +483,7 @@ function makeCard(it) {
 }
 
 function fail(it, msg) {
+  it.el.card.classList.remove("queued");
   clearInterval(it.quip);
   it.failed = true;
   it.el.card.classList.add("failed");
@@ -480,6 +496,7 @@ async function run() {
   try {
     for (const it of [...items]) {
       if (it.mask || it.failed || !it.bmp) continue;
+      startQuips(it);
       await nextFrame();
       try { it.mask = await segment(it.bmp); }
       catch (e) { console.error(e); fail(it, "Could not process this image."); continue; }
@@ -490,11 +507,20 @@ async function run() {
       it.el.up.hidden = it.el.down.hidden = false; it.ms = lastMs;
       dbg("shown");
       dbg("reveal"); reveal(it); sync();
-      if (PHONE) png(it);
       it.el.card.dataset.ms = lastMs;
     }
   } finally { running = false; }
-  if (items.some((i) => i.bmp && !i.mask && !i.failed)) run();
+  if (items.some((i) => i.bmp && !i.mask && !i.failed)) return run();
+  if (PHONE) for (const it of items) if (it.mask) png(it); // after the batch: don't compete with the model
+}
+
+function startQuips(it) {
+  const { card, busy } = it.el;
+  card.classList.remove("queued");
+  let line = Math.floor(Math.random() * QUIPS.length);
+  busy.textContent = QUIPS[line];
+  clearInterval(it.quip);
+  it.quip = setInterval(() => { if (!it.failed) busy.textContent = QUIPS[++line % QUIPS.length]; }, 1600);
 }
 
 function show() { document.body.classList.add("has-work"); }
@@ -527,8 +553,9 @@ async function retry(it) {
   busy.textContent = QUIPS[Math.floor(Math.random() * QUIPS.length)]; busy.hidden = false; dl.disabled = true;
   try {
     const sx = Math.round(x0 * it.w), sy = Math.round(y0 * it.h), sw = Math.max(1, Math.round((x1 - x0) * it.w)), sh = Math.max(1, Math.round((y1 - y0) * it.h));
-    const sc = it.bmp.width / it.w; // the bitmap may be larger than the working size
-    const part = await createImageBitmap(it.bmp, Math.round(sx * sc), Math.round(sy * sc), Math.max(1, Math.round(sw * sc)), Math.max(1, Math.round(sh * sc)));
+    const big = await fullBitmap(it), sc = big.width / it.w; // decoded size can exceed the working size
+    const part = await createImageBitmap(big, Math.round(sx * sc), Math.round(sy * sc), Math.max(1, Math.round(sw * sc)), Math.max(1, Math.round(sh * sc)));
+    big.close();
     const m = await segment(part);
     if (m.box) { it.mask = m; it.maskRect = { x: sx / it.w, y: sy / it.h, w: sw / it.w, h: sh / it.h }; it.ms = lastMs; it.png = null; }
   } catch (e) { console.warn("Retry failed", e); }
@@ -560,9 +587,10 @@ new ResizeObserver(layout).observe($("grid"));
 
 function sync() {
   const done = items.filter((i) => i.mask).length;
-  $("all").hidden = done < 2;
+  $("all").hidden = false;
+  $("all").style.visibility = done < 2 ? "hidden" : "";
   $("all").textContent = `Download all (${done})`;
-  $("tools").hidden = done < 2;
+  $("tools").hidden = items.length < 2; // reserve the row early so the grid doesn't jump
   if (!items.length) document.body.classList.remove("has-work");
   requestAnimationFrame(layout);
 }
