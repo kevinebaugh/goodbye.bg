@@ -54,15 +54,33 @@ the ad network's hosts.
    parties at all, so the privacy line stays true. Good fits: print-on-demand, e-commerce photo tools,
    anything for online sellers who cut out product shots. It takes outreach, so start once traffic is real.
 2. **EthicalAds.** No cookies, no tracking, contextual. Built for developer sites, so it may pay little
-   on a general audience. Easy to try in `ad.html`.
+   on a general audience. Chosen; see the decision below.
 3. **Carbon Ads.** Similar privacy and design-focused, but invite-only, with a minimum traffic level.
 
 **Footer:** if any network ad runs, the footer has to change from "no cookies, no analytics" to whatever
 is still true. Direct sponsors keep it true as written.
 
-**Recommendation:** keep ads off through the remove.bg shutdown wave, because first impressions matter
-most while people pick their replacement. Turn on one below-the-results slot in January, with a direct
-sponsor if one bites, and EthicalAds otherwise.
+**Decision (2026-11-20): EthicalAds.** It's wired up and switched off:
+- `src/ad.html` holds the EthicalAds tag (client pinned to v2.6.0, publisher ID `goodbye-bg`, keywords
+  design, photography, images, ecommerce; horizontal image ad, flat theme that follows dark mode).
+- `_headers` lets only `ad.html` reach `media.ethicalads.io` and `server.ethicalads.io`.
+- The iframe has no `src` until `ADS = true`, so nothing loads from EthicalAds while ads are off.
+- EthicalAds sets no cookies and uses no storage (checked in their client code), so the footer stays true.
+
+What their rules require (from their publisher FAQ and policy):
+- At least 50,000 pageviews a month to be approved; they make exceptions for fast-growing sites. The
+  remove.bg shutdown spike may count.
+- One ad per page, above the fold on the first visit, not inside the main content. Our slot sits between
+  the app and the footer, which is above the fold on a first visit on desktop and on most phones.
+- 70% revenue share, paid monthly, minimum payout $50.
+
+To turn it on:
+1. Kevin applies at ethicalads.io (his account) and confirms the publisher ID.
+2. Serve `ad.html` from its own origin, such as `ads.goodbye.bg`, as a small second Pages project. In the
+   sandbox on our own origin, `location.origin` is `"null"`, and the client sends that to EthicalAds as
+   the page URL, so their domain check would fail. A separate origin also keeps the ad isolated from the
+   photos without the sandbox having to hide its origin.
+3. Set `AD_SRC` in `app.js` to that URL, add it to `frame-src` in the page's CSP, and set `ADS = true`.
 
 ## Budget: $1/day (decided 2026-11-20)
 

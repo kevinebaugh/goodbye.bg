@@ -8,14 +8,17 @@
   It gets an opaque origin, so ad code here cannot read the main page, its canvases,
   or the user's photos.
 
-  To turn ads on:
-  1. Paste the ad network's tag below (Carbon Ads or EthicalAds fit best: no tracking pixels).
-  2. Add the network's hosts to the /ad.html Content-Security-Policy in _headers.
-  3. Set ADS = true in app.js.
+  Network: EthicalAds (no cookies, no tracking, contextual). Client pinned to v2.6.0.
+  To turn ads on (see docs/ads.md):
+  1. Get approved at ethicalads.io (needs ~50,000 pageviews/month) and put the publisher ID below.
+  2. Serve this file from its own origin (for example ads.goodbye.bg). In a sandbox on our origin,
+     location.origin is "null", so EthicalAds would not see which site it is on.
+  3. Point the iframe in index.html at that origin, allow it in frame-src, and set ADS = true in app.js.
 -->
 <style>html,body{margin:0;background:transparent;font:13px system-ui,sans-serif}</style>
 </head>
 <body>
-<!-- ad tag goes here -->
+<div data-ea-publisher="goodbye-bg" data-ea-type="image" data-ea-keywords="design|photography|images|ecommerce" class="horizontal flat adaptive"></div>
+<script async src="https://media.ethicalads.io/media/client/v2.6.0/ethicalads.min.js"></script>
 </body>
 </html>

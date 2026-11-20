@@ -11,7 +11,8 @@ const MAX_SIDE = 8192;       // larger images are scaled down to fit in memory
 const MAX_BATCH = 50;        // images per drop or paste
 const PREVIEW_SIDE = 900;    // card preview size
 const CUTOFF = 0.5, SOFTNESS = 0.6;
-const ADS = false;           // set true once ad.html holds a real ad tag
+const ADS = false;           // EthicalAds; turn on per docs/ads.md
+const AD_SRC = "ad.html";    // later: ad.html on its own origin, e.g. https://ads.goodbye.bg/ad.html
 
 const QUIPS = [
   "Asking the background to leave…",
@@ -532,7 +533,8 @@ if ("launchQueue" in window) {
 }
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
-if (ADS) $("ad").hidden = false;
+// The frame gets its src only when ads are on, so nothing loads from the ad network otherwise.
+if (ADS) { $("ad").querySelector("iframe").src = AD_SRC; $("ad").hidden = false; }
 
 // Start loading the model right away so the first photo is fast.
 loadModel().catch((e) => { console.error(e); toast("Could not load. Check your connection and reload.", 8000); });

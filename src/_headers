@@ -19,9 +19,9 @@
 /how-to-remove-background/
   Content-Security-Policy: default-src 'self'; script-src 'none'; style-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
 
-# The ad frame. Add the ad network's hosts here when you turn ads on.
+# The ad frame: EthicalAds only. Off until ADS = true in app.js.
 /ad.html
-  Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'self'
+  Content-Security-Policy: default-src 'none'; script-src https://media.ethicalads.io https://server.ethicalads.io; img-src https://media.ethicalads.io https://server.ethicalads.io data:; style-src 'unsafe-inline'; connect-src https://server.ethicalads.io; frame-ancestors 'self' https://goodbye.bg https://goodbye-bg-git.pages.dev
 
 /sw.js
   Cache-Control: no-cache
