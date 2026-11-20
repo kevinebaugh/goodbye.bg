@@ -341,13 +341,15 @@ async function addSources(list, origin = "") {
   if (!list.length) { toast("No image found there. Try a photo file, a copied image, or an image link."); return; }
   show();
   // All cards appear at once, so the layout settles once instead of jumping with every photo.
+  const cards = document.createDocumentFragment(); // the batch goes on top, in the order it was picked
   const batch = list.map((src) => {
     const it = { id: ++uid, name: "image", bmp: null, blob: null, w: 0, h: 0, mask: null, crop: true };
     items.push(it);
-    $("grid").prepend(makeCard(it));
+    cards.append(makeCard(it));
     it.name = baseName(src instanceof Blob ? src.name : String(src).startsWith("data:") ? "pasted" : String(src));
     return [it, src];
   });
+  $("grid").prepend(cards);
   sync();
   for (const [it, src] of batch) { // one decode at a time: a full-size decode is big
     if (!items.includes(it)) continue;
@@ -494,8 +496,10 @@ async function run() {
   if (running) return;
   running = true;
   try {
-    for (const it of [...items]) {
-      if (it.mask || it.failed || !it.bmp) continue;
+    // Next waiting photo in reading order (top-left first), so the work starts where people look.
+    const next = () => [...$("grid").children].map((card) => items.find((i) => i.el.card === card))
+      .find((i) => i && !i.mask && !i.failed && i.bmp);
+    for (let it; (it = next()); ) {
       startQuips(it);
       await nextFrame();
       try { it.mask = await segment(it.bmp); }
