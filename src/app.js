@@ -7,6 +7,8 @@ import { zipSync } from "./vendor/fflate.mjs";
 
 const RES = 1024;            // model input size
 const MAX_SIDE = 8192;       // larger images are scaled down to fit in memory
+// Safari (Mac, iPhone, and every iOS browser) can't hold a canvas over about 16.7 megapixels.
+const MAX_PIXELS = navigator.vendor === "Apple Computer, Inc." ? 16_000_000 : 64_000_000;
 const MAX_BATCH = 50;        // images per drop or paste
 const PREVIEW_SIDE = 900;    // card preview size
 const CUTOFF = 0.5, SOFTNESS = 0.6;
@@ -150,9 +152,11 @@ async function segment(bitmap) {
     id.data[k + 3] = Math.max(0, Math.min(255, m[i] * 255));
   }
   despeck(id);
+  const box = subjectBox(id);
+  for (let i = 3; i < id.data.length; i += 4) id.data[i] = LUT[id.data[i]]; // soften the edge once, here
   const mask = new OffscreenCanvas(RES, RES);
   mask.getContext("2d").putImageData(id, 0, 0);
-  mask.box = subjectBox(id);
+  mask.box = box;
   return mask;
 }
 
@@ -215,21 +219,16 @@ const LUT = (() => {
   return t;
 })();
 
+// The cut-out at W x H: the photo with the mask as its alpha. One canvas; the browser applies the mask
+// by compositing, so a big photo costs one copy of itself, not four (iPhones run out of memory).
 function render(it, W, H) {
-  const m = new OffscreenCanvas(W, H), mx = m.getContext("2d", { willReadFrequently: true });
-  mx.imageSmoothingQuality = "high";
-  const r = it.maskRect || FULL; // a retry's mask covers only the zoomed-in part of the photo
-  mx.drawImage(it.mask, r.x * W, r.y * H, r.w * W, r.h * H);
-  const a = mx.getImageData(0, 0, W, H).data;
-
-  const fg = new OffscreenCanvas(W, H), fx = fg.getContext("2d", { willReadFrequently: true });
-  fx.imageSmoothingQuality = "high";
-  fx.drawImage(it.bmp, 0, 0, W, H);
-  const id = fx.getImageData(0, 0, W, H);
-  for (let i = 3; i < id.data.length; i += 4) id.data[i] = LUT[a[i]];
-  fx.putImageData(id, 0, 0);
-
-  return fg;
+  const c = new OffscreenCanvas(W, H), x = c.getContext("2d");
+  x.imageSmoothingQuality = "high";
+  x.drawImage(it.bmp, 0, 0, W, H);
+  x.globalCompositeOperation = "destination-in"; // keep the photo only where the mask is opaque
+  const r = it.maskRect || FULL; // a retry's mask covers only the zoomed-in part; the rest goes clear
+  x.drawImage(it.mask, r.x * W, r.y * H, r.w * W, r.h * H);
+  return c;
 }
 
 function drawCard(it) {
@@ -308,8 +307,9 @@ async function addSources(list, origin = "") {
       it.name = baseName(name);
       let bmp = await decode(blob);
       let { width: w, height: h } = bmp;
-      if (Math.max(w, h) > MAX_SIDE) {
-        const k = MAX_SIDE / Math.max(w, h); w = Math.round(w * k); h = Math.round(h * k);
+      if (Math.max(w, h) > MAX_SIDE || w * h > MAX_PIXELS) {
+        const k = Math.min(MAX_SIDE / Math.max(w, h), Math.sqrt(MAX_PIXELS / (w * h)));
+        w = Math.floor(w * k); h = Math.floor(h * k);
         bmp = await createImageBitmap(bmp, { resizeWidth: w, resizeHeight: h, resizeQuality: "high" });
       }
       Object.assign(it, { bmp, w, h });
