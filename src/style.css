@@ -2,8 +2,8 @@
   /* One column. A friendly hero that shrinks once photos arrive; results as a card grid.
      The checkerboard is the motif: it is what "goodbye, background" looks like. */
   /* Giant Goldfish palette (COLOURlovers #92095): #69D2E7 #A7DBD8 #E0E4CC #F38630 #FA6900.
-     Cool side carries the page (aqua buttons, deep-teal text); orange is only the .bg pop.
-     Orange with black read as Halloween. */
+     Only the cool side is used: aqua buttons and wordmark, deep-teal text, sage lines.
+     Orange read as Halloween, so it's out. */
   --ink: #1d3a41;
   --paper: #f7f8f0;
   --card: #ffffff;
@@ -11,7 +11,7 @@
   --muted: #5b7377;
   --accent: #69d2e7;
   --accent-ink: #0c2a30;
-  --brand: #fa6900;
+  --brand: #2f9fb8;
   --danger: #b23a2a;
   --check-a: #e1f1f0;
   --check-b: #ffffff;
@@ -21,7 +21,7 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --ink: #edf6f3; --paper: #0e262b; --card: #143238; --line: #23464e; --muted: #9dbfc3;
-    --accent: #69d2e7; --accent-ink: #0c2a30; --brand: #f38630; --danger: #ff8a7a;
+    --accent: #69d2e7; --accent-ink: #0c2a30; --brand: #69d2e7; --danger: #ff8a7a;
     --check-a: #18383f; --check-b: #1f434b;
     color-scheme: dark;
   }
