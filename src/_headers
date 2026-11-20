@@ -2,7 +2,9 @@
 
 /*
   Cross-Origin-Opener-Policy: same-origin
-  Cross-Origin-Embedder-Policy: credentialless
+  Cross-Origin-Embedder-Policy: require-corp
+  # require-corp, not credentialless: Safari only supports require-corp, and without it the CPU engine
+  # gets one thread. Everything the app loads is same-origin (links come through /api/fetch).
   X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer
   Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=()

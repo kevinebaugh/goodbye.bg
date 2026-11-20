@@ -63,9 +63,14 @@ const GPU_WARMUP_TIMEOUT = 30_000, GPU_RUN_TIMEOUT = 15_000; // longer counts as
 let worker = null, engineName = "", engineReady = null, gpuBroken = false, jobId = 0;
 const jobs = new Map();
 
+// iPhones and iPads: WebGPU runs ISNet, but often crashes the tab (out of memory) on the first real
+// photo; tested 2026-11-20 with ?debug=1. The CPU engine works there. Use it until that changes.
+const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
 async function pickEngine() {
   const forced = params.get("engine");
   if (forced === "gpu" || forced === "cpu") return forced;
+  if (IOS) return "cpu";
   if (gpuBroken) return "cpu";
   try {
     const adapter = await navigator.gpu?.requestAdapter();
@@ -104,7 +109,9 @@ function startEngine(name) {
       }
     };
     dbg("engine-start", { name });
-    w.postMessage({ type: "init", ep: name === "gpu" ? "webgpu" : "wasm", fail: params.get("gpufail"), debug: DEBUG, noWarm: params.has("nowarm") });
+    w.postMessage({ type: "init", ep: name === "gpu" ? "webgpu" : "wasm", fail: params.get("gpufail"), debug: DEBUG, noWarm: params.has("nowarm"),
+      // Each CPU thread adds memory; iPhones get one until more is proven safe (?threads=N to test).
+      threads: +params.get("threads") || (IOS ? 1 : 4) });
   });
 }
 
@@ -138,7 +145,7 @@ function infer(input) {
 
 async function segment(bitmap) {
   await loadModel();
-  dbg("segment", { w: bitmap.width, h: bitmap.height });
+  dbg("segment", { w: bitmap.width, h: bitmap.height, coi: self.crossOriginIsolated, threads: +params.get("threads") || (IOS ? 1 : 4) });
   const c = new OffscreenCanvas(RES, RES), x = c.getContext("2d");
   x.drawImage(bitmap, 0, 0, RES, RES); dbg("drawn");
   const px = x.getImageData(0, 0, RES, RES).data, n = RES * RES; dbg("pixels");

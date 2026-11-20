@@ -62,7 +62,7 @@ onmessage = async ({ data }) => {
       ort = await import(RT + "ort.webgpu.min.mjs");
       ort.env.wasm.wasmPaths = new URL(RT, location.href).href;
       ort.env.wasm.wasmBinary = await fetchParts(RT + "wasm/");
-      ort.env.wasm.numThreads = self.crossOriginIsolated ? Math.min(4, navigator.hardwareConcurrency || 2) : 1;
+      ort.env.wasm.numThreads = self.crossOriginIsolated ? Math.min(data.threads || 4, navigator.hardwareConcurrency || 2) : 1;
       let bytes = await fetchParts(MODEL, (f) => postMessage({ type: "progress", f }));
       postMessage({ type: "loaded" }); dbg("model-fetched");
       session = await ort.InferenceSession.create(bytes, { executionProviders: [data.ep], graphOptimizationLevel: "all" });
