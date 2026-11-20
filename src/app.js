@@ -166,9 +166,17 @@ function subjectBox(img) {
   return x1 < 0 ? null : { x0: x0 / RES, y0: y0 / RES, x1: (x1 + 1) / RES, y1: (y1 + 1) / RES };
 }
 
+const FULL = { x: 0, y: 0, w: 1, h: 1 };
+
+// The subject's box as fractions of the whole photo, or null.
+function subject(it) {
+  const b = it.mask?.box, r = it.maskRect || FULL;
+  return b ? { x0: r.x + b.x0 * r.w, y0: r.y + b.y0 * r.h, x1: r.x + b.x1 * r.w, y1: r.y + b.y1 * r.h } : null;
+}
+
 // What a card shows and saves, in image pixels: the subject with a little room when cropped, else the whole photo.
 function frame(it) {
-  const b = it.mask?.box;
+  const b = subject(it);
   if (!it.crop || !b) return { x: 0, y: 0, w: it.w, h: it.h };
   const pad = 0.04 * Math.max((b.x1 - b.x0) * it.w, (b.y1 - b.y0) * it.h);
   const x0 = Math.max(0, Math.floor(b.x0 * it.w - pad)), y0 = Math.max(0, Math.floor(b.y0 * it.h - pad));
@@ -210,7 +218,8 @@ const LUT = (() => {
 function render(it, W, H) {
   const m = new OffscreenCanvas(W, H), mx = m.getContext("2d", { willReadFrequently: true });
   mx.imageSmoothingQuality = "high";
-  mx.drawImage(it.mask, 0, 0, W, H);
+  const r = it.maskRect || FULL; // a retry's mask covers only the zoomed-in part of the photo
+  mx.drawImage(it.mask, r.x * W, r.y * H, r.w * W, r.h * H);
   const a = mx.getImageData(0, 0, W, H).data;
 
   const fg = new OffscreenCanvas(W, H), fx = fg.getContext("2d", { willReadFrequently: true });
@@ -400,7 +409,14 @@ function makeCard(it) {
   pic.append(canvas, busy, crop, x);
   const bar = document.createElement("div"); bar.className = "bar";
   const dl = document.createElement("button"); dl.type = "button"; dl.className = "btn primary"; dl.textContent = PHONE ? "Save" : "Download"; dl.disabled = true;
-  bar.append(dl);
+  const up = document.createElement("button"), down = document.createElement("button");
+  for (const [b, label, emoji] of [[up, "Good result", "👍"], [down, "Bad result, try again", "👎"]]) {
+    b.type = "button"; b.className = "rate"; b.textContent = emoji; b.hidden = true;
+    b.setAttribute("aria-label", label); b.title = label;
+  }
+  up.addEventListener("click", () => rate(it, "up"));
+  down.addEventListener("click", () => rate(it, "down"));
+  bar.append(up, down, dl);
   card.append(pic, bar);
 
   crop.addEventListener("click", () => {
@@ -410,7 +426,7 @@ function makeCard(it) {
   x.addEventListener("click", () => { clearInterval(it.quip); items.splice(items.indexOf(it), 1); card.remove(); sync(); });
   dl.addEventListener("click", async () => deliver([{ name: outName(it), blob: await png(it) }]));
 
-  it.el = { card, canvas, busy, dl, crop };
+  it.el = { card, canvas, busy, dl, crop, up, down };
   return card;
 }
 
@@ -434,6 +450,7 @@ async function run() {
       if (!items.includes(it)) continue;
       clearInterval(it.quip);
       it.el.busy.hidden = true; it.el.dl.disabled = false; it.el.crop.hidden = !it.mask.box;
+      it.el.up.hidden = it.el.down.hidden = false; it.ms = lastMs;
       reveal(it); sync();
       if (PHONE) png(it);
       it.el.card.dataset.ms = lastMs;
@@ -443,6 +460,46 @@ async function run() {
 }
 
 function show() { document.body.classList.add("has-work"); }
+/* ---------- ratings ----------
+   👍 and 👎 send an anonymous count to /api/rate: the vote, the engine, the run time and the photo's
+   megapixels. Never the photo. 👎 then runs the model again, zoomed in on the subject, which gives
+   it more pixels to work with. The retry can be rated too. */
+function sendRating(it, vote) {
+  const body = JSON.stringify({ vote, engine: engineName, retry: !!it.retried, ms: it.ms || 0, mp: +((it.w * it.h) / 1e6).toFixed(1) });
+  fetch("/api/rate", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
+}
+
+async function rate(it, vote) {
+  const { up, down } = it.el;
+  up.disabled = down.disabled = true;
+  (vote === "up" ? up : down).classList.add("chosen");
+  sendRating(it, vote);
+  if (vote === "down" && !it.retried) await retry(it);
+}
+
+async function retry(it) {
+  const s = subject(it);
+  if (!s) return;
+  // Zoom to the subject with generous room; skip if that is most of the photo anyway.
+  const padX = 0.15 * (s.x1 - s.x0), padY = 0.15 * (s.y1 - s.y0);
+  const x0 = Math.max(0, s.x0 - padX), y0 = Math.max(0, s.y0 - padY), x1 = Math.min(1, s.x1 + padX), y1 = Math.min(1, s.y1 + padY);
+  if ((x1 - x0) * (y1 - y0) > 0.8) return;
+  it.retried = true;
+  const { busy, up, down, dl } = it.el;
+  busy.textContent = QUIPS[Math.floor(Math.random() * QUIPS.length)]; busy.hidden = false; dl.disabled = true;
+  try {
+    const sx = Math.round(x0 * it.w), sy = Math.round(y0 * it.h), sw = Math.max(1, Math.round((x1 - x0) * it.w)), sh = Math.max(1, Math.round((y1 - y0) * it.h));
+    const part = await createImageBitmap(it.bmp, sx, sy, sw, sh);
+    const m = await segment(part);
+    if (m.box) { it.mask = m; it.maskRect = { x: sx / it.w, y: sy / it.h, w: sw / it.w, h: sh / it.h }; it.ms = lastMs; it.png = null; }
+  } catch (e) { console.warn("Retry failed", e); }
+  busy.hidden = true; dl.disabled = false;
+  if (!items.includes(it)) return;
+  reveal(it);
+  if (PHONE) png(it);
+  up.disabled = down.disabled = false; up.classList.remove("chosen"); down.classList.remove("chosen");
+}
+
 // Everything fits on one screen: cards are square and sized so they all fit the space left.
 // Only past a minimum size (dozens of photos on a phone) does the grid scroll.
 const GAP = 12, MIN_PIC = 96, MAX_PIC = 640;

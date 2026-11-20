@@ -5,6 +5,7 @@ import { readFile, stat } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import { onRequestGet as fetchFn } from "../functions/api/fetch.js";
+import { onRequestPost as rateFn } from "../functions/api/rate.js";
 
 const dist = new URL("../dist/", import.meta.url).pathname;
 const port = Number(process.env.PORT) || 8788;
@@ -24,6 +25,11 @@ const match = (pattern, path) => pattern.endsWith("*") ? path.startsWith(pattern
 createServer(async (req, res) => {
   const path = decodeURIComponent(new URL(req.url, "http://x").pathname);
   // Run the Pages Function locally, same code as production.
+  if (path === "/api/rate" && req.method === "POST") {
+    const body = await new Promise((ok) => { let d = ""; req.on("data", (c) => (d += c)); req.on("end", () => ok(d)); });
+    const r = await rateFn({ request: new Request(`http://localhost:${port}/api/rate`, { method: "POST", headers: req.headers, body }), env: {} });
+    res.writeHead(r.status).end(); return;
+  }
   if (path === "/api/fetch") {
     const r = await fetchFn({ request: new Request(new URL(req.url, `http://localhost:${port}`), { headers: req.headers }) });
     res.writeHead(r.status, Object.fromEntries(r.headers));

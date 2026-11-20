@@ -1,0 +1,10 @@
+# Cloudflare Pages settings for goodbye-bg-git. This file is the source of truth once it exists:
+# the dashboard's binding settings are ignored. No [env.*] blocks, so preview and production match.
+name = "goodbye-bg-git"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-11-19"
+
+# Anonymous ratings from /api/rate: thumbs up or down, engine, timing. No photos, IPs or cookies.
+[[analytics_engine_datasets]]
+binding = "RATINGS"
+dataset = "goodbye_bg_ratings"
