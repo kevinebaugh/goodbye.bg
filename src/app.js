@@ -3,7 +3,6 @@
 // only allows requests back to this site. The one server call is /api/fetch, used only
 // when the visitor gives us a link to an image that lives on another site.
 
-import * as ort from "./ort/ort.webgpu.min.mjs";
 import { zipSync } from "./vendor/fflate.mjs";
 
 const RES = 1024;            // model input size
@@ -26,7 +25,7 @@ const QUIPS = [
 const $ = (id) => document.getElementById(id);
 const items = [];
 let white = false;
-let session = null, loading = null, running = false, uid = 0, lastMs = 0;
+let running = false, uid = 0, lastMs = 0;
 
 /* ---------- small helpers ---------- */
 function toast(msg, ms = 3500) {
@@ -40,102 +39,115 @@ const nextFrame = () => new Promise((r) => requestAnimationFrame(() => setTimeou
 const baseName = (s) => (s || "image").split(/[\\/?#]/).filter(Boolean).pop()?.replace(/\.[^.]+$/, "").slice(0, 80) || "image";
 
 /* ---------- model ----------
-   Two engines. Everyone runs IMG.LY's ISNet on the CPU. BiRefNet on WebGPU is opt-in with
-   ?engine=gpu: on ORT 1.21 it loads but every run fails, and the failure breaks ORT for the
-   rest of the page, so the CPU cannot take over (see CLAUDE.md). */
+   ISNet runs in its own worker (engine.js). Computers and phones whose GPU can run it use
+   WebGPU (about 0.15 s a photo on a recent Mac); everyone else uses the CPU (several seconds).
+   If the GPU fails to start, fails a run, hangs, or returns garbage, its worker is thrown away
+   and a CPU worker takes over the same photo. ?engine=gpu or ?engine=cpu forces one;
+   ?gpufail=init|run|hang simulates a broken GPU for testing. */
 
-const ENGINES = {
-  gpu: { dir: "m/birefnet/", ep: "webgpu", mean: [0.485 * 255, 0.456 * 255, 0.406 * 255], std: [0.229 * 255, 0.224 * 255, 0.225 * 255], logits: true },
-  cpu: { dir: "m/isnet/", ep: "wasm", mean: [128, 128, 128], std: [256, 256, 256], logits: false },
-};
-let engine = null;
+const params = new URLSearchParams(location.search);
+const GPU_WARMUP_TIMEOUT = 30_000, GPU_RUN_TIMEOUT = 15_000; // longer counts as hung
+let worker = null, engineName = "", engineReady = null, gpuBroken = false, jobId = 0;
+const jobs = new Map();
 
 async function pickEngine() {
-  const forced = new URLSearchParams(location.search).get("engine");
-  return forced in ENGINES ? forced : "cpu";
+  const forced = params.get("engine");
+  if (forced === "gpu" || forced === "cpu") return forced;
+  if (gpuBroken) return "cpu";
+  try {
+    const adapter = await navigator.gpu?.requestAdapter();
+    if (adapter?.features.has("shader-f16")) return "gpu"; // the model is 16-bit
+  } catch {}
+  return "cpu";
 }
 
-async function fetchModel(dir) {
-  const manifest = await (await fetch(dir + "manifest.json")).json();
-  let got = 0; const parts = [];
-  for (const p of manifest.parts) {
-    // A dropped connection only costs this part: try it again a few times before giving up.
-    for (let attempt = 1; ; attempt++) {
-      const chunks = []; let partGot = 0;
-      try {
-        const res = await fetch(dir + p);
-        if (!res.ok) throw new Error(`Could not load ${p} (${res.status})`);
-        const reader = res.body.getReader();
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          chunks.push(value); partGot += value.length;
-          status(`Downloading model: ${Math.floor(((got + partGot) / manifest.size) * 10) * 10}%`);
-        }
-        parts.push(...chunks); got += partGot;
-        break;
-      } catch (e) {
-        if (attempt >= 4) throw e;
-        console.warn(`Retrying ${p}`, e);
-        await new Promise((r) => setTimeout(r, 1000 * attempt));
-      }
-    }
-  }
-  return new Uint8Array(await new Blob(parts).arrayBuffer());
+function killWorker(reason) {
+  worker?.terminate(); worker = null;
+  for (const j of jobs.values()) j.reject(new Error(reason));
+  jobs.clear();
 }
+function stopEngine(reason) { killWorker(reason); engineReady = null; }
 
-async function loadModel() {
-  if (session) return session;
-  if (loading) return loading;
-  loading = (async () => {
-    ort.env.wasm.wasmPaths = new URL("./ort/", location.href).href;
-    ort.env.wasm.numThreads = self.crossOriginIsolated ? Math.min(4, navigator.hardwareConcurrency || 2) : 1;
-    let name = await pickEngine();
-    for (;;) {
-      engine = ENGINES[name];
-      try {
-        const bytes = await fetchModel(engine.dir);
+function startEngine(name) {
+  killWorker("Engine restarted");
+  engineName = name;
+  const w = worker = new Worker("engine.js", { type: "module" });
+  return new Promise((resolve, reject) => {
+    let timer = 0;
+    const fail = (e) => { clearTimeout(timer); reject(e instanceof Error ? e : new Error(String(e))); };
+    w.onerror = (e) => { e.preventDefault?.(); fail(e.message || "Engine worker crashed"); for (const j of jobs.values()) j.reject(new Error("Engine worker crashed")); jobs.clear(); };
+    w.onmessage = ({ data }) => {
+      if (data.type === "progress") status(`Downloading model: ${Math.floor(data.f * 10) * 10}%`);
+      else if (data.type === "loaded") {
         status("Starting up…");
-        const opts = { executionProviders: [engine.ep], graphOptimizationLevel: "all" };
-        if (engine.ep === "wasm") {
-          try { ort.env.wasm.proxy = true; session = await ort.InferenceSession.create(bytes.slice(0), opts); } // worker keeps the page smooth
-          catch (e) { console.warn("Worker mode failed, using the main thread.", e); ort.env.wasm.proxy = false; session = await ort.InferenceSession.create(bytes, opts); }
-        } else {
-          session = await ort.InferenceSession.create(bytes, opts);
-        }
-        break;
-      } catch (e) {
-        if (name === "gpu") { console.warn("GPU engine failed, falling back to CPU.", e); name = "cpu"; continue; }
-        throw e;
+        if (name === "gpu") timer = setTimeout(() => fail("GPU warm-up timed out"), GPU_WARMUP_TIMEOUT);
+      } else if (data.type === "ready") { clearTimeout(timer); resolve(); }
+      else if (data.type === "failed") fail(data.error);
+      else if (data.type === "result" || data.type === "error") {
+        const j = jobs.get(data.id); if (!j) return;
+        jobs.delete(data.id); clearTimeout(j.timer);
+        data.type === "result" ? j.resolve(data) : j.reject(new Error(data.error));
       }
-    }
-    status("Ready.");
-    return session;
-  })();
-  try { return await loading; } catch (e) { loading = null; throw e; }
+    };
+    w.postMessage({ type: "init", ep: name === "gpu" ? "webgpu" : "wasm", fail: params.get("gpufail") });
+  });
+}
+
+function loadModel() {
+  if (!engineReady) {
+    engineReady = (async () => {
+      const name = await pickEngine();
+      try { await startEngine(name); }
+      catch (e) {
+        if (name !== "gpu") throw e;
+        console.warn("GPU engine failed to start, switching to CPU.", e);
+        gpuBroken = true; await startEngine("cpu");
+      }
+      status(`Ready.`);
+      console.info(`goodbye.bg: engine ${engineName}`);
+    })();
+    engineReady.catch(() => { engineReady = null; });
+  }
+  return engineReady;
+}
+
+function infer(input) {
+  const w = worker, id = ++jobId;
+  return new Promise((resolve, reject) => {
+    const j = { resolve, reject, timer: 0 };
+    if (engineName === "gpu") j.timer = setTimeout(() => { jobs.delete(id); reject(new Error("GPU run timed out")); }, GPU_RUN_TIMEOUT);
+    jobs.set(id, j);
+    w.postMessage({ type: "run", id, input });
+  });
 }
 
 async function segment(bitmap) {
-  const s = await loadModel();
+  await loadModel();
   const c = new OffscreenCanvas(RES, RES), x = c.getContext("2d");
   x.drawImage(bitmap, 0, 0, RES, RES);
   const px = x.getImageData(0, 0, RES, RES).data, n = RES * RES;
-  const { mean, std, logits } = engine;
-  const input = new Float32Array(3 * n);
+  const input = new Float32Array(3 * n); // ISNet input: (x - 128) / 256
   for (let i = 0; i < n; i++) {
-    input[i] = (px[i * 4] - mean[0]) / std[0];
-    input[i + n] = (px[i * 4 + 1] - mean[1]) / std[1];
-    input[i + 2 * n] = (px[i * 4 + 2] - mean[2]) / std[2];
+    input[i] = (px[i * 4] - 128) / 256;
+    input[i + n] = (px[i * 4 + 1] - 128) / 256;
+    input[i + 2 * n] = (px[i * 4 + 2] - 128) / 256;
   }
-  const t0 = performance.now();
-  const out = await s.run({ [s.inputNames[0]]: new ort.Tensor("float32", input, [1, 3, RES, RES]) }, [s.outputNames[0]]);
-  const m = await out[s.outputNames[0]].getData();
-  lastMs = Math.round(performance.now() - t0);
+  let res;
+  try { res = await infer(input); }
+  catch (e) {
+    if (engineName !== "gpu" || params.get("engine") === "gpu") throw e;
+    console.warn("GPU run failed, switching to CPU.", e);
+    gpuBroken = true; stopEngine("GPU failed");
+    await loadModel();
+    res = await infer(input);
+  }
+  const m = res.mask;
+  lastMs = res.ms;
   const id = new ImageData(RES, RES);
   for (let i = 0; i < n; i++) {
-    const k = i * 4, v = logits ? 1 / (1 + Math.exp(-m[i])) : m[i];
+    const k = i * 4;
     id.data[k] = id.data[k + 1] = id.data[k + 2] = 255;
-    id.data[k + 3] = Math.max(0, Math.min(255, v * 255));
+    id.data[k + 3] = Math.max(0, Math.min(255, m[i] * 255));
   }
   despeck(id);
   const mask = new OffscreenCanvas(RES, RES);
@@ -507,7 +519,6 @@ $("linkform").addEventListener("submit", (e) => {
 });
 
 // 6. Links into the site: goodbye.bg/?url=https://… (bookmarklets, other apps).
-const params = new URLSearchParams(location.search);
 if (params.get("url")) addSources([params.get("url")]);
 
 // 7. Share sheet on Android, after "Add to Home screen" (see sw.js and manifest).
