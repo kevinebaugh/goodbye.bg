@@ -94,7 +94,7 @@ async function loadModel() {
         throw e;
       }
     }
-    status(name === "gpu" ? "Ready. Running on your GPU." : "Ready. Running on your CPU.");
+    status("Ready.");
     return session;
   })();
   try { return await loading; } catch (e) { loading = null; status("Could not load. Reload the page to try again."); throw e; }
