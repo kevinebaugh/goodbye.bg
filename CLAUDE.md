@@ -33,6 +33,23 @@ Actions. The old upload-only project `goodbye-bg` can be deleted.
 
 ## Engines
 
+iPhones and iPads always use the CPU engine (4 threads). Tested 2026-11-20 on Kevin's iPhone with
+`?debug=1`: the WebGPU engine crashed the tab ("A problem repeatedly occurred") on the first real photo,
+even with no warm-up run (one try in two); the CPU engine never crashed: 7.3 s a photo on 1 thread,
+5.0 s on 2, 3.5 s on 4. Safari needs `Cross-Origin-Embedder-Policy: require-corp` (it ignores
+`credentialless`) to be cross-origin isolated, which threads need.
+
+Debugging on phones: `?debug=1` sends step names and numbers (never photo data) to `/api/diag`, which
+only writes to the Functions log. Read it with `npx wrangler pages deployment tail <deployment-id>
+--project-name goodbye-bg-git --format json` (find the ID with `wrangler pages deployment list`).
+Other test switches: `?engine=gpu|cpu`, `?threads=N`, `?nowarm=1`, `?gpufail=init|run|hang`.
+
+Memory on phones (measured in the iOS Simulator, CPU engine): ISNet at 1024x1024 needs about 1.5 to
+2 GB of wasm heap, mostly activations; it can't run smaller (a Concat inside is fixed to 1024). Asking
+for only the first of its 13 outputs, freeing the model bytes after session creation, one PNG at a
+time, and compositing the mask instead of copying pixels took 3 photos from 2.1 GB to 1.46 GB.
+Safari caps photos at 16 MP (canvas limit); the original bitmap is kept and scaled when drawn.
+
 One model, two engines. `src/engine.js` runs IMG.LY ISNet medium (fp16, AGPL, 88 MB) on ONNX Runtime Web
 1.31.1 inside its own module Worker. `app.js` starts it with WebGPU when the adapter has `shader-f16`, else
 with WebAssembly (4 threads). The GPU worker does a warm-up run before "Ready", which compiles the shaders
@@ -56,7 +73,6 @@ Measured 2026-11-20, Chrome 157, M5 Pro:
   over a soft blurred background (keeps the blur), and keeps blobs of busy backdrops (graffiti).
 - Tested: every forced GPU failure finishes the photo on the CPU; photos added during the first download wait
   and then run; a dropped model part is retried.
-- Not yet tested on Safari / iPhone with this runtime.
 
 Rejected:
 - ISNet **small** (quint8): garbage (61% of pixels unsure).
@@ -71,8 +87,8 @@ Requirement from Kevin: 10 to 30 seconds per photo is unacceptable. Target a few
 
 ## Next steps
 
-1. Check the GPU engine on Safari (iPhone, Mac) before relying on it there. If ORT 1.31.1 fails on Safari,
-   both engines fail, because they share the runtime.
+1. Mac Safari still picks the GPU engine; not tested there. A smaller GPU footprint might make WebGPU
+   safe on iPhones again (try once ORT or the model changes).
 2. Better quality than ISNet for close-ups and busy backgrounds: BiRefNet on WebGPU (see blockers above) or
    another model that fits WebGPU and a 4 GB heap.
 3. Not yet tested on real devices: Android share target, desktop "Open with", folder drops, live link fetching.

@@ -110,8 +110,8 @@ function startEngine(name) {
     };
     dbg("engine-start", { name });
     w.postMessage({ type: "init", ep: name === "gpu" ? "webgpu" : "wasm", fail: params.get("gpufail"), debug: DEBUG, noWarm: params.has("nowarm"),
-      // Each CPU thread adds memory; iPhones get one until more is proven safe (?threads=N to test).
-      threads: +params.get("threads") || (IOS ? 1 : 4) });
+      // ?threads=N to test. 4 threads: 3.5 s a photo on an iPhone (1: 7.3 s, 2: 5.0 s), no crash.
+      threads: +params.get("threads") || 4 });
   });
 }
 
@@ -145,7 +145,7 @@ function infer(input) {
 
 async function segment(bitmap) {
   await loadModel();
-  dbg("segment", { w: bitmap.width, h: bitmap.height, coi: self.crossOriginIsolated, threads: +params.get("threads") || (IOS ? 1 : 4) });
+  dbg("segment", { w: bitmap.width, h: bitmap.height, coi: self.crossOriginIsolated, threads: +params.get("threads") || 4 });
   const c = new OffscreenCanvas(RES, RES), x = c.getContext("2d");
   x.drawImage(bitmap, 0, 0, RES, RES); dbg("drawn");
   const px = x.getImageData(0, 0, RES, RES).data, n = RES * RES; dbg("pixels");
@@ -443,7 +443,7 @@ function makeCard(it) {
   crop.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M2 6h14a2 2 0 0 1 2 2v14"/></svg>';
   pic.append(canvas, busy, crop, x);
   const bar = document.createElement("div"); bar.className = "bar";
-  const dl = document.createElement("button"); dl.type = "button"; dl.className = "btn primary"; dl.textContent = PHONE ? "Save" : "Download"; dl.disabled = true;
+  const dl = document.createElement("button"); dl.type = "button"; dl.className = "btn primary"; dl.textContent = "Download"; dl.disabled = true;
   const up = document.createElement("button"), down = document.createElement("button");
   for (const [b, label, emoji] of [[up, "Good result", "👍"], [down, "Bad result, try again", "👎"]]) {
     b.type = "button"; b.className = "rate"; b.textContent = emoji; b.hidden = true;
@@ -561,7 +561,7 @@ new ResizeObserver(layout).observe($("grid"));
 function sync() {
   const done = items.filter((i) => i.mask).length;
   $("all").hidden = done < 2;
-  $("all").textContent = `${PHONE ? "Save" : "Download"} all (${done})`;
+  $("all").textContent = `Download all (${done})`;
   $("tools").hidden = done < 2;
   if (!items.length) document.body.classList.remove("has-work");
   requestAnimationFrame(layout);
