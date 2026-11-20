@@ -542,7 +542,12 @@ async function rate(it, vote) {
   up.disabled = down.disabled = true;
   (vote === "up" ? up : down).classList.add("chosen");
   sendRating(it, vote);
-  if (vote === "down" && !it.retried) await retry(it);
+  if (vote !== "down") return;
+  if (!it.retried) return retry(it);
+  if (it.first) { // 👎 on the retry: put the first result back, so a retry never leaves things worse
+    Object.assign(it, { mask: it.first.mask, maskRect: it.first.rect, png: null });
+    it.first = null; drawCard(it); if (PHONE) png(it);
+  }
 }
 
 async function retry(it) {
@@ -553,6 +558,7 @@ async function retry(it) {
   const x0 = Math.max(0, s.x0 - padX), y0 = Math.max(0, s.y0 - padY), x1 = Math.min(1, s.x1 + padX), y1 = Math.min(1, s.y1 + padY);
   if ((x1 - x0) * (y1 - y0) > 0.8) return;
   it.retried = true;
+  it.first = { mask: it.mask, rect: it.maskRect };
   const { busy, up, down, dl } = it.el;
   busy.textContent = QUIPS[Math.floor(Math.random() * QUIPS.length)]; busy.hidden = false; dl.disabled = true;
   try {
