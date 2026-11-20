@@ -6,6 +6,14 @@ remove.bg shuts down on 1 December 2026, so its users will start searching for a
 
 ## Ads to goodbye.bg
 
+**On hold (decided 2026-11-20): no paid ads until ads on the site earn money.** Then spend at most what
+the EthicalAds slot earned the month before. Until then, grow through free channels: SEO
+(`docs/seo.md`), Show HN, Product Hunt, and answering "what replaces remove.bg?" threads. The plan below
+is ready for when that happens.
+
+Ad-management tools such as Dextrum (dextrum.app) don't fit. It's a Google Ads optimizer for advertisers,
+not an ad network, and costs $99/month for 1 to 3 accounts, far more than this budget.
+
 **Wait for the domain.** An ad that lands on `goodbye-bg-git.pages.dev` looks like a scam. The goodbye.bg
 domain is waiting on the Netim trustee check. Ask Netim to speed it up. If it isn't live by 28 November,
 run the campaign on the pages.dev URL anyway rather than miss the shutdown.
@@ -82,7 +90,7 @@ To turn it on:
    photos without the sandbox having to hide its origin.
 3. Set `AD_SRC` in `app.js` to that URL, add it to `frame-src` in the page's CSP, and set `ADS = true`.
 
-## Budget: $1/day (decided 2026-11-20)
+## Budget once ads earn: start at $1/day
 
 At $1/day, spend it only where nobody else bids: the shutdown searches. About 2 to 4 clicks a day, so
 this is a test, not a growth channel.
@@ -98,6 +106,6 @@ this is a test, not a growth channel.
 
 ## Decisions for Kevin
 
-1. ~~Budget~~: $1/day on Google Search, as above.
+1. ~~Budget~~: no paid ads until the site earns from ads; then start at $1/day on Google Search.
 2. OK to add the cookie-free `ref` counter, the only server-side counting on the site.
 3. Ads on the site: off until January, then a direct sponsor or EthicalAds.
