@@ -37,9 +37,9 @@ const nextFrame = () => new Promise((r) => requestAnimationFrame(() => setTimeou
 const baseName = (s) => (s || "image").split(/[\\/?#]/).filter(Boolean).pop()?.replace(/\.[^.]+$/, "").slice(0, 80) || "image";
 
 /* ---------- model ----------
-   Two engines. Phones and computers with WebGPU (most current browsers) run BiRefNet on
-   the GPU: best edges, a few seconds or less. Everything else runs IMG.LY's ISNet on the
-   CPU. Add ?engine=gpu or ?engine=cpu to the address to force one when testing. */
+   Two engines. Everyone runs IMG.LY's ISNet on the CPU. BiRefNet on WebGPU is opt-in with
+   ?engine=gpu: on ORT 1.21 it loads but every run fails, and the failure breaks ORT for the
+   rest of the page, so the CPU cannot take over (see CLAUDE.md). */
 
 const ENGINES = {
   gpu: { dir: "m/birefnet/", ep: "webgpu", mean: [0.485 * 255, 0.456 * 255, 0.406 * 255], std: [0.229 * 255, 0.224 * 255, 0.225 * 255], logits: true },
@@ -49,12 +49,7 @@ let engine = null;
 
 async function pickEngine() {
   const forced = new URLSearchParams(location.search).get("engine");
-  if (forced in ENGINES) return forced;
-  try {
-    const adapter = await navigator.gpu?.requestAdapter();
-    if (adapter?.features.has("shader-f16")) return "gpu";
-  } catch {}
-  return "cpu";
+  return forced in ENGINES ? forced : "cpu";
 }
 
 async function fetchModel(dir) {

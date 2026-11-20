@@ -33,7 +33,8 @@ Actions. The old upload-only project `goodbye-bg` can be deleted.
 
 ## Engines (current work)
 
-`app.js` picks an engine at load. Force one with `?engine=gpu` or `?engine=cpu`.
+`app.js` uses the cpu engine unless the address has `?engine=gpu` (opt-in since 2026-11-20, because the gpu
+engine fails on every photo; see findings below).
 
 | Engine | Model | Runs on | Notes |
 |---|---|---|---|
@@ -43,16 +44,46 @@ Actions. The old upload-only project `goodbye-bg` can be deleted.
 Findings on a real photo (oak tree, sky, grass):
 - ISNet **small** (quint8, shipped first): garbage. Sky 0.47, 61% of pixels unsure. Do not use.
 - ISNet **medium**: clean sky, but drops the tree crown, keeps only trunk. ~3.7 s on 2 sandbox CPU cores.
-- BiRefNet lite: quality and speed not yet measured. Input is fixed at 1024x1024, so no low-res mode.
+- BiRefNet lite: input is fixed at 1024x1024, so no low-res mode.
+
+Measured 2026-11-19 in Chrome 157 on an M5 Pro (18 cores, Apple metal-3 GPU, crossOriginIsolated, 4 wasm threads
+in a worker), photo `Solitary Tree in a Sunlit Meadow.png` (1024x1536):
+- **gpu: does not run.** The session loads and says "Running on your GPU", then every photo fails with
+  "Could not process this image". BiRefNet has Concat nodes with 17, 65 and 125 inputs. ORT 1.21.0 builds one
+  shader per Concat: it exceeds the device's 8 storage buffers per stage (the adapter allows 10), and the
+  125-input one breaks WGSL's nesting limit of 127. The CPU fallback only covers session creation, not `run`,
+  so any browser with `shader-f16` (all Apple silicon Chrome) would fail on every photo. This is not on
+  `main` yet (commit e960847 is local only). Do not push it as is.
+- **gpu on ORT 1.31.1** (tried, reverted): the Concat errors are gone and the device gets 10 buffers, but one
+  shader still needs 11: `Too many storage buffers in shader. Current: 11, Max is 10`. Fails cleanly, no freeze.
+  1.31.1 also changes the runtime files (`ort-wasm-simd-threaded.asyncify.*` instead of `.jsep.*`), and its
+  wasm is 27.4 MiB, over the 25 MiB Pages limit, so it would need splitting.
+- **cpu (ISNet medium)**: 6.6 s per photo cold and warm on ORT 1.21.0 (end to end 6.8 s); 5.2 to 6.0 s on 1.31.1.
+  Model ready ~4 s after page load (served from the local server). On this tree it keeps the whole crown
+  (contradicts the note above), removes sky and grass; only the sunlit right edge of the crown turns half
+  transparent.
+- **cpu on four more photos** (Wikimedia Commons, 1920 px wide, 2026-11-20): 6.0 to 6.8 s each, four in a
+  batch took 26.7 s. Woman with long dark hair in front of a crowd: crowd fully removed, hair outline solid but
+  blocky, fine strands lost. Girl hugging a dog: clean, pigtails and fur kept. Bicycle against graffiti:
+  frame and spokes kept, but a blue graffiti blob stays behind the rear wheel. Cat close-up on a soft blurred
+  background: **fails**, keeps the blurred background on the left and bottom as part of the cat.
+- `/ort/*` and `/m/*` are cached `immutable` for a year under fixed names. Changing the ORT version or a model
+  serves the old file to returning visitors. Put the version in the path when upgrading.
 
 Requirement from Kevin: 10 to 30 seconds per photo is unacceptable. Target a few seconds.
 
 ## Next steps
 
-1. Measure BiRefNet on WebGPU in Chrome on the Mac: `npm run dev`, open `/?engine=gpu`, add a photo.
-   Each card gets `data-ms` with inference time. Check quality on hard photos (trees, hair, products).
-2. Measure the CPU engine (`/?engine=cpu`) on the Mac. Decide if ISNet medium is an acceptable fallback.
-3. If WebGPU is slow, try a newer onnxruntime-web (pinned at 1.21.0) before changing models.
+1. Fix or drop the gpu engine (now opt-in). Options: a BiRefNet export that avoids the wide Concats, or a
+   different model. Before making it the default again, it needs a real fallback. Retrying on the CPU in the same
+   page does not work (tried 2026-11-20): one ORT wasm instance backs both engines, the failed WebGPU run aborts
+   it, and the CPU session then fails with "no available backend found". Run the gpu engine in its own Worker
+   and terminate it on failure, or load a separate wasm-only ORT build for the CPU (one more runtime file).
+   The 125-input Concat breaks WGSL's nesting limit, which every Chrome enforces, so ORT 1.21 most likely fails
+   on all platforms, not only Macs (only tested on the M5 Pro).
+2. ISNet medium is a usable fallback for people and pets in scenes, weak on close-ups with blurred
+   backgrounds (cat) and busy backdrops (graffiti). It is not good enough to be the only engine.
+3. If staying on CPU, 5 to 7 s on an M5 Pro means phones will be much slower. Consider more threads or a smaller input.
 4. Merge, push, and check the preview, then production.
 5. Not yet tested on real devices: Android share target, desktop "Open with", folder drops, live link fetching.
 
