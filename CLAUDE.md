@@ -85,6 +85,27 @@ Rejected:
 
 Requirement from Kevin: 10 to 30 seconds per photo is unacceptable. Target a few seconds.
 
+## UX decisions (2026-11-20, from Kevin)
+
+- One screen, no scrolling, no zoom or pan gestures. Cards are square and sized to fit; a batch appears at
+  once, in the order picked, and processing goes top-left first.
+- Only the photo being worked on waves and shows a quip; waiting cards stay still. Quips are the one place
+  for playful text; everything else is plain and only what people need.
+- Results are cropped to the subject by default (crop icon switches to the whole frame). 👍/👎 sit on the
+  image; 👎 retries zoomed in on the subject, a second 👎 restores the first result.
+- Hover effects only on devices with a real pointer (phones keep :hover after a tap).
+- Palette: the cool side of Giant Goldfish only (aqua, deep teal, sage). No orange; red only for errors.
+- Every claim on the site must stay true, including once ads run.
+- Typical photos: phone camera rolls. People, kids, pets, products, cars. Busy scenes (car interiors, a
+  small cat in a dark yard) are the model's weak spot; don't over-tune for them.
+
+Reading ratings (Workers Analytics Engine, dataset `goodbye_bg_ratings`; blob1 vote, blob2 engine,
+blob3 first/retry, double1 ms, double2 megapixels):
+
+    POST /accounts/<account>/analytics_engine/sql   (text/plain body)
+    SELECT blob1 AS vote, blob2 AS engine, blob3 AS kind, count() AS n, avg(double1) AS ms
+    FROM goodbye_bg_ratings GROUP BY vote, engine, kind ORDER BY n DESC
+
 ## Next steps
 
 1. Mac Safari still picks the GPU engine; not tested there. A smaller GPU footprint might make WebGPU

@@ -591,7 +591,7 @@ function layout() {
   const scroll = best.p < MIN_PIC, p = Math.min(MAX_PIC, Math.max(best.p, MIN_PIC));
   const c = scroll ? Math.max(1, Math.floor((W + GAP) / (p + GAP))) : best.c;
   g.classList.toggle("scroll", scroll);
-  g.style.setProperty("--cols", c); g.style.setProperty("--p", `${p}px`);
+  $("main").style.setProperty("--cols", c); $("main").style.setProperty("--p", `${p}px`); // grid and tools row share them
 }
 new ResizeObserver(layout).observe($("grid"));
 
