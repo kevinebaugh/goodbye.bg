@@ -85,7 +85,6 @@ body.has-work .hero h1, body.has-work .sub { display: none; }
 body.hot .dropzone { display: grid; animation: fade .12s ease-out; }
 @keyframes fade { from { opacity: 0; } }
 .dropzone p { margin: 0; font-size: clamp(40px, 8vw, 88px); font-weight: 800; letter-spacing: -0.04em; text-align: center; line-height: 1; animation: bob 1s ease-in-out infinite alternate; }
-.dropzone small { display: block; font-size: 20px; font-weight: 600; letter-spacing: 0; margin-top: 12px; opacity: .9; }
 @keyframes bob { to { transform: translateY(-8px) rotate(-1.5deg); } }
 .c { position: absolute; width: 90px; height: 90px; border: 0 solid #fff; }
 .tl { top: 28px; left: 28px; border-top-width: 10px; border-left-width: 10px; border-top-left-radius: 40px; }

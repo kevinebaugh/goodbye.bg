@@ -13,14 +13,6 @@ const PREVIEW_SIDE = 900;    // card preview size
 const CUTOFF = 0.5, SOFTNESS = 0.6;
 const ADS = false;           // set true once ad.html holds a real ad tag
 
-const QUIPS = [
-  "Asking the background to leave…",
-  "Showing the backdrop the door…",
-  "Packing the background's bags…",
-  "It's not you, background. It's us.",
-  "Waving goodbye…",
-  "Cutting ties with the background…",
-];
 
 const $ = (id) => document.getElementById(id);
 const items = [];
@@ -251,7 +243,6 @@ async function addSources(list, origin = "") {
         bmp = await createImageBitmap(bmp, { resizeWidth: w, resizeHeight: h, resizeQuality: "high" });
       }
       Object.assign(it, { bmp, w, h });
-      it.el.busy.textContent = QUIPS[Math.floor(Math.random() * QUIPS.length)];
       drawCard(it);
     } catch (e) {
       console.warn(e);
@@ -337,9 +328,7 @@ function makeCard(it) {
   const canvas = document.createElement("canvas");
   canvas.setAttribute("role", "img"); canvas.setAttribute("aria-label", "Image");
   const busy = document.createElement("div"); busy.className = "busy";
-  let line = Math.floor(Math.random() * QUIPS.length);
-  busy.textContent = it.bmp ? QUIPS[line] : "Fetching…";
-  it.quip = setInterval(() => { if (it.bmp && !it.failed) busy.textContent = QUIPS[++line % QUIPS.length]; }, 1600);
+  busy.setAttribute("role", "status"); busy.setAttribute("aria-label", "Working");
   const x = document.createElement("button"); x.type = "button"; x.className = "x"; x.textContent = "×"; x.setAttribute("aria-label", "Remove");
   pic.append(canvas, busy, x);
   const bar = document.createElement("div"); bar.className = "bar";
@@ -352,7 +341,7 @@ function makeCard(it) {
   pic.addEventListener("pointerdown", (e) => { if (e.target === x) return; pic.setPointerCapture(e.pointerId); peek(true); });
   for (const t of ["pointerup", "pointercancel", "pointerleave"]) pic.addEventListener(t, () => peek(false));
   pic.addEventListener("contextmenu", (e) => e.preventDefault());
-  x.addEventListener("click", () => { clearInterval(it.quip); items.splice(items.indexOf(it), 1); card.remove(); sync(); });
+  x.addEventListener("click", () => { items.splice(items.indexOf(it), 1); card.remove(); sync(); });
   dl.addEventListener("click", async () => save(outName(it), await fullBlob(it)));
 
   it.el = { card, canvas, busy, dl, name };
@@ -360,7 +349,6 @@ function makeCard(it) {
 }
 
 function fail(it, msg) {
-  clearInterval(it.quip);
   it.failed = true;
   it.el.card.classList.add("failed");
   it.el.busy.textContent = msg;
@@ -376,7 +364,6 @@ async function run() {
       try { it.mask = await segment(it.bmp); }
       catch (e) { console.error(e); fail(it, "Could not process this image."); continue; }
       if (!items.includes(it)) continue;
-      clearInterval(it.quip);
       it.el.busy.hidden = true; it.el.dl.disabled = false;
       reveal(it); sync();
       it.el.card.dataset.ms = lastMs;
@@ -412,7 +399,6 @@ $("all").addEventListener("click", async () => {
     files[name] = [new Uint8Array(await (await fullBlob(it)).arrayBuffer()), { level: 0 }];
   }
   save(`goodbye-bg-${done.length}-images.zip`, new Blob([zipSync(files)], { type: "application/zip" }));
-  console.info("goodbye.bg: All yours. Backgrounds gone. 👋");
 });
 
 $("white").addEventListener("change", (e) => { white = e.target.checked; for (const it of items) if (it.bmp) drawCard(it); });
@@ -500,4 +486,3 @@ if (ADS) $("ad").hidden = false;
 
 // Start loading the model right away so the first photo is fast.
 loadModel().catch((e) => { console.error(e); toast("Could not load. Check your connection and reload.", 8000); });
-console.info("goodbye.bg: No backgrounds were harmed. Well, a few.");
