@@ -56,14 +56,26 @@ async function fetchModel(dir) {
   const manifest = await (await fetch(dir + "manifest.json")).json();
   let got = 0; const parts = [];
   for (const p of manifest.parts) {
-    const res = await fetch(dir + p);
-    if (!res.ok) throw new Error(`Could not load ${p} (${res.status})`);
-    const reader = res.body.getReader();
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      parts.push(value); got += value.length;
-      status(`Getting ready, one time only: ${Math.round((got / manifest.size) * 100)}%`);
+    // A dropped connection only costs this part: try it again a few times before giving up.
+    for (let attempt = 1; ; attempt++) {
+      const chunks = []; let partGot = 0;
+      try {
+        const res = await fetch(dir + p);
+        if (!res.ok) throw new Error(`Could not load ${p} (${res.status})`);
+        const reader = res.body.getReader();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value); partGot += value.length;
+          status(`Getting ready, one time only: ${Math.round(((got + partGot) / manifest.size) * 100)}%`);
+        }
+        parts.push(...chunks); got += partGot;
+        break;
+      } catch (e) {
+        if (attempt >= 4) throw e;
+        console.warn(`Retrying ${p}`, e);
+        await new Promise((r) => setTimeout(r, 1000 * attempt));
+      }
     }
   }
   return new Uint8Array(await new Blob(parts).arrayBuffer());
