@@ -264,12 +264,19 @@ function reveal(it) {
     else if (zoom) { t0 = performance.now(); requestAnimationFrame(ease); }
     else drawCard(it);
   };
+  // Ease into the crop in a canvas sized once for the crop: the view shrinks from the whole frame
+  // (letterboxed) to the subject. Resizing a canvas every frame churns memory on phones.
+  let cw = 0, ch = 0;
   const ease = (now) => {
+    if (!cw) {
+      const k = Math.min(PREVIEW_SIDE / Math.max(f.w, f.h), 4);
+      c.width = cw = Math.max(1, Math.round(f.w * k)); c.height = ch = Math.max(1, Math.round(f.h * k));
+    }
     const t = 1 - (1 - Math.min(1, (now - t0) / Z)) ** 3, l = (a, b) => a + (b - a) * t;
     const rx = l(0, f.x) * K, ry = l(0, f.y) * K, rw = l(it.w, f.w) * K, rh = l(it.h, f.h) * K;
-    const s = Math.min(PREVIEW_SIDE / Math.max(rw, rh), 4);
-    c.width = Math.max(1, Math.round(rw * s)); c.height = Math.max(1, Math.round(rh * s));
-    x.drawImage(cut, rx, ry, rw, rh, 0, 0, c.width, c.height);
+    const s = Math.min(cw / rw, ch / rh), dw = rw * s, dh = rh * s;
+    x.clearRect(0, 0, cw, ch);
+    x.drawImage(cut, rx, ry, rw, rh, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
     if (t < 1) requestAnimationFrame(ease); else drawCard(it);
   };
   requestAnimationFrame(wipe);
@@ -286,7 +293,9 @@ function fullBlob(it) {
 // Phones save through the share sheet ("Save Image" puts it in Photos) instead of downloading to Files.
 // The share sheet only opens straight from a tap, so phones make each PNG as soon as the cut is done.
 const PHONE = matchMedia("(pointer: coarse)").matches && "canShare" in navigator;
-const png = (it) => (it.png ||= fullBlob(it));
+let pngChain = Promise.resolve();
+// One full-size PNG at a time: several at once can run a phone out of memory.
+const png = (it) => (it.png ||= (pngChain = pngChain.then(() => fullBlob(it), () => fullBlob(it))));
 const outName = (it) => `${it.name}-goodbye-bg.png`;
 
 /* ---------- getting images in ----------
@@ -416,7 +425,9 @@ function makeCard(it) {
   }
   up.addEventListener("click", () => rate(it, "up"));
   down.addEventListener("click", () => rate(it, "down"));
-  bar.append(up, down, dl);
+  const rates = document.createElement("div"); rates.className = "rates"; rates.append(up, down);
+  pic.append(rates);
+  bar.append(dl);
   card.append(pic, bar);
 
   crop.addEventListener("click", () => {

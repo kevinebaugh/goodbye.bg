@@ -5,8 +5,6 @@ pages_build_output_dir = "dist"
 compatibility_date = "2026-11-19"
 
 # Anonymous ratings from /api/rate: thumbs up or down, engine, timing. No photos, IPs or cookies.
-# Off until Analytics Engine is enabled on the account (Workers & Pages > Analytics Engine);
-# deploys fail while the binding points at a disabled product. Uncomment then.
-# [[analytics_engine_datasets]]
-# binding = "RATINGS"
-# dataset = "goodbye_bg_ratings"
+[[analytics_engine_datasets]]
+binding = "RATINGS"
+dataset = "goodbye_bg_ratings"

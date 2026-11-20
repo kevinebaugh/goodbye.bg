@@ -85,13 +85,15 @@ body.has-work .hero h1, body.has-work .sub { display: none; }
 .card:hover .x, .x:focus-visible, .card:hover .crop, .crop:focus-visible { opacity: .85; }
 @media (hover: none) { .x, .crop { opacity: .85; } } /* phones: no hover, so always show them */
 .bar { display: flex; padding: 10px 12px; border-top: 1px solid var(--line); }
-.bar { gap: 6px; align-items: center; }
 .bar .btn { flex: 1; }
-.rate { width: 34px; height: 34px; flex: none; border: 0; border-radius: 50%; background: none; font-size: 17px; line-height: 1;
-  cursor: pointer; opacity: .45; filter: grayscale(1); transition: opacity .15s, filter .15s, transform .15s; }
+/* Ratings sit on the image, bottom right, like the crop and remove buttons. */
+.rates { position: absolute; right: 8px; bottom: 8px; display: flex; gap: 6px; }
+.rate { width: 30px; height: 30px; border: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+  background: color-mix(in srgb, var(--card) 85%, transparent); box-shadow: 0 1px 3px rgb(0 0 0 / .15);
+  font-size: 15px; line-height: 1; opacity: .75; filter: grayscale(1); transition: opacity .15s, filter .15s, transform .15s; }
 .rate:hover:not(:disabled), .rate:focus-visible { opacity: 1; filter: none; }
 .rate:disabled { cursor: default; }
-.rate.chosen { opacity: 1; filter: none; transform: scale(1.15); }
+.rate.chosen { opacity: 1; filter: none; transform: scale(1.1); }
 
 /* Full-window drop target with corner brackets. */
 .dropzone { position: fixed; inset: 0; z-index: 20; display: none; place-items: center; pointer-events: none;
