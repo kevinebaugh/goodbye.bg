@@ -1410,12 +1410,17 @@ else {
 }
 
 // 4. Drag and drop: files, whole folders, and images dragged from other web pages.
-let depth = 0;
-addEventListener("dragenter", (e) => { e.preventDefault(); depth++; document.body.classList.add("hot"); });
+// A cut-out dragged out of its card (to the desktop or another app) is not a new photo: drags that start on this
+// page are left alone (dropped back here, one used to become an error card).
+let depth = 0, ownDrag = false;
+addEventListener("dragstart", () => { ownDrag = true; });
+addEventListener("dragend", () => { ownDrag = false; });
+addEventListener("dragenter", (e) => { e.preventDefault(); if (ownDrag) return; depth++; document.body.classList.add("hot"); });
 addEventListener("dragover", (e) => e.preventDefault());
 addEventListener("dragleave", () => { if (--depth <= 0) { depth = 0; document.body.classList.remove("hot"); } });
 addEventListener("drop", async (e) => {
   e.preventDefault(); depth = 0; document.body.classList.remove("hot");
+  if (ownDrag) { ownDrag = false; return; }
   if (e.dataTransfer) addSources(await fromDataTransfer(e.dataTransfer));
 });
 
