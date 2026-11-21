@@ -125,6 +125,9 @@ for GIFs (👎 is a vote only). Measured: 10 frames at 360x540 in 5.7 s on the G
   full-size PNG). Safari ignores `touch-action` for double taps, so app.js swallows a second
   tap within 350 ms.
 - Hover effects only on devices with a real pointer (phones keep :hover after a tap).
+- Buttons follow one small system in style.css (Kevin, 2026-11-21: "a mature design system"): spacing tokens
+  `--s1..--s5` (4 px scale), heights `--h-sm/md/lg` (32/40/48), every button a size plus a variant (`.primary`,
+  `.ghost`, plain). Set `--h`, `--px`, `--fs` instead of padding by hand. Whimsy: lift on hover, press on click.
 - Palette: the cool side of Giant Goldfish only (aqua, deep teal, sage). No orange; red only for errors.
 - Every claim on the site must stay true, including once ads run.
 - Typical photos: phone camera rolls. People, kids, pets, products, cars. Busy scenes (car interiors, a

@@ -18,6 +18,11 @@
   --danger: #b23a2a;
   --check-a: #e1f1f0;
   --check-b: #ffffff;
+  /* The system: a 4 px spacing scale, three control heights, one pill radius (the Bootstrap way: every
+     button is a size plus a variant, so nothing is sized by hand). The whimsy rides on top: a soft lift on
+     hover, a small press on click, the 👋. */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px;
+  --h-sm: 32px; --h-md: 40px; --h-lg: 48px;
   --font: "Nunito", ui-rounded, "SF Pro Rounded", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   color-scheme: light;
 }
@@ -56,24 +61,30 @@ main { flex: 1; width: 100%; max-width: 1100px; margin: 0 auto; padding: 0 24px 
 .hero h1 { margin: 0; font-size: clamp(38px, 7vw, 68px); line-height: 1; letter-spacing: -0.04em; font-weight: 800; text-wrap: balance; }
 .sub { margin: 0; color: var(--muted); font-size: 18px; }
 .row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
-.big { background: var(--accent); color: var(--accent-ink); border: 2px solid var(--accent); font-weight: 700; font-size: 18px; padding: 12px 28px; border-radius: 999px; cursor: pointer; transition: transform .25s ease-out, box-shadow .25s ease-out; }
-/* Gentle: a soft lift on hover, a small press on click. The whimsy is the 👋 in the wordmark waving. */
-@media (hover: hover) { /* phones keep :hover after a tap; only real pointers get it */
-  .big:hover { transform: translateY(-1px); box-shadow: 0 6px 16px -8px color-mix(in srgb, var(--ink) 45%, transparent); }
-  }
-.big:active { transform: translateY(0) scale(.98); box-shadow: none; transition-duration: .08s; }
-@media (hover: hover) { body:has(.big:hover) .mark .wave { animation: wave 1.6s ease-in-out infinite; } }
-.big.ghost { background: transparent; color: var(--ink); }
+/* Buttons. Size: md by default, .big is lg, small cards step down to sm. Variant: .primary (filled aqua),
+   .ghost (outlined), plain (card-coloured). */
+.btn, .big { --h: var(--h-md); --px: 20px; --fs: 15px;
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--s2); height: var(--h); padding: 0 var(--px);
+  font-size: var(--fs); font-weight: 700; line-height: 1; white-space: nowrap; border-radius: 999px; cursor: pointer;
+  border: 1.5px solid var(--line); background: var(--card); color: var(--ink);
+  transition: transform .25s ease-out, box-shadow .25s ease-out, background .15s, border-color .15s; }
+.big { --h: var(--h-lg); --px: 28px; --fs: 18px; }
+.btn.primary, .big { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.big.ghost { background: transparent; color: var(--ink); border-color: var(--accent); }
+.btn:disabled { opacity: .4; cursor: default; }
+/* Gentle: a soft lift on hover, a small press on click. Only real pointers (phones keep :hover after a tap). */
+@media (hover: hover) {
+  .btn:hover:not(:disabled), .big:hover { transform: translateY(-1px); box-shadow: 0 6px 16px -8px color-mix(in srgb, var(--ink) 45%, transparent); }
+  .btn:not(.primary):hover:not(:disabled) { border-color: var(--accent); }
+  body:has(.big:hover) .mark .wave { animation: wave 1.6s ease-in-out infinite; }
+}
+.btn:active:not(:disabled), .big:active { transform: translateY(0) scale(.98); box-shadow: none; transition-duration: .08s; }
 
 /* Once photos arrive, the hero steps aside. */
 body.has-work .hero { margin-top: 0; gap: 12px; }
 body.has-work .hero h1, body.has-work .sub { display: none; }
 
 .spacer { flex: 1; }
-.btn { border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 8px 16px; cursor: pointer; font-weight: 700; font-size: 15px; }
-.btn:hover { border-color: var(--ink); }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-.btn:disabled { opacity: .4; cursor: default; }
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 16px; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; display: flex; flex-direction: column; animation: pop .35s cubic-bezier(.2,1.4,.4,1); }
@@ -94,13 +105,13 @@ body.has-work .hero h1, body.has-work .sub { display: none; }
 .pic.still img { display: block; }
 .pic.still canvas { display: none; }
 /* Nothing sits on the image. Its controls live in the bar below: crop, Download, 👍 👎, remove. */
-.bar { display: flex; align-items: center; gap: 4px; padding: 8px 10px; border-top: 1px solid var(--line); }
-.bar .dl { flex: 1; min-width: 0; display: flex; justify-content: center; align-items: center; margin: 0 4px; }
+.bar { display: flex; align-items: center; gap: var(--s2); padding: var(--s2) var(--s3); border-top: 1px solid var(--line); }
+.bar .dl { flex: 1; min-width: 0; }
 .dl svg { display: none; }
-.rates { display: flex; gap: 2px; }
-.ico { flex: none; width: 30px; height: 30px; border-radius: 50%; border: 0; padding: 0; display: grid; place-items: center; cursor: pointer;
+.rates { display: flex; gap: var(--s1); }
+.ico { flex: none; width: var(--h-sm); height: var(--h-sm); border-radius: 50%; border: 0; padding: 0; display: grid; place-items: center; cursor: pointer;
   background: transparent; color: var(--ink); font-size: 15px; line-height: 1; opacity: .7; transition: opacity .15s, background .15s, filter .15s, transform .15s; }
-.x { font-size: 20px; margin-left: 8px; } /* room before remove, so a tap meant for 👎 doesn't land on it */
+.x { font-size: 20px; margin-left: var(--s1); } /* room before remove, so a tap meant for 👎 doesn't land on it */
 .crop[aria-pressed="true"] { background: color-mix(in srgb, var(--ink) 12%, transparent); opacity: .9; }
 .rate { filter: grayscale(1); }
 .ico:focus-visible { opacity: 1; }
@@ -138,11 +149,11 @@ body.has-work .hero h1, body.has-work .sub { display: none; }
 @container (max-width: 150px) { .adtag { font-size: 8px; top: 6px; } }
 .adcard .bar { justify-content: center; }
 /* Quiet: outlined, not filled, so the photos' Download stays the one loud button. The whole card is the link. */
-.adcard .adcta { flex: none; max-width: 100%; min-width: 0; text-align: center; padding-inline: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  background: transparent; border: 1.5px solid color-mix(in srgb, var(--accent) 55%, transparent); color: var(--ink); font-weight: 600; }
+.adcard .adcta { --px: 24px; flex: none; max-width: 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  background: transparent; border-color: color-mix(in srgb, var(--accent) 55%, transparent); font-weight: 600; }
 @media (hover: hover) { .adcard:hover .adcta { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); } }
-@container (max-width: 240px) { .adline { font-size: 12px; } .adcard .adcta { font-size: 13px; padding: 5px 14px; line-height: 1.4; } .adpic { gap: 6px; padding: 8px; } }
-@container (max-width: 150px) { .adcard .adcta { font-size: 12px; padding: 6px 10px; } }
+@container (max-width: 240px) { .adline { font-size: 12px; } .adcard .adcta { --h: var(--h-sm); --px: 14px; --fs: 13px; } .adpic { gap: 6px; padding: 8px; } }
+@container (max-width: 150px) { .adcard .adcta { --px: 10px; --fs: 12px; } }
 
 /* Full-window drop target with corner brackets. */
 .dropzone { position: fixed; inset: 0; z-index: 20; display: none; place-items: center; pointer-events: none;
@@ -218,12 +229,13 @@ body.app:not(.has-work) main { flex: none; margin-top: auto; }
 
 /* Small cards (many photos on a phone): Download becomes an icon; the tiniest drop the rating icons. */
 .card { container-type: inline-size; }
+@container (max-width: 330px) { .bar { gap: var(--s1); padding-inline: var(--s2); } .bar .dl { --px: var(--s3); } }
 @container (max-width: 240px) {
-  .bar { padding: 6px; gap: 2px; }
-  .bar .dl { padding: 6px; margin: 0 2px; }
+  .bar { padding: var(--s2) 6px; gap: var(--s1); }
+  .bar .dl { --h: var(--h-sm); --px: var(--s2); }
   .dl span { display: none; }
   .dl svg { display: block; }
-  .ico { width: 26px; height: 26px; font-size: 13px; }
+  .ico { width: 28px; height: 28px; font-size: 13px; }
   .x { font-size: 17px; margin-left: 4px; }
   .crop svg { width: 14px; height: 14px; }
   .busy { font-size: 12px; gap: 6px; padding: 8px; }
@@ -234,6 +246,6 @@ body.app:not(.has-work) main { flex: none; margin-top: auto; }
 @media (max-width: 600px) { body.app.has-work .foot p:first-child { display: none; } }
 /* "Download all" spans the row under the cards, edge to edge with them. */
 .allrow { grid-column: 1 / -1; display: flex; }
-.allrow .btn { flex: 1; padding: 11px 16px; font-size: 16px; }
+.allrow .btn { flex: 1; --fs: 16px; }
 /* With photos on screen the add buttons step down a size, so the cards get the room. */
-body.app.has-work .big { font-size: 16px; padding: 9px 22px; }
+body.app.has-work .big { --h: 44px; --px: 24px; --fs: 16px; }
