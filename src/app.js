@@ -860,7 +860,8 @@ fetch("/partners.json").then((r) => r.json()).then((list) => {
 }).catch(() => {});
 
 function adsOn() { return adVariants.length > 0; }
-function adReady() { return adsOn() && !running && !retrying && !items.some((i) => !i.mask && !i.failed); }
+// As soon as one cut-out is done (the cells are reserved from the start, so nothing moves).
+function adReady() { return adsOn() && items.some((i) => i.mask?.box); }
 function placeAds(n, free) {
   const want = adReady() && n >= 1 ? free : 0;
   while (adEls.length > want) adEls.pop().remove();
@@ -878,6 +879,7 @@ function buildAd(i) {
   let src = null;
   const draw = PRODUCTS[x.product];
   try { src = draw && artSource(i); } catch (e) { report("mug-failed", e); }
+  a.artIdx = i; // which of the finished cut-outs it shows; rotates (see rotateAds)
   if (src) { // the visitor's own cut-out on the product, drawn here (nothing is uploaded)
     const c = document.createElement("canvas"); c.className = "adart"; c.setAttribute("aria-hidden", "true");
     a.querySelector(".adicon").replaceWith(c);
@@ -973,10 +975,40 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => {
 // The art for the product: the first finished card on screen, cropped tight to the subject whatever the card
 // shows, at most 640 px. Edges fade softly, so a subject cut off by the photo's frame (a cat's chest, a sofa)
 // ends like a printed design instead of a hard straight line.
-function artSource(i = 0) {
-  const done = [...$("grid").children].map((card) => items.find((x) => x.el.card === card)).filter((it) => it?.mask?.box);
-  return done.length ? mugArt(done[i % done.length]) : null; // with several photos, each card uses a different one
+function finishedCuts() {
+  return [...$("grid").children].map((card) => items.find((x) => x.el.card === card)).filter((it) => it?.mask?.box);
 }
+function artSource(i = 0) {
+  const done = finishedCuts();
+  return done.length ? artOf(done[i % done.length]) : null; // with several photos, each card uses a different one
+}
+const artCache = new WeakMap(); // mask -> art, so rotating doesn't redo the work
+function artOf(it) {
+  let a = artCache.get(it.mask);
+  if (!a) { a = mugArt(it); artCache.set(it.mask, a); }
+  return a;
+}
+
+// With several cut-outs, each ad card crossfades to the next one every few seconds, the cards staggered so
+// they never change together. Off when the tab is hidden or the person asks for reduced motion.
+const ROTATE = 5000;
+setInterval(() => {
+  if (document.hidden || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const done = finishedCuts();
+  if (done.length < 2) return;
+  adEls.forEach((a, k) => setTimeout(() => {
+    if (!a.isConnected || !a.art) return;
+    a.artIdx = (a.artIdx + 1) % done.length;
+    const old = a.querySelector(".adart");
+    if (!old || done.length < 2) return;
+    let src; try { src = artOf(done[a.artIdx % done.length]); } catch { return; }
+    const c = document.createElement("canvas"); c.className = "adart fading"; c.setAttribute("aria-hidden", "true");
+    old.after(c);
+    try { a.art.draw(c, src); } catch { c.remove(); return; }
+    a.art.src = src;
+    requestAnimationFrame(() => { c.classList.remove("fading"); setTimeout(() => old.remove(), 900); });
+  }, k * 1300));
+}, ROTATE);
 function mugArt(it) {
   const keep = it.crop; it.crop = true; const f = frame(it); it.crop = keep;
   const k = Math.min(1, 640 / Math.max(f.w, f.h), it.bmp.width / it.w);
