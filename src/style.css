@@ -100,7 +100,7 @@ body.has-work .hero h1, body.has-work .sub { display: none; }
 .rates { display: flex; gap: 2px; }
 .ico { flex: none; width: 30px; height: 30px; border-radius: 50%; border: 0; padding: 0; display: grid; place-items: center; cursor: pointer;
   background: transparent; color: var(--ink); font-size: 15px; line-height: 1; opacity: .7; transition: opacity .15s, background .15s, filter .15s, transform .15s; }
-.x { font-size: 20px; }
+.x { font-size: 20px; margin-left: 8px; } /* room before remove, so a tap meant for 👎 doesn't land on it */
 .crop[aria-pressed="true"] { background: color-mix(in srgb, var(--ink) 12%, transparent); opacity: .9; }
 .rate { filter: grayscale(1); }
 .ico:focus-visible { opacity: 1; }
@@ -188,7 +188,7 @@ body.app:not(.has-work) main { flex: none; margin-top: auto; }
   .dl span { display: none; }
   .dl svg { display: block; }
   .ico { width: 26px; height: 26px; font-size: 13px; }
-  .x { font-size: 17px; }
+  .x { font-size: 17px; margin-left: 4px; }
   .crop svg { width: 14px; height: 14px; }
   .busy { font-size: 12px; gap: 6px; padding: 8px; }
   .busy::before { font-size: 22px; }

@@ -186,8 +186,10 @@ function report(step, e, it) {
     error: String(e?.message || e).slice(0, 160) };
   fetch("/api/crash", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(note), keepalive: true }).catch(() => {});
 }
-function rested() { try { localStorage.removeItem(CRASH_KEY); } catch {} }
-addEventListener("pagehide", rested);
+// Cleared only once nothing is working: no batch, no 👎 retry, no PNG being built.
+let retrying = 0, pngBusy = 0;
+function rested() { if (running || retrying || pngBusy) return; try { localStorage.removeItem(CRASH_KEY); } catch {} }
+addEventListener("pagehide", () => { try { localStorage.removeItem(CRASH_KEY); } catch {} }); // a normal close or reload
 (() => {
   let note = null;
   try { note = localStorage.getItem(CRASH_KEY); localStorage.removeItem(CRASH_KEY); } catch {}
@@ -223,7 +225,7 @@ let pngTimer = 0;
 function preparePngs() {
   if (!PHONE) return;
   clearTimeout(pngTimer);
-  pngTimer = setTimeout(() => { if (!running) for (const it of items) if (it.mask) png(it); }, IOS ? 10_000 : 0);
+  pngTimer = setTimeout(() => { if (!running && !retrying) for (const it of items) if (it.mask) png(it); }, IOS ? 10_000 : 0);
 }
 function idle() {
   if (IOS && worker && !jobs.size && !running) { stopEngine("idle"); dbg("engine-idle"); }
@@ -499,7 +501,7 @@ const fullBitmap = (it) => decode(it.blob);
 
 async function fullBlob(it) {
   dbg("png", { w: it.w, h: it.h });
-  working("png", it);
+  working("png", it); pngBusy++;
   // One canvas at the saved size: the photo is drawn shifted so the crop lands at 0,0 (the canvas clips the
   // rest), the full photo is freed, then the mask cuts it out. A 16 MP photo on an iPhone crashed with the
   // old way (full-frame canvas plus a cropped copy plus the decoded photo).
@@ -512,7 +514,7 @@ async function fullBlob(it) {
     const r = it.maskRect || FULL;
     x.drawImage(it.mask, r.x * it.w - f.x, r.y * it.h - f.y, r.w * it.w, r.h * it.h);
     return await out.convertToBlob({ type: "image/png" });
-  } finally { if (!running) rested(); }
+  } finally { pngBusy--; rested(); }
 }
 
 // Phones save through the share sheet ("Save Image" puts it in Photos) instead of downloading to Files.
@@ -675,7 +677,7 @@ function makeCard(it) {
     it.crop = !it.crop; crop.setAttribute("aria-pressed", String(it.crop)); tick();
     it.png = null; drawCard(it); if (PHONE) png(it);
   });
-  x.addEventListener("click", () => { clearInterval(it.quip); it.gen = -1;
+  x.addEventListener("click", () => { dbg("removed"); clearInterval(it.quip); it.gen = -1;
     for (const u of [it.previewUrl, it.fullUrl]) if (u) URL.revokeObjectURL(u); items.splice(items.indexOf(it), 1); card.remove(); sync(); });
   dl.addEventListener("click", async () => tick() || deliver([{ name: outName(it), blob: await png(it) }]));
 
@@ -759,21 +761,27 @@ async function retry(it) {
   if ((x1 - x0) * (y1 - y0) > 0.8) return;
   it.retried = true;
   it.first = { mask: it.mask, rect: it.maskRect };
-  working("retry", it);
+  retrying++; working("retry", it);
   const { busy, up, down, dl } = it.el;
   busy.textContent = QUIPS[Math.floor(Math.random() * QUIPS.length)]; busy.hidden = false; dl.disabled = true;
+  // Never next to a PNG being built (a full photo each): wait for those, and hold back the ones not started.
+  clearTimeout(pngTimer);
+  await pngChain.catch(() => {});
   try {
     const sx = Math.round(x0 * it.w), sy = Math.round(y0 * it.h), sw = Math.max(1, Math.round((x1 - x0) * it.w)), sh = Math.max(1, Math.round((y1 - y0) * it.h));
     const big = await fullBitmap(it), sc = big.width / it.w; // decoded size can exceed the working size
-    const part = await createImageBitmap(big, Math.round(sx * sc), Math.round(sy * sc), Math.max(1, Math.round(sw * sc)), Math.max(1, Math.round(sh * sc)));
+    // Straight to the model's input size: 4 MB instead of a full-resolution crop.
+    const part = await createImageBitmap(big, Math.round(sx * sc), Math.round(sy * sc), Math.max(1, Math.round(sw * sc)), Math.max(1, Math.round(sh * sc)),
+      { resizeWidth: RES, resizeHeight: RES, resizeQuality: "high" });
     big.close();
-    const m = await segment(part);
+    const m = await segment(part); part.close();
     if (m.box) { it.mask = m; it.maskRect = { x: sx / it.w, y: sy / it.h, w: sw / it.w, h: sh / it.h }; it.ms = lastMs; it.png = null; }
   } catch (e) { console.warn("Retry failed", e); }
+  retrying--;
   busy.hidden = true; dl.disabled = false;
-  if (!items.includes(it)) return;
+  if (!items.includes(it)) { rested(); return; }
   reveal(it);
-  if (!running) rested();
+  rested();
   idle();
   preparePngs();
   up.disabled = down.disabled = false; up.classList.remove("chosen"); down.classList.remove("chosen");
