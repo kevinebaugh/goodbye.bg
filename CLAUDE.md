@@ -129,6 +129,10 @@ rating. Links go through `/go/<id>` (functions/go/[id].js), which counts the cli
 a POST there counts the card being shown ('adseen'). EthicalAds would need the below-results slot (their rules forbid
 ads inside the main content) and a proxy (Safari blocks their images under COEP require-corp).
 
+Reading the ad A/B test (blob5 = variant): `SELECT blob1 AS kind, blob2 AS partner, blob5 AS variant, count() AS n
+FROM goodbye_bg_ratings WHERE blob1 IN ('adseen','adclick') GROUP BY kind, partner, variant` (clicks / shows per variant;
+expect a few hundred clicks per variant before trusting a difference).
+
 Reading views: `SELECT toDate(timestamp) AS day, blob2 AS device, blob3 AS from_site, count() AS views
 FROM goodbye_bg_ratings WHERE blob1 = 'view' GROUP BY day, device, from_site ORDER BY day DESC`
 

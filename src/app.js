@@ -834,28 +834,31 @@ new ResizeObserver(layout).observe($("grid"));
    At most one affiliate card, and only in a grid cell that would otherwise be empty (3 photos in a 2x2 grid),
    once the whole batch is done. Never between photos, never shrinks them, not part of Download all, no rating,
    clearly marked "Ad". One partner per visit. Its link goes through /go/<id>, which counts the click. */
-let adPartner = null, adEl = null;
+let adPartner = null, adVariant = null, adEl = null;
 const adSeen = new Set();
 fetch("/partners.json").then((r) => r.json()).then((list) => {
   const ok = list.filter((p) => p.live || params.has("adtest")); // ?adtest=1 shows partners before their links exist
   adPartner = ok.length ? ok[Math.floor(Math.random() * ok.length)] : null;
+  // A/B: one of the partner's live variants, at random, for this visit.
+  const vs = adPartner?.variants.filter((x) => x.live || params.has("adtest")) || [];
+  adVariant = vs.length ? vs[Math.floor(Math.random() * vs.length)] : null;
   requestAnimationFrame(layout);
 }).catch(() => {});
 
 function placeAd(n, cols, scroll) {
   const busy = running || retrying || items.some((i) => !i.mask && !i.failed);
   const free = n >= 2 && !scroll ? Math.ceil(n / cols) * cols - n : 0;
-  if (!adPartner || busy || free < 1) { adEl?.remove(); adEl = null; return; }
+  if (!adPartner || !adVariant || busy || free < 1) { adEl?.remove(); adEl = null; return; }
   if (adEl) return;
-  const p = adPartner, a = adEl = document.createElement("a");
-  a.className = "adcard"; a.href = `/go/${p.id}`; a.target = "_blank"; a.rel = "sponsored noopener";
+  const p = adPartner, x = adVariant, a = adEl = document.createElement("a");
+  a.className = "adcard"; a.href = `/go/${p.id}?v=${x.v}`; a.target = "_blank"; a.rel = "sponsored noopener";
   a.innerHTML = '<div class="adpic"><span class="adicon" aria-hidden="true"></span><p class="adline"></p></div><div class="bar"><span class="adtag">Ad</span><span class="btn primary adcta"></span></div>';
   a.querySelector(".adicon").textContent = p.emoji;
-  a.querySelector(".adline").textContent = p.line;
-  a.querySelector(".adcta").textContent = p.cta;
-  a.setAttribute("aria-label", `Ad: ${p.line} ${p.cta}`);
+  a.querySelector(".adline").textContent = x.line;
+  a.querySelector(".adcta").textContent = x.cta;
+  a.setAttribute("aria-label", `Ad: ${x.line} ${x.cta}`);
   $("grid").insertBefore(a, $("tools"));
-  if (!adSeen.has(p.id)) { adSeen.add(p.id); fetch(`/go/${p.id}`, { method: "POST", keepalive: true }).catch(() => {}); }
+  if (!adSeen.has(p.id)) { adSeen.add(p.id); fetch(`/go/${p.id}?v=${x.v}`, { method: "POST", keepalive: true }).catch(() => {}); }
 }
 
 function sync() {

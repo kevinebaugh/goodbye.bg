@@ -32,7 +32,7 @@ createServer(async (req, res) => {
   const go = path.match(/^\/go\/([a-z0-9-]+)$/);
   if (go) {
     const fn = req.method === "POST" ? goPost : goGet;
-    const r = await fn({ params: { id: go[1] }, env: {}, request: new Request(`http://localhost:${port}${path}`, { method: req.method, headers: req.headers }) });
+    const r = await fn({ params: { id: go[1] }, env: {}, request: new Request(new URL(req.url, `http://localhost:${port}`), { method: req.method, headers: req.headers }) });
     res.writeHead(r.status, Object.fromEntries(r.headers)).end(); return;
   }
   const fns = { "/api/rate": rateFn, "/api/crash": crashFn, "/api/diag": diagFn };
