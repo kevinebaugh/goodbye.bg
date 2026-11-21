@@ -303,10 +303,9 @@ async function segment(bitmap) {
   await loadModel();
   dbg("segment", { w: bitmap.width, h: bitmap.height, coi: self.crossOriginIsolated, threads: THREADS });
   const c = new OffscreenCanvas(RES, RES), x = c.getContext("2d");
-  // On white: a see-through PNG or SVG would otherwise reach the model on black, and dark outlines vanish into it.
-  x.fillStyle = "#fff"; x.fillRect(0, 0, RES, RES);
   x.drawImage(bitmap, 0, 0, RES, RES); dbg("drawn");
   const px = x.getImageData(0, 0, RES, RES).data, n = RES * RES; dbg("pixels");
+  onBackdrop(px);
   const input = px.slice(); // RGBA; the engine turns it into its model's input. A copy: px is used again below.
   let res;
   dbg("infer");
@@ -334,6 +333,23 @@ async function segment(bitmap) {
   mask.box = box;
   try { mask.fix = edgeColors(px, id.data); dbg("edges"); } catch (e) { console.warn("Edge colors skipped", e); }
   return mask;
+}
+
+// A see-through image (a PNG cut-out, an SVG logo) would reach the model on black: dark outlines vanish into it. It
+// goes on white instead, or on black when the subject itself is light (a white logo on white was lost the other way).
+function onBackdrop(px) {
+  let clear = 0, lum = 0, solid = 0;
+  for (let i = 0; i < px.length; i += 4) {
+    if (px[i + 3] < 250) clear++;
+    if (px[i + 3] > 128) { solid++; lum += 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]; }
+  }
+  if (clear < px.length / 400) return; // an ordinary photo: nothing to do
+  const bg = solid && lum / solid > 150 ? 0 : 255;
+  for (let i = 0; i < px.length; i += 4) {
+    const a = px[i + 3] / 255;
+    for (let c = 0; c < 3; c++) px[i + c] = px[i + c] * a + bg * (1 - a);
+    px[i + 3] = 255;
+  }
 }
 
 // Hair and other see-through edges keep some of the old background's color (sky shows through as a pale fringe).
