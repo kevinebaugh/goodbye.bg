@@ -303,8 +303,10 @@ let pressed = null;
 function holdFull(it) {
   if (pressed && pressed !== it && pressed.previewUrl) pressed.el.img.src = pressed.previewUrl;
   pressed = it;
-  if (!it.mask) return;
-  png(it).then((b) => {
+  // Never start a full-size encode here: during a batch it competes with the model for memory (iPhones crash).
+  // Phones prepare the PNGs after the batch; until then a long press saves the preview.
+  if (!it.mask || !it.png || running) return;
+  it.png.then((b) => {
     if (pressed !== it || !it.el.pic.classList.contains("still")) return;
     it.fullUrl ||= URL.createObjectURL(b);
     if (it.el.img.src !== it.fullUrl) it.el.img.src = it.fullUrl;
