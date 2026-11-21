@@ -762,9 +762,13 @@ function makeCard(it) {
   x.addEventListener("click", () => { dbg("removed"); clearInterval(it.quip); it.gen = -1;
     for (const u of [it.previewUrl, it.fullUrl, it.gifUrl]) if (u) URL.revokeObjectURL(u); items.splice(items.indexOf(it), 1); card.remove(); sync(); });
   dl.addEventListener("click", async () => {
-    tick();
-    try { await deliver([{ name: outName(it), blob: await png(it) }]); }
+    if (it.saving) return; // already on it
+    it.saving = true; tick();
+    // A big photo takes a few seconds to build at full size: the button shimmers meanwhile (not for a quick one).
+    const slow = setTimeout(() => dl.setAttribute("aria-busy", "true"), 150);
+    try { const blob = await png(it); clearTimeout(slow); dl.removeAttribute("aria-busy"); await deliver([{ name: outName(it), blob }]); }
     catch (e) { console.error(e); report("save-failed", e, it); toast("Could not save this image. Try again."); }
+    finally { clearTimeout(slow); dl.removeAttribute("aria-busy"); it.saving = false; }
   });
 
   it.el = { card, pic, canvas, img, busy, dl, crop, up, down };
