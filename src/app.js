@@ -981,11 +981,16 @@ function buildAd(i) {
   a.addEventListener("pointerleave", () => { a.tilt.t = 0; });
   // The partner opens in a new tab as usual, and this tab saves the cut-out shown on the product, ready to
   // upload there (Kevin, 2026-11-21). Saved on the device like Download; nothing is sent to the partner.
-  a.addEventListener("click", async () => {
+  // Phones: Safari won't save from a tab that went to the background, so the share sheet comes first (Save Image),
+  // then the partner opens.
+  a.addEventListener("click", async (e) => {
     if (!a.art) return;
     const done = finishedCuts(), it = done[a.artIdx % done.length];
     if (!it) return;
-    try { save(outName(it), await png(it)); } catch (e) { report("ad-failed", e); }
+    if (!PHONE) { try { save(outName(it), await png(it)); } catch (err) { report("ad-failed", err); } return; }
+    e.preventDefault();
+    try { await share([{ name: outName(it), blob: await png(it) }]); } catch (err) { report("ad-failed", err); }
+    if (!window.open(a.href, "_blank", "noopener")) location.href = a.href;
   });
   // The card stays invisible (its cell already reserved) until its product is drawn: no empty ad panels.
   const show = () => {
