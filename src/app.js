@@ -246,7 +246,8 @@ function startEngine(name) {
       else if (data.type === "loaded") {
         status("Starting up…");
         if (name === "gpu") timer = setTimeout(() => fail("GPU warm-up timed out"), GPU_WARMUP_TIMEOUT);
-      } else if (data.type === "ready") { clearTimeout(timer); engineModel = data.model; resolve(); }
+      } else if (data.type === "model") engineModel = data.name;
+      else if (data.type === "ready") { clearTimeout(timer); resolve(); }
       else if (data.type === "failed") fail(data.error);
       else if (data.type === "result" || data.type === "error") {
         const j = jobs.get(data.id); if (!j) return;

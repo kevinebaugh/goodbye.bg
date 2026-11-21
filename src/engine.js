@@ -11,10 +11,10 @@
 //   Input (x - 128) / 256, output 0..1.
 
 const RT = "./rt/%ORT%/";            // versioned by the build, so upgrades never mix with cached files
-const HAS_BIREFNET = "%BIREFNET%" === "1"; // set by the build: dist/m/birefnet/ exists
+const BIREFNET = "%BIREFNET%";       // set by the build: "birefnet-<hash>", or "" when the build has no BiRefNet
 const MODELS = {
   isnet: { dir: "./m/isnet/", mean: [128, 128, 128], std: [256, 256, 256], logits: false },
-  birefnet: { dir: "./m/birefnet/", mean: [123.675, 116.28, 103.53], std: [58.395, 57.12, 57.375], logits: true },
+  birefnet: { dir: `./m/${BIREFNET}/`, mean: [123.675, 116.28, 103.53], std: [58.395, 57.12, 57.375], logits: true },
 };
 const RES = 1024;
 let ort, session, model, failMode = "", debug = false;
@@ -81,8 +81,9 @@ onmessage = async ({ data }) => {
     try {
       failMode = data.ep === "webgpu" ? data.fail || "" : ""; debug = !!data.debug;
       // BiRefNet only on the GPU; ?model=isnet|birefnet (sent by the page) forces one where it can run.
-      const name = data.ep === "webgpu" && HAS_BIREFNET && data.model !== "isnet" ? "birefnet" : "isnet";
+      const name = data.ep === "webgpu" && BIREFNET && data.model !== "isnet" ? "birefnet" : "isnet";
       model = MODELS[name];
+      postMessage({ type: "model", name }); // now, so a crash while starting up is reported against the right model
       dbg("init", { ep: data.ep, model: name });
       ort = await import(RT + "ort.webgpu.min.mjs");
       ort.env.wasm.wasmPaths = new URL(RT, location.href).href;

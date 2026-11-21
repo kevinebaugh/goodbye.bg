@@ -23,7 +23,8 @@ Actions. The old upload-only project `goodbye-bg` can be deleted.
   30 MB cap, follows og:image for web pages). The only server code.
 - `scripts/build.mjs` assembles `dist/`. `scripts/serve.mjs` local server that applies `_headers` and runs the function.
 - `src/engine.js` the model worker. `scripts/birefnet.sh` makes `models/birefnet-webgpu.onnx` (download, then
-  `deform-to-gridsample.py` and `narrow-onnx.py`); the build includes it when it exists, else the GPU runs ISNet.
+  `deform-to-gridsample.py` and `narrow-onnx.py`); the build serves it from `m/birefnet-<hash>/` when it exists,
+  else the GPU runs ISNet.
 
 ## Rules
 
@@ -60,8 +61,7 @@ starts it with WebGPU when the adapter has `shader-f16`, else with WebAssembly (
   and 6.7 GB (Node, 64-bit): no.
 - Votes and crash reports call the engines `gpu-birefnet`, `gpu` (ISNet) and `cpu` (ISNet).
 
- The GPU worker does a warm-up run before "Ready", which compiles the shaders
-and proves the GPU works. If the GPU fails to start, fails a run, hangs (30 s warm-up, 15 s per run), or
+The GPU worker does a warm-up run before "Ready", which compiles the shaders and proves the GPU works. If the GPU fails to start, fails a run, hangs (30 s warm-up, 15 s per run), or
 returns NaN, the page terminates that worker and a CPU worker redoes the same photo. A separate worker is
 required: a failed WebGPU run aborts ORT's wasm instance for the whole realm.
 
@@ -73,7 +73,7 @@ required: a failed WebGPU run aborts ORT's wasm instance for the whole realm.
   into parts (Pages limit is 25 MiB per file) and passed in as `ort.env.wasm.wasmBinary`.
 - ORT 1.21 cannot run ISNet on WebGPU (MaxPool with ceil mode unsupported).
 
-Measured 2026-11-20, Chrome 157, M5 Pro:
+ISNet, measured 2026-11-20, Chrome 157, M5 Pro:
 - **gpu: 150 to 300 ms per photo**, warm-up about 0.3 s. Four photos end to end: 1.35 s.
 - **cpu: 5 to 7 s per photo.**
 - GPU and CPU masks match on five test photos: mean difference at most 0.002, max 0.05, no pixel off by more
@@ -82,9 +82,6 @@ Measured 2026-11-20, Chrome 157, M5 Pro:
   over a soft blurred background (keeps the blur), and keeps blobs of busy backdrops (graffiti).
 - Tested: every forced GPU failure finishes the photo on the CPU; photos added during the first download wait
   and then run; a dropped model part is retried.
-
-Rejected:
-- ISNet **small** (quint8): garbage (61% of pixels unsure).
 
 BiRefNet on WebGPU (2026-11-21; numbers and side-by-sides in `docs/birefnet.md`). The onnx-community export needs
 two rewrites, both in `scripts/birefnet.sh`:
@@ -100,6 +97,9 @@ two rewrites, both in `scripts/birefnet.sh`:
 - Quality: much better than ISNet on close-ups over a blurred background (cats, Larry: no leftover blur),
   busy backdrops (bicycle on graffiti: no blobs), see-through objects (headphone case), small subjects
   (yard cat), sky gaps in the tree. Hair about the same at 1024.
+
+Rejected:
+- ISNet **small** (quint8): garbage (61% of pixels unsure).
 
 Requirement from Kevin: 10 to 30 seconds per photo is unacceptable. Target a few seconds.
 

@@ -14,10 +14,11 @@ The side-by-side sheets (photo | ISNet | BiRefNet) are not in the repo; the phot
 | Session create | 0.4 s | 1.2 s |
 | GPU process memory, peak over idle | +1.0 GB | +3.0 GB |
 | Download | 88 MB | 93 MB |
-| Four photos end to end in the app | 4.3 s | 3.9 s |
+| Four photos end to end in the app (browser pane) | 4.3 s | 3.9 s |
 
-The app's own work (decode, despeckle, edge colors, previews) dominates end-to-end time; the model adds about
-0.2 s a photo. BiRefNet on the CPU (onnxruntime-node, 64-bit): 9.9 s and 6.7 GB for one photo, so the CPU engine
+The end-to-end row is not a model comparison: the app's own work dominates it, and both are well above the 1.35 s
+CLAUDE.md records for ISNet on 2026-11-20 (the pane may have been throttled, or the app got slower since; not
+checked). The model itself adds about 0.2 s a photo. BiRefNet on the CPU (onnxruntime-node, 64-bit): 9.9 s and 6.7 GB for one photo, so the CPU engine
 stays ISNet.
 
 ## Quality (same photos, same 1024 input)

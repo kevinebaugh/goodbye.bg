@@ -2,6 +2,7 @@
 // No bundler. Output is plain static files for Cloudflare Pages or any static host.
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
 
 const root = new URL("..", import.meta.url).pathname;
 const nm = join(root, "node_modules");
@@ -46,7 +47,9 @@ writeFileSync(join(dist, "app.js"), readFileSync(join(dist, "app.js"), "utf8").r
 // BiRefNet lite (MIT) for the GPU engine, made by scripts/birefnet.sh. Without it the GPU engine runs ISNet.
 const birefnetFile = join(root, "models", "birefnet-webgpu.onnx");
 const birefnet = existsSync(birefnetFile) ? readFileSync(birefnetFile) : null;
-writeFileSync(join(dist, "engine.js"), readFileSync(join(dist, "engine.js"), "utf8").replaceAll("%ORT%", ORT).replaceAll("%BIREFNET%", birefnet ? "1" : "0"));
+// m/ is cached forever, so the folder is named after the model's hash: a new export never mixes with old parts.
+const birefnetDir = birefnet ? "birefnet-" + createHash("sha256").update(birefnet).digest("hex").slice(0, 8) : "";
+writeFileSync(join(dist, "engine.js"), readFileSync(join(dist, "engine.js"), "utf8").replaceAll("%ORT%", ORT).replaceAll("%BIREFNET%", birefnetDir));
 
 // fflate (MIT) for "Download all" zips.
 mkdirSync(join(dist, "vendor"));
@@ -89,6 +92,9 @@ writeFileSync(join(dist, "partners.json"), JSON.stringify(PARTNERS.map(({ id, na
 
 console.log("Model:");
 writeParts(join(dist, "m", "isnet"), isnet, "isnet");
-if (birefnet) writeParts(join(dist, "m", "birefnet"), birefnet, "birefnet");
+if (birefnet) {
+  writeParts(join(dist, "m", birefnetDir), birefnet, birefnetDir);
+  cpSync(join(root, "docs/licenses/BiRefNet.txt"), join(dist, "m", birefnetDir, "LICENSE.txt")); // MIT: the notice travels with the weights
+}
 else console.log("  birefnet: not built (run scripts/birefnet.sh); the GPU engine uses ISNet");
 console.log("Built dist/.");
