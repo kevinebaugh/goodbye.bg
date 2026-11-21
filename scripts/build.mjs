@@ -51,6 +51,14 @@ cpSync(join(nm, "fflate/esm/browser.js"), join(dist, "vendor/fflate.mjs"));
 // canvas-confetti (ISC) for the hundredth cut-out and taps on the count. Served from here: the page loads nothing from elsewhere.
 cpSync(join(nm, "canvas-confetti/dist/confetti.module.mjs"), join(dist, "vendor/confetti.mjs"));
 
+// Nunito (SIL OFL 1.1), Latin, all weights in one variable file. The name carries the version so it can be
+// cached forever; style.css and index.html must name the same file.
+const NUNITO = JSON.parse(readFileSync(join(nm, "@fontsource-variable/nunito/package.json"), "utf8")).version;
+const fontFile = `nunito-latin-${NUNITO}.woff2`;
+for (const f of ["style.css", "index.html"]) if (!readFileSync(join(dist, f), "utf8").includes(fontFile)) throw new Error(`${f} must use fonts/${fontFile}`);
+mkdirSync(join(dist, "fonts"));
+cpSync(join(nm, "@fontsource-variable/nunito/files/nunito-latin-wght-normal.woff2"), join(dist, "fonts", fontFile));
+
 // The model: ISNet, 16-bit (AGPL-3.0, IMG.LY), used by both the GPU and the CPU engine.
 // The package stores it as 4 MB chunks.
 const dataDir = join(nm, "@imgly/background-removal-data/dist");
