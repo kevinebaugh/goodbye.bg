@@ -825,54 +825,59 @@ function layout() {
     }
     return b;
   };
-  let best = fit(n), extra = 0;
-  // Room for the ad card at no cost: if one more card fits without making the photos smaller (one photo on
-  // a wide screen), lay out for one more and the ad takes that cell.
-  if (adReady() && best.p >= MIN_PIC) { const b2 = fit(n + 1); if (b2.p >= best.p) { best = b2; extra = 1; } }
+  // Ads fill the grid (Kevin, 2026-11-20): up to 3 photos are laid out as 4 cells, more photos fill out their
+  // last row. The cells are reserved from the start, so the photos never resize when the ads arrive.
+  const slots = adsOn() && n < 4 ? 4 : n, best = fit(slots);
   const scroll = best.p < MIN_PIC, p = Math.min(MAX_PIC, Math.max(best.p, MIN_PIC));
   const c = scroll ? Math.max(1, Math.floor((W + GAP) / (p + GAP))) : best.c;
   g.classList.toggle("scroll", scroll);
   $("main").style.setProperty("--cols", c); $("main").style.setProperty("--p", `${p}px`); // grid and tools row share them
-  placeAd(n, c, scroll, extra);
+  placeAds(n, scroll ? 0 : Math.ceil(slots / c) * c - n);
 }
 new ResizeObserver(layout).observe($("grid"));
 
-/* ---------- ad card ----------
-   At most one affiliate card, and only in space that would otherwise be empty: a spare grid cell (3 photos in a
-   2x2 grid), or room for one more card that doesn't shrink the photos (one photo on a wide screen),
-   once the whole batch is done. Never between photos, never shrinks them, not part of Download all, no rating,
-   clearly marked "Ad". One partner per visit. Its link goes through /go/<id>, which counts the click. */
-let adPartner = null, adVariant = null, adEl = null;
-// Label test, independent of the partner's A/B variant: "Ad" or "Sponsored", picked at random per visit.
+/* ---------- ad cards ----------
+   Affiliate cards fill the grid's empty cells once the whole batch is done: 1 photo gets 3, 2 get 2, 3 get 1,
+   more photos fill out their last row. Each card shows a different product drawn from one of the visitor's
+   cut-outs. Never between photos, not part of Download all, no rating, clearly marked. Links go through
+   /go/<id>, which counts the click. */
+let adPartner = null, adVariants = [];
+const adEls = [];
+// Per-visit tests, independent of each other: the label ("Ad" or "Sponsored") and the button wording.
 const adLabel = Math.random() < 0.5 ? "Ad" : "Sponsored";
+let adCta = -1;
 const adSeen = new Set();
 fetch("/partners.json").then((r) => r.json()).then((list) => {
   const ok = list.filter((p) => p.live || params.has("adtest")); // ?adtest=1 shows partners before their links exist
   adPartner = ok.length ? ok[Math.floor(Math.random() * ok.length)] : null;
-  // A/B: one of the partner's live variants, at random, for this visit.
-  const vs = adPartner?.variants.filter((x) => x.live || params.has("adtest")) || [];
-  adVariant = vs.find((x) => x.v === params.get("adv")) || (vs.length ? vs[Math.floor(Math.random() * vs.length)] : null); // ?adv=<v> to check one
+  // The partner's live variants in random order, so each card gets a different one (?adv=<v> puts one first).
+  adVariants = (adPartner?.variants.filter((x) => x.live || params.has("adtest")) || []).sort(() => Math.random() - 0.5);
+  const first = adVariants.findIndex((x) => x.v === params.get("adv"));
+  if (first > 0) adVariants.unshift(...adVariants.splice(first, 1));
+  const ctas = adVariants.find((x) => x.ctas)?.ctas;
+  adCta = ctas ? Math.floor(Math.random() * ctas.length) : -1;
   requestAnimationFrame(layout);
 }).catch(() => {});
 
-function adReady() { return !!(adPartner && adVariant) && !running && !retrying && !items.some((i) => !i.mask && !i.failed); }
-function placeAd(n, cols, scroll, extra = 0) {
-  const free = n >= 1 && !scroll ? Math.ceil((n + extra) / cols) * cols - n : 0;
-  if (!adReady() || free < 1 || (n < 2 && !extra)) { adEl?.remove(); adEl = null; return; }
-  if (adEl) return;
-  try { adEl = buildAd(); }
-  catch (e) { console.warn("Ad card failed", e); report("ad-failed", e); adPartner = null; } // no ad this visit rather than a broken one
+function adsOn() { return adVariants.length > 0; }
+function adReady() { return adsOn() && !running && !retrying && !items.some((i) => !i.mask && !i.failed); }
+function placeAds(n, free) {
+  const want = adReady() && n >= 1 ? free : 0;
+  while (adEls.length > want) adEls.pop().remove();
+  while (adEls.length < want) {
+    try { adEls.push(buildAd(adEls.length)); }
+    catch (e) { console.warn("Ad card failed", e); report("ad-failed", e); adVariants = []; break; } // no ads rather than broken ones
+  }
 }
-function buildAd() {
-  const p = adPartner, x = adVariant, a = document.createElement("a");
-  // Button-wording test: one of the variant's wordings at random, counted as c=0, c=1, ...
-  const ci = x.ctas?.length ? Math.floor(Math.random() * x.ctas.length) : -1, cta = ci >= 0 ? x.ctas[ci] : x.cta;
+function buildAd(i) {
+  const p = adPartner, x = adVariants[i % adVariants.length], a = document.createElement("a");
+  const ci = x.ctas?.length ? Math.min(adCta, x.ctas.length - 1) : -1, cta = ci >= 0 ? x.ctas[ci] : x.cta;
   const q = `?v=${x.v}&l=${adLabel.toLowerCase()}${ci >= 0 ? `&c=${ci}` : ""}`;
   a.className = "adcard"; a.href = `/go/${p.id}${q}`; a.target = "_blank"; a.rel = "sponsored noopener";
   a.innerHTML = '<div class="adpic"><span class="adtag"></span><span class="adicon" aria-hidden="true"></span><p class="adline"></p></div><div class="bar"><span class="btn primary adcta"></span></div>';
   let src = null;
   const draw = PRODUCTS[x.product];
-  try { src = draw && artSource(); } catch (e) { report("mug-failed", e); }
+  try { src = draw && artSource(i); } catch (e) { report("mug-failed", e); }
   if (src) { // the visitor's own cut-out on the product, drawn here (nothing is uploaded)
     const c = document.createElement("canvas"); c.className = "adart"; c.setAttribute("aria-hidden", "true");
     a.querySelector(".adicon").replaceWith(c);
@@ -886,9 +891,9 @@ function buildAd() {
   if (src) {
     a.art = { draw, src };
     try { draw(a.querySelector(".adart"), src); }
-    catch (e) { report("mug-failed", e); const i = document.createElement("span"); i.className = "adicon"; i.textContent = p.emoji; a.querySelector(".adart").replaceWith(i); }
+    catch (e) { report("mug-failed", e); const ic = document.createElement("span"); ic.className = "adicon"; ic.textContent = p.emoji; a.querySelector(".adart").replaceWith(ic); }
   }
-  if (!adSeen.has(p.id)) { adSeen.add(p.id); fetch(`/go/${p.id}${q}`, { method: "POST", keepalive: true }).catch(() => {}); }
+  if (!adSeen.has(x.v)) { adSeen.add(x.v); fetch(`/go/${p.id}${q}`, { method: "POST", keepalive: true }).catch(() => {}); }
   return a;
 }
 
@@ -961,17 +966,16 @@ function drawTote(c, src) {
 const PRODUCTS = { mug: (c, src) => drawMug(c, src), sticker: drawSticker, shirt: drawShirt, tote: drawTote };
 
 // Light or dark changed: redraw the product in the other color.
-matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => { if (adEl?.art) try { adEl.art.draw(adEl.querySelector(".adart"), adEl.art.src); } catch {} });
+matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => {
+  for (const a of adEls) if (a.art) try { a.art.draw(a.querySelector(".adart"), a.art.src); } catch {}
+});
 
 // The art for the product: the first finished card on screen, cropped tight to the subject whatever the card
 // shows, at most 640 px. Edges fade softly, so a subject cut off by the photo's frame (a cat's chest, a sofa)
 // ends like a printed design instead of a hard straight line.
-function artSource() {
-  for (const card of $("grid").children) {
-    const it = items.find((i) => i.el.card === card);
-    if (it?.mask?.box) return mugArt(it);
-  }
-  return null;
+function artSource(i = 0) {
+  const done = [...$("grid").children].map((card) => items.find((x) => x.el.card === card)).filter((it) => it?.mask?.box);
+  return done.length ? mugArt(done[i % done.length]) : null; // with several photos, each card uses a different one
 }
 function mugArt(it) {
   const keep = it.crop; it.crop = true; const f = frame(it); it.crop = keep;
