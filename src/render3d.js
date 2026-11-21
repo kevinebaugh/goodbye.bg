@@ -4,10 +4,10 @@
 //
 // One WebGL context for all cards: each product renders offscreen and is copied into the card's canvas.
 import {
-  ACESFilmicToneMapping, CanvasTexture, CatmullRomCurve3, Color, CylinderGeometry, DataTexture, DirectionalLight,
-  DoubleSide, Group, LatheGeometry, LinearMipmapLinearFilter, Mesh, MeshDepthMaterial, MeshPhysicalMaterial,
-  MeshStandardMaterial, PCFSoftShadowMap, PerspectiveCamera, PlaneGeometry, PMREMGenerator, RGBADepthPacking,
-  CircleGeometry, RepeatWrapping, RGBAFormat, Scene, ShadowMaterial, SRGBColorSpace, TorusGeometry, TubeGeometry, Vector2, Vector3,
+  ACESFilmicToneMapping, Box3, CanvasTexture, CatmullRomCurve3, Color, CylinderGeometry, DataTexture, DirectionalLight,
+  DoubleSide, Group, LatheGeometry, LinearMipmapLinearFilter, Mesh, MeshDepthMaterial, MeshBasicMaterial, MeshPhysicalMaterial,
+  MeshStandardMaterial, PerspectiveCamera, PlaneGeometry, PMREMGenerator, RGBADepthPacking,
+  CircleGeometry, RepeatWrapping, RGBAFormat, Scene, SRGBColorSpace, TorusGeometry, TubeGeometry, Vector2, Vector3,
   WebGLRenderer,
 } from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
@@ -25,8 +25,6 @@ function setup() {
   renderer.outputColorSpace = SRGBColorSpace;
   renderer.toneMapping = ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = PCFSoftShadowMap;
   const pmrem = new PMREMGenerator(renderer);
   envMap = pmrem.fromScene(new RoomEnvironment(), 0.03).texture;
   pmrem.dispose();
@@ -88,15 +86,8 @@ function studio(floorY = 0, shadow = 0.3) {
   scene.environment = envMap;
   const key = new DirectionalLight(0xffffff, 1.6);
   key.position.set(-3, 6, 4);
-  key.castShadow = true;
-  key.shadow.mapSize.set(1024, 1024);
-  key.shadow.radius = 6;
-  key.shadow.bias = -0.0004;
-  Object.assign(key.shadow.camera, { left: -4, right: 4, top: 4, bottom: -4, near: 0.5, far: 20 });
   scene.add(key);
-  const floor = new Mesh(new PlaneGeometry(30, 30), new ShadowMaterial({ opacity: shadow }));
-  floor.rotation.x = -Math.PI / 2; floor.position.y = floorY; floor.receiveShadow = true;
-  scene.add(floor);
+  scene.userData.floor = { y: floorY, opacity: shadow }; // render() lays a soft shadow here once the product is built
   return scene;
 }
 
@@ -377,14 +368,41 @@ function keychain(art, dark) {
 const MAKERS = { mug, sticker, tote, shirt, ornament, phonecase, pillow, keychain };
 
 // Render `kind` with the visitor's cut-out `art` into the 2D canvas `out` (sized by CSS).
+// A soft shadow on the floor under the product: a blurred ellipse, nudged away from the key light. Not a shadow
+// map: on iPhones the shadow-map test failed and darkened the whole floor into a slab behind the product.
+let blobTex = null;
+function groundShadow(scene) {
+  const f = scene.userData.floor;
+  if (!f) return;
+  const box = new Box3().setFromObject(scene), size = box.getSize(new Vector3()), mid = box.getCenter(new Vector3());
+  if (!blobTex) {
+    const c = document.createElement("canvas"); c.width = c.height = 128;
+    const x = c.getContext("2d"), g = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+    g.addColorStop(0, "rgba(0,0,0,1)"); g.addColorStop(0.45, "rgba(0,0,0,.55)"); g.addColorStop(1, "rgba(0,0,0,0)");
+    x.fillStyle = g; x.fillRect(0, 0, 128, 128);
+    blobTex = new CanvasTexture(c);
+  }
+  const blob = new Mesh(new PlaneGeometry(1, 1), new MeshBasicMaterial({ color: 0x000000, map: blobTex, transparent: true, opacity: f.opacity * 1.6, depthWrite: false, toneMapped: false }));
+  blob.material.map = blobTex; blob.userData.shared = true;
+  blob.rotation.x = -Math.PI / 2;
+  const flat = size.y < 0.3 * Math.max(size.x, size.z), grow = flat ? 1.06 : 1.3; // lying flat: a tight edge, not a halo
+  blob.scale.set(Math.max(0.6, size.x * grow), Math.max(0.5, size.z * grow), 1);
+  if (flat) blob.material.opacity = f.opacity;
+  blob.position.set(mid.x + 0.12, f.y + 0.002, mid.z - 0.06);
+  blob.renderOrder = -1;
+  scene.add(blob);
+}
+
 export function render(kind, out, art, dark) {
   setup();
   const k = Math.min(2, self.devicePixelRatio || 1), w = Math.max(1, Math.round((out.clientWidth || 200) * k)), h = Math.max(1, Math.round((out.clientHeight || 150) * k));
-  const made = MAKERS[kind](art, dark), cam = camera(w, h, made.target, made.halfW, made.halfH, made.dir);
+  const made = MAKERS[kind](art, dark);
+  groundShadow(made.scene);
+  const cam = camera(w, h, made.target, made.halfW, made.halfH, made.dir);
   renderer.setSize(w, h, false);
   renderer.render(made.scene, cam);
   out.width = w; out.height = h;
   const o = out.getContext("2d"); o.clearRect(0, 0, w, h);
   o.drawImage(renderer.domElement, 0, 0, w, h, 0, 0, w, h);
-  made.scene.traverse((o) => { if (o.isMesh) { o.geometry.dispose(); for (const m of [].concat(o.material)) { m.map?.dispose(); m.alphaMap?.dispose(); m.dispose(); } } });
+  made.scene.traverse((o) => { if (o.isMesh) { o.geometry.dispose(); for (const m of [].concat(o.material)) { if (!o.userData.shared) m.map?.dispose(); m.alphaMap?.dispose(); m.dispose(); } } });
 }

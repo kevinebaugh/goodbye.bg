@@ -793,7 +793,8 @@ const GAP = 12, MIN_PIC = 96, MAX_PIC = 640;
 function layout() {
   const g = $("grid"), n = g.querySelectorAll(".card").length, all = $("tools");
   if (!n) { placeAds(0, 0); return; } // the last photo was removed: the ads go with it
-  const bar = g.querySelector(".bar")?.offsetHeight || 52, W = g.clientWidth, H = g.clientHeight - (all.hidden ? 0 : all.offsetHeight + GAP); // "Download all" sits under the cards
+  // The tallest bar, ads included: an ad's outlined button can make its bar a few px taller than a photo's.
+  const bar = Math.max(0, ...[...g.querySelectorAll(".bar")].map((b) => b.offsetHeight)) || 52, W = g.clientWidth, H = g.clientHeight - (all.hidden ? 0 : all.offsetHeight + GAP); // "Download all" sits under the cards
   const fit = (k) => {
     let b = { p: 0, c: 1 };
     for (let c = 1; c <= k; c++) {
@@ -875,13 +876,14 @@ function buildAd(i) {
   a.setAttribute("aria-label", `${adLabel}: ${x.line} ${cta}`);
   $("grid").insertBefore(a, $("tools"));
   adWatch.observe(a); // the cut-out beat starts once ads are on screen
-  a.style.setProperty("--sway-delay", `${-((i * 1.7) % 6)}s`); // phones: each card sways out of step
-  a.addEventListener("pointermove", (e) => { // a few degrees of tilt toward the pointer
+  a.tilt = { phase: i * 2.1, mix: 0, x: 0, y: 0, t: 0 }; // each card sways out of step with the others
+  a.addEventListener("pointermove", (e) => { // while the mouse moves over it, the product leans toward it
     if (e.pointerType !== "mouse") return;
-    const r = a.getBoundingClientRect(), dx = (e.clientX - r.left) / r.width - 0.5, dy = (e.clientY - r.top) / r.height - 0.5;
-    a.style.setProperty("--ry", `${(dx * 14).toFixed(1)}deg`); a.style.setProperty("--rx", `${(-dy * 10).toFixed(1)}deg`);
+    const r = a.getBoundingClientRect();
+    a.tilt.y = ((e.clientX - r.left) / r.width - 0.5) * 10; a.tilt.x = -((e.clientY - r.top) / r.height - 0.5) * 6;
+    a.tilt.t = performance.now(); tiltGo();
   });
-  a.addEventListener("pointerleave", () => { a.style.removeProperty("--ry"); a.style.removeProperty("--rx"); });
+  a.addEventListener("pointerleave", () => { a.tilt.t = 0; });
   if (src) {
     a.art = { draw, src };
     try { draw(a.querySelector(".adart"), src); }
@@ -1003,8 +1005,23 @@ function artOf(it) {
 const BEAT = 4000;
 let beatTimer = 0, beatNext = 0;
 const onScreen = () => adEls.some((a) => a.onScreen);
+// A little 3D, kept subtle: each product sways slowly on its own; while the mouse moves over a card it leans
+// toward the pointer, and a second after the mouse stops (or leaves) it eases back into the sway.
+let tiltRaf = 0;
+function tiltGo() { if (!tiltRaf && !matchMedia("(prefers-reduced-motion: reduce)").matches) tiltRaf = requestAnimationFrame(tiltLoop); }
+function tiltLoop(t) {
+  const live = adEls.filter((a) => a.onScreen && a.tilt);
+  tiltRaf = live.length && !document.hidden ? requestAnimationFrame(tiltLoop) : 0;
+  for (const a of live) {
+    const k = a.tilt, ph = t / 1000 * (2 * Math.PI / 12) + k.phase; // a 12 s cycle
+    k.mix += ((k.t && t - k.t < 1000 ? 1 : 0) - k.mix) * 0.07;
+    const ry = Math.sin(ph) * 5 * (1 - k.mix) + k.y * k.mix, rx = Math.cos(ph * 0.8) * 1.5 * (1 - k.mix) + k.x * k.mix;
+    a.style.setProperty("--ry", `${ry.toFixed(2)}deg`); a.style.setProperty("--rx", `${rx.toFixed(2)}deg`); // the products inherit them
+  }
+}
 const adWatch = new IntersectionObserver((entries) => {
   for (const e of entries) e.target.onScreen = e.isIntersecting;
+  if (onScreen()) tiltGo();
   if (onScreen() && !beatTimer) beat();
   else if (!onScreen()) { clearTimeout(beatTimer); beatTimer = 0; }
 }, { threshold: 0.5 });

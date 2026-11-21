@@ -141,7 +141,8 @@ Products render in real 3D (src/render3d.js + Three.js 0.187.0, MIT, bundled by 
 ~150 KB gzipped, loaded only when ads show): lathe-turned glazed mug with a real handle, die-cut vinyl sticker with a
 peeling corner, canvas tote with straps front and back, flat-lay t-shirt with folds, porcelain ornament on a gold cap with a ribbon,
 phone case with camera bump, throw pillow, die-cut acrylic keychain; physical materials, a studio
-environment (RoomEnvironment, no download), soft shadow; one shared WebGL context, ~20 ms a render. The 2D canvas
+environment (RoomEnvironment, no download), a soft blob shadow (not a shadow map: on iPhones the shadow test failed and the
+whole floor turned into a dark slab); each product sways slowly and leans toward a moving mouse, a few degrees at most; one shared WebGL context, ~20 ms a render. The 2D canvas
 drawings in app.js are the fallback (crash step '3d-failed'). The mug camera centres on the body, not the handle.
 
 Zazzle variant "mug" (the A): the visitor's first finished cut-out drawn on a mug in a canvas on the device
