@@ -939,8 +939,10 @@ function layout() {
   // Ads fill the grid (Kevin, 2026-11-20): up to 3 photos are laid out as 4 cells, more photos fill out their
   // last row. The cells are reserved from the start, so the photos never resize when the ads arrive.
   const slots = adsOn() && n < 4 ? 4 : n, best = fit(slots);
-  const scroll = best.p < MIN_PIC, p = Math.min(MAX_PIC, Math.max(best.p, MIN_PIC));
+  const scroll = best.p < MIN_PIC;
+  let p = Math.min(MAX_PIC, Math.max(best.p, MIN_PIC));
   const c = scroll ? Math.max(1, Math.floor((W + GAP) / (p + GAP))) : best.c;
+  if (scroll) p = Math.min(MAX_PIC, Math.floor((W - GAP * (c - 1)) / c)); // scrolling anyway: the columns use the full width
   g.classList.toggle("scroll", scroll);
   $("main").style.setProperty("--cols", c); $("main").style.setProperty("--p", `${p}px`); // grid and tools row share them
   placeAds(n, scroll ? 0 : Math.ceil(slots / c) * c - n);

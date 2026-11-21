@@ -246,6 +246,7 @@ body.app:not(.has-work) main { flex: none; margin-top: auto; }
   .busy::before { font-size: 22px; }
 }
 @container (max-width: 165px) { .rates { display: none; } }
+@container (max-width: 130px) { .crop { display: none; } } /* the smallest cards (a dozen photos on a phone): Download keeps room for its icon */
 /* Phones with photos on screen: the grid gets the room; the privacy note is on the empty page and in the headline. */
 @media (max-width: 600px) { body.app.has-work .foot p:first-child { display: none; } }
 /* "Download all" spans the row under the cards, edge to edge with them. */
