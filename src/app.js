@@ -26,6 +26,19 @@ const QUIPS = [
 
 const $ = (id) => document.getElementById(id);
 const items = [];
+
+// A Safari tab left open can come back hours later showing an old build without asking the server.
+// When the page comes back into view with no photos on it, compare builds and reload if it is stale.
+const BUILD = "%BUILD%";
+async function freshen() {
+  if (items.length || document.visibilityState !== "visible" || BUILD.startsWith("%")) return;
+  try {
+    const live = (await (await fetch("/version.txt", { cache: "no-store" })).text()).trim();
+    if (live && live !== BUILD) location.reload();
+  } catch {}
+}
+addEventListener("pageshow", freshen);
+document.addEventListener("visibilitychange", freshen);
 let running = false, uid = 0, lastMs = 0;
 
 /* ---------- small helpers ---------- */

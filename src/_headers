@@ -25,6 +25,9 @@
 /ad.html
   Content-Security-Policy: default-src 'none'; script-src https://media.ethicalads.io https://server.ethicalads.io; img-src https://media.ethicalads.io https://server.ethicalads.io data:; style-src 'unsafe-inline'; connect-src https://server.ethicalads.io; frame-ancestors 'self' https://goodbye.bg https://goodbye-bg-git.pages.dev
 
+/version.txt
+  Cache-Control: no-store
+
 /sw.js
   Cache-Control: no-cache
 

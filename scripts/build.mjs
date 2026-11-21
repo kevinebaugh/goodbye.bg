@@ -39,6 +39,10 @@ mkdirSync(rt, { recursive: true });
 for (const f of ["ort.webgpu.min.mjs", "ort-wasm-simd-threaded.asyncify.mjs"]) cpSync(join(ortDist, f), join(rt, f));
 console.log(`Runtime ${ORT}:`);
 writeParts(join(rt, "wasm"), readFileSync(join(ortDist, "ort-wasm-simd-threaded.asyncify.wasm")), "wasm");
+// Build ID: the page reloads itself when a tab left open is older than the live site (see freshen() in app.js).
+const BUILD = Date.now().toString(36);
+writeFileSync(join(dist, "version.txt"), BUILD);
+writeFileSync(join(dist, "app.js"), readFileSync(join(dist, "app.js"), "utf8").replaceAll("%BUILD%", BUILD));
 writeFileSync(join(dist, "engine.js"), readFileSync(join(dist, "engine.js"), "utf8").replaceAll("%ORT%", ORT));
 
 // fflate (MIT) for "Download all" zips.
