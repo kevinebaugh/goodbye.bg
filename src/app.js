@@ -1015,11 +1015,13 @@ setInterval(() => {
     const old = a.querySelector(".adart");
     if (!old || done.length < 2) return;
     let src; try { src = artOf(done[a.artIdx % done.length]); } catch { return; }
+    // Never two at once: the current one dips out (fades, shrinks a little), then the next one rises in.
     const c = document.createElement("canvas"); c.className = "adart fading"; c.setAttribute("aria-hidden", "true");
     old.after(c);
     try { a.art.draw(c, src); } catch { c.remove(); return; }
     a.art.src = src;
-    requestAnimationFrame(() => { c.classList.remove("fading"); setTimeout(() => old.remove(), 900); });
+    old.classList.add("leaving");
+    setTimeout(() => { old.remove(); requestAnimationFrame(() => c.classList.remove("fading")); }, 380);
   }, k * 1300));
 }, ROTATE);
 function mugArt(it) {
