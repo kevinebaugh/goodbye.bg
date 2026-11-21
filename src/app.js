@@ -943,6 +943,14 @@ function buildAd(i) {
     a.tilt.t = performance.now(); tiltGo();
   });
   a.addEventListener("pointerleave", () => { a.tilt.t = 0; });
+  // The partner opens in a new tab as usual, and this tab saves the cut-out shown on the product, ready to
+  // upload there (Kevin, 2026-11-21). Saved on the device like Download; nothing is sent to the partner.
+  a.addEventListener("click", async () => {
+    if (!a.art) return;
+    const done = finishedCuts(), it = done[a.artIdx % done.length];
+    if (!it) return;
+    try { save(outName(it), await png(it)); } catch (e) { report("ad-failed", e); }
+  });
   // The card stays invisible (its cell already reserved) until its product is drawn: no empty ad panels.
   const show = () => {
     if (!a.classList.contains("loading")) return;
