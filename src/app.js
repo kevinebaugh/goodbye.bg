@@ -839,7 +839,7 @@ function layout() {
   if (!n) { placeAds(0, 0); hugFooter(0); return; } // the last photo was removed: the ads go with it
   try { if (adsOn()) load3d(); } catch {} // fetch the 3D code while the first photo is still being worked on, so ads draw at once
   // The tallest bar, ads included: an ad's outlined button can make its bar a few px taller than a photo's.
-  const bar = Math.max(0, ...[...g.querySelectorAll(".bar")].map((b) => b.offsetHeight)) || 52, W = g.clientWidth, H = g.clientHeight - (all.hidden ? 0 : all.offsetHeight + GAP); // "Download all" sits under the cards
+  const bar = Math.max(0, ...[...g.querySelectorAll(".bar")].map((b) => b.offsetHeight)) || 52, W = g.clientWidth, H = g.clientHeight - (parseFloat(getComputedStyle(g).paddingTop) || 0) - (all.hidden ? 0 : all.offsetHeight + GAP); // "Download all" sits under the cards
   const fit = (k) => {
     let b = { p: 0, c: 1 };
     for (let c = 1; c <= k; c++) {
