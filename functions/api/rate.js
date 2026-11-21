@@ -12,7 +12,7 @@ export async function onRequestPost({ request, env }) {
   try { b = await request.json(); } catch { return new Response("Bad request", { status: 400 }); }
   const vote = b?.vote === "up" || b?.vote === "down" ? b.vote : null;
   if (!vote) return new Response("Bad request", { status: 400 });
-  const engine = b.engine === "gpu" ? "gpu" : "cpu";
+  const engine = ["gpu", "gpu-birefnet"].includes(b.engine) ? b.engine : "cpu";
   const ms = Math.max(0, Math.min(600_000, Number(b.ms) || 0));
   const mp = Math.max(0, Math.min(1000, Number(b.mp) || 0));
   const point = { blobs: [vote, engine, b.retry ? "retry" : "first"], doubles: [ms, mp], indexes: [vote] };

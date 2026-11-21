@@ -1,5 +1,5 @@
 # Usage: python3 scripts/narrow-onnx.py in.onnx out.onnx 6   (needs: pip install onnx)
-# Not used by the build. Kept for the next attempt at BiRefNet on WebGPU (see CLAUDE.md).
+# Used by scripts/birefnet.sh (after deform-to-gridsample.py) to make BiRefNet run on WebGPU (see CLAUDE.md).
 # Make BiRefNet fit WebGPU's storage-buffer limit: no Concat with more than K inputs and
 # no Split with more than K outputs. Both become trees of smaller ops with the same result.
 import sys, onnx

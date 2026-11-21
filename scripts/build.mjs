@@ -1,6 +1,6 @@
 // Builds dist/: copies src/, then adds the model and runtime.
 // No bundler. Output is plain static files for Cloudflare Pages or any static host.
-import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const root = new URL("..", import.meta.url).pathname;
@@ -43,7 +43,10 @@ writeParts(join(rt, "wasm"), readFileSync(join(ortDist, "ort-wasm-simd-threaded.
 const BUILD = Date.now().toString(36);
 writeFileSync(join(dist, "version.txt"), BUILD);
 writeFileSync(join(dist, "app.js"), readFileSync(join(dist, "app.js"), "utf8").replaceAll("%BUILD%", BUILD));
-writeFileSync(join(dist, "engine.js"), readFileSync(join(dist, "engine.js"), "utf8").replaceAll("%ORT%", ORT));
+// BiRefNet lite (MIT) for the GPU engine, made by scripts/birefnet.sh. Without it the GPU engine runs ISNet.
+const birefnetFile = join(root, "models", "birefnet-webgpu.onnx");
+const birefnet = existsSync(birefnetFile) ? readFileSync(birefnetFile) : null;
+writeFileSync(join(dist, "engine.js"), readFileSync(join(dist, "engine.js"), "utf8").replaceAll("%ORT%", ORT).replaceAll("%BIREFNET%", birefnet ? "1" : "0"));
 
 // fflate (MIT) for "Download all" zips.
 mkdirSync(join(dist, "vendor"));
@@ -86,4 +89,6 @@ writeFileSync(join(dist, "partners.json"), JSON.stringify(PARTNERS.map(({ id, na
 
 console.log("Model:");
 writeParts(join(dist, "m", "isnet"), isnet, "isnet");
+if (birefnet) writeParts(join(dist, "m", "birefnet"), birefnet, "birefnet");
+else console.log("  birefnet: not built (run scripts/birefnet.sh); the GPU engine uses ISNet");
 console.log("Built dist/.");
