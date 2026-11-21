@@ -104,6 +104,16 @@ Requirement from Kevin: 10 to 30 seconds per photo is unacceptable. Target a few
 - Typical photos: phone camera rolls. People, kids, pets, products, cars. Busy scenes (car interiors, a
   small cat in a dark yard) are the model's weak spot; don't over-tune for them.
 
+Anonymous counts the page sends (never photo data): 👍/👎 to `/api/rate`; crash reports to `/api/crash` (the page
+leaves a note in localStorage while working on a photo; the next visit sends it if the tab died: step, engine,
+device kind, photos done, megapixels); `/api/count` adds one to a single global number in D1
+(`goodbye-bg-counter`, binding COUNTER) per finished cut-out, and every 100th gets confetti (`?confetti=1` forces it).
+Haptics: a light tick on result, crop, 👍/👎 and Download (Android vibrate; iOS 18+ hidden switch control).
+iPhones shut the engine down once idle (its ~1.8 GB never shrinks; 7 to 8 photos in one tab crashed Safari).
+
+Reading crashes: `SELECT blob2 AS engine, blob3 AS step, blob4 AS device, count() AS n, avg(double1) AS done,
+avg(double2) AS mp FROM goodbye_bg_ratings WHERE blob1 = 'crash' GROUP BY engine, step, device`
+
 Reading ratings (Workers Analytics Engine, dataset `goodbye_bg_ratings`; blob1 vote, blob2 engine,
 blob3 first/retry, double1 ms, double2 megapixels):
 

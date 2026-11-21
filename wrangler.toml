@@ -8,3 +8,10 @@ compatibility_date = "2026-11-19"
 [[analytics_engine_datasets]]
 binding = "RATINGS"
 dataset = "goodbye_bg_ratings"
+
+# One global number: cut-outs finished on goodbye.bg, everywhere. /api/count adds one and returns the
+# total; every 100th gets confetti. No photos, IPs or cookies.
+[[d1_databases]]
+binding = "COUNTER"
+database_name = "goodbye-bg-counter"
+database_id = "d6e817c0-752d-4c25-b85a-f781ad72da46"

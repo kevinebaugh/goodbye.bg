@@ -81,6 +81,71 @@ const jobs = new Map();
 const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 const THREADS = +params.get("threads") || (IOS ? 2 : 4);
 
+/* ---------- crash reports ----------
+   iOS kills a tab that runs out of memory and no code runs then, so nothing can report it at the time.
+   Instead the page leaves a note in localStorage while it works on a photo and clears it when done or
+   when the page closes normally. If the next visit finds the note, it sends it once to /api/crash:
+   the step, the engine, the device kind, the photo's megapixels and how many photos the tab had finished.
+   Never the photo. */
+const CRASH_KEY = "goodbye-bg:working", DEVICE = IOS ? "ios" : /Android/.test(navigator.userAgent) ? "android" : "desktop";
+let finished = 0;
+
+// A light haptic tick. Android: the vibration API. iPhone (iOS 18+): Safari has no vibration API, but a
+// native switch control ticks when toggled, and toggling a hidden one through its label works from code.
+const tickSwitch = IOS && (() => {
+  const label = document.createElement("label"), box = document.createElement("input");
+  box.type = "checkbox"; box.setAttribute("switch", ""); label.append(box);
+  label.style.display = "none"; label.setAttribute("aria-hidden", "true");
+  document.body.append(label);
+  return label;
+})();
+// Every 100th cut-out on goodbye.bg, counted across everyone, gets confetti. /api/count adds one to a single
+// global number and says whether this one is a hundredth. It carries nothing about the photo.
+async function milestone(it) {
+  let hit = params.has("confetti");
+  try { hit = (await (await fetch("/api/count", { method: "POST" })).json()).confetti || hit; } catch {}
+  if (hit && items.includes(it)) confetti(it.el.card);
+}
+function confetti(from) {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const r = from.getBoundingClientRect(), W = innerWidth, H = innerHeight, k = Math.min(2, devicePixelRatio || 1);
+  const c = document.createElement("canvas"), x = c.getContext("2d");
+  c.className = "confetti"; c.width = W * k; c.height = H * k; x.scale(k, k);
+  document.body.append(c);
+  const colors = ["#69d2e7", "#a7dbd8", "#e0e4cc", "#2f9fb8", "#ffffff"]; // the cool side of Giant Goldfish
+  const bits = Array.from({ length: 110 }, () => ({
+    x: r.left + r.width / 2, y: r.top + r.height / 3, vx: (Math.random() - 0.5) * 13, vy: -4 - Math.random() * 11,
+    s: 5 + Math.random() * 5, a: Math.random() * 6, va: (Math.random() - 0.5) * 0.4, c: colors[(Math.random() * colors.length) | 0],
+  }));
+  const t0 = performance.now(), D = 2200;
+  const frame = (now) => {
+    const t = now - t0;
+    x.clearRect(0, 0, W, H); x.globalAlpha = Math.max(0, 1 - t / D);
+    for (const b of bits) {
+      b.vy += 0.35; b.vx *= 0.99; b.x += b.vx; b.y += b.vy; b.a += b.va;
+      x.save(); x.translate(b.x, b.y); x.rotate(b.a); x.fillStyle = b.c; x.fillRect(-b.s / 2, -b.s / 4, b.s, b.s / 2); x.restore();
+    }
+    if (t < D) requestAnimationFrame(frame); else c.remove();
+  };
+  requestAnimationFrame(frame);
+}
+
+function tick() {
+  if (tickSwitch) tickSwitch.click();
+  else if (navigator.userActivation?.hasBeenActive && matchMedia("(pointer: coarse)").matches) navigator.vibrate?.(8);
+}
+function working(step, it) {
+  const note = { step, engine: engineName || "cpu", dev: DEVICE, done: finished, mp: it ? +((it.w * it.h) / 1e6).toFixed(1) : 0 };
+  try { localStorage.setItem(CRASH_KEY, JSON.stringify(note)); } catch {}
+}
+function rested() { try { localStorage.removeItem(CRASH_KEY); } catch {} }
+addEventListener("pagehide", rested);
+(() => {
+  let note = null;
+  try { note = localStorage.getItem(CRASH_KEY); localStorage.removeItem(CRASH_KEY); } catch {}
+  if (note) fetch("/api/crash", { method: "POST", headers: { "Content-Type": "application/json" }, body: note, keepalive: true }).catch(() => {});
+})();
+
 async function pickEngine() {
   const forced = params.get("engine");
   if (forced === "gpu" || forced === "cpu") return forced;
@@ -99,6 +164,13 @@ function killWorker(reason) {
   jobs.clear();
 }
 function stopEngine(reason) { killWorker(reason); engineReady = null; }
+
+// iPhones: the engine's memory (about 1.8 GB) only grows while the tab is open, and each photo added to it
+// until Safari killed the tab (7 to 8 photos in one session). Once nothing is waiting, shut it down; the
+// next photo starts a fresh one in under a second from the cached model.
+function idle() {
+  if (IOS && worker && !jobs.size && !running) { stopEngine("idle"); dbg("engine-idle"); }
+}
 
 function startEngine(name) {
   killWorker("Engine restarted");
@@ -362,6 +434,7 @@ const fullBitmap = (it) => decode(it.blob);
 
 async function fullBlob(it) {
   dbg("png", { w: it.w, h: it.h });
+  working("png", it);
   const big = await fullBitmap(it);
   try {
     const f = frame(it), full = render(it, it.w, it.h, big);
@@ -369,7 +442,7 @@ async function fullBlob(it) {
     const out = new OffscreenCanvas(f.w, f.h);
     out.getContext("2d").drawImage(full, f.x, f.y, f.w, f.h, 0, 0, f.w, f.h);
     return await out.convertToBlob({ type: "image/png" });
-  } finally { big.close(); }
+  } finally { big.close(); if (!running) rested(); }
 }
 
 // Phones save through the share sheet ("Save Image" puts it in Photos) instead of downloading to Files.
@@ -521,20 +594,20 @@ function makeCard(it) {
     b.type = "button"; b.className = "ico rate"; b.textContent = emoji; b.style.visibility = "hidden";
     b.setAttribute("aria-label", label); b.title = label;
   }
-  up.addEventListener("click", () => rate(it, "up"));
-  down.addEventListener("click", () => rate(it, "down"));
+  up.addEventListener("click", () => { tick(); rate(it, "up"); });
+  down.addEventListener("click", () => { tick(); rate(it, "down"); });
   const rates = document.createElement("div"); rates.className = "rates"; rates.append(up, down);
   x.classList.add("ico"); crop.classList.add("ico");
   bar.append(crop, dl, rates, x);
   card.append(pic, bar);
 
   crop.addEventListener("click", () => {
-    it.crop = !it.crop; crop.setAttribute("aria-pressed", String(it.crop));
+    it.crop = !it.crop; crop.setAttribute("aria-pressed", String(it.crop)); tick();
     it.png = null; drawCard(it); if (PHONE) png(it);
   });
   x.addEventListener("click", () => { clearInterval(it.quip); it.gen = -1;
     for (const u of [it.previewUrl, it.fullUrl]) if (u) URL.revokeObjectURL(u); items.splice(items.indexOf(it), 1); card.remove(); sync(); });
-  dl.addEventListener("click", async () => deliver([{ name: outName(it), blob: await png(it) }]));
+  dl.addEventListener("click", async () => tick() || deliver([{ name: outName(it), blob: await png(it) }]));
 
   it.el = { card, pic, canvas, img, busy, dl, crop, up, down };
   return card;
@@ -558,18 +631,20 @@ async function run() {
     for (let it; (it = next()); ) {
       startQuips(it);
       await nextFrame();
-      try { it.mask = await segment(it.bmp); }
+      working(engineReady ? "model" : "load", it);
+      try { it.mask = await segment(it.bmp); finished++; }
       catch (e) { console.error(e); fail(it, "Could not process this image."); continue; }
       if (!it.mask.box) { it.mask = null; fail(it, "No clear subject in this photo."); continue; }
       if (!items.includes(it)) continue;
       clearInterval(it.quip);
       it.el.busy.hidden = true; it.el.dl.disabled = false; for (const b of [it.el.crop, it.el.up, it.el.down]) b.style.visibility = ""; it.ms = lastMs;
       dbg("shown");
-      dbg("reveal"); reveal(it); sync();
+      dbg("reveal"); reveal(it); sync(); tick(); milestone(it);
       it.el.card.dataset.ms = lastMs;
     }
-  } finally { running = false; }
+  } finally { running = false; rested(); }
   if (items.some((i) => i.bmp && !i.mask && !i.failed)) return run();
+  idle();
   if (PHONE) for (const it of items) if (it.mask) png(it); // after the batch: don't compete with the model
 }
 
@@ -614,6 +689,7 @@ async function retry(it) {
   if ((x1 - x0) * (y1 - y0) > 0.8) return;
   it.retried = true;
   it.first = { mask: it.mask, rect: it.maskRect };
+  working("retry", it);
   const { busy, up, down, dl } = it.el;
   busy.textContent = QUIPS[Math.floor(Math.random() * QUIPS.length)]; busy.hidden = false; dl.disabled = true;
   try {
@@ -627,6 +703,8 @@ async function retry(it) {
   busy.hidden = true; dl.disabled = false;
   if (!items.includes(it)) return;
   reveal(it);
+  if (!running) rested();
+  idle();
   if (PHONE) png(it);
   up.disabled = down.disabled = false; up.classList.remove("chosen"); down.classList.remove("chosen");
 }
