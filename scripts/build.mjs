@@ -71,6 +71,10 @@ const esbuild = await import("esbuild");
 await esbuild.build({ entryPoints: [join(root, "src/render3d.js")], bundle: true, format: "esm", minify: true, target: "es2022",
   outfile: join(dist, "render3d.mjs"), legalComments: "none", logLevel: "warning" });
 rmSync(join(dist, "render3d.js"));
+// Animated GIFs: src/gif.js with gifuct-js and gifenc (both MIT), loaded only when an animated GIF is added.
+await esbuild.build({ entryPoints: [join(root, "src/gif.js")], bundle: true, format: "esm", minify: true, target: "es2022",
+  outfile: join(dist, "gif.mjs"), legalComments: "none", logLevel: "warning" });
+rmSync(join(dist, "gif.js"));
 
 // Ad partners the page may show (public fields only; the affiliate links stay in the /go redirect).
 const { PARTNERS } = await import(join(root, "lib/partners.mjs"));

@@ -87,6 +87,14 @@ Rejected:
 
 Requirement from Kevin: 10 to 30 seconds per photo is unacceptable. Target a few seconds.
 
+## Animated GIFs (2026-11-21)
+
+An animated GIF is read with gifuct-js and written back with gifenc (both MIT, bundled into `dist/gif.mjs`, loaded
+only when one is added). Every frame goes through the model (at most 100, or 16 on iPhones and without WebGPU:
+longer GIFs keep every n-th frame and add up the delays) and the result is an animated GIF with on/off transparency
+(soft edges become hard). The card plays it; Download and long-press save the GIF. No crop and no zoomed retry
+for GIFs (👎 is a vote only). Measured: 10 frames at 360x540 in 5.7 s on the GPU engine.
+
 ## UX decisions (2026-11-20, from Kevin)
 
 - One screen, no scrolling. No double-tap zoom; pinch-zoom is allowed for accessibility (Kevin, 2026-11-20). Cards are square and sized to fit; a batch appears at

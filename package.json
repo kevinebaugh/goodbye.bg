@@ -21,6 +21,8 @@
   "dependencies": {
     "@fontsource-variable/nunito": "5.3.0",
     "canvas-confetti": "1.9.4",
+    "gifenc": "1.0.3",
+    "gifuct-js": "2.1.2",
     "three": "0.187.0"
   }
 }

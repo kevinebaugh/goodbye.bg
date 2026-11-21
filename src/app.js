@@ -469,7 +469,7 @@ function still(it) {
     if (!b || gen !== it.gen) return;
     const old = it.previewUrl;
     it.previewUrl = URL.createObjectURL(b);
-    img.src = it.previewUrl;
+    img.src = it.gifUrl || it.previewUrl; // an animated cut-out plays
     try { await img.decode(); } catch {}
     if (gen !== it.gen) return;
     pic.classList.add("still");
@@ -562,7 +562,33 @@ const PHONE = matchMedia("(pointer: coarse)").matches && "canShare" in navigator
 let pngChain = Promise.resolve();
 // One full-size PNG at a time: several at once can run a phone out of memory.
 const png = (it) => (it.png ||= (pngChain = pngChain.then(() => fullBlob(it), () => fullBlob(it))));
-const outName = (it) => `${it.name}-goodbye-bg.png`;
+const ext = (it) => (it.anim ? "gif" : "png");
+const outName = (it) => `${it.name}-goodbye-bg.${ext(it)}`;
+
+/* ---------- animated GIFs ----------
+   Each frame goes through the model (the first one already has), is cut out at the GIF's size, and the frames
+   are written back as an animated GIF. Long GIFs keep every n-th frame (the timing stays): phones run the model
+   on the CPU, about 5 s a frame. */
+const MAX_FRAMES = IOS || !navigator.gpu ? 16 : 100;
+let gifMod = null;
+const loadGif = () => (gifMod ||= import("./gif.mjs"));
+async function animate(it) {
+  const { frames, w, h } = it.anim, busy = it.el.busy;
+  clearInterval(it.quip);
+  const cut = (mask, src) => render({ mask }, w, h, src).getContext("2d").getImageData(0, 0, w, h).data;
+  const out = [{ rgba: cut(it.mask, frames[0].canvas), delay: frames[0].delay }];
+  for (let i = 1; i < frames.length; i++) {
+    if (!items.includes(it)) return;
+    busy.textContent = `Frame ${i + 1} of ${frames.length}`;
+    working("gif", it);
+    const m = await segment(frames[i].canvas);
+    out.push({ rgba: cut(m, frames[i].canvas), delay: frames[i].delay });
+    frames[i].canvas = null; // done with it (memory)
+  }
+  const blob = (await loadGif()).writeGif(out, w, h);
+  it.png = Promise.resolve(blob); it.gifUrl = URL.createObjectURL(blob);
+  dbg("gif-done", { frames: out.length, bytes: blob.size });
+}
 
 /* ---------- getting images in ----------
    Every way in ends at addSources(list), where each entry is a File/Blob or a string
@@ -590,6 +616,10 @@ async function addSources(list, origin = "") {
     try {
       const { blob, name } = await toBlob(src);
       it.name = baseName(name);
+      if (/gif/i.test(blob.type) || /\.gif$/i.test(name || "")) { // animated: every frame gets cut out
+        try { const g = (await loadGif()).readGif(await blob.arrayBuffer(), MAX_FRAMES); if (g) { it.anim = g; it.crop = false; dbg("gif", { frames: g.frames.length, total: g.total }); } }
+        catch (e) { console.warn("GIF frames skipped", e); }
+      }
       dbg("decode", { bytes: blob.size, type: blob.type });
       const full = await decode(blob);
       let { width: w, height: h } = full;
@@ -717,7 +747,7 @@ function makeCard(it) {
     it.png = null; drawCard(it); if (PHONE) png(it);
   });
   x.addEventListener("click", () => { dbg("removed"); clearInterval(it.quip); it.gen = -1;
-    for (const u of [it.previewUrl, it.fullUrl]) if (u) URL.revokeObjectURL(u); items.splice(items.indexOf(it), 1); card.remove(); sync(); });
+    for (const u of [it.previewUrl, it.fullUrl, it.gifUrl]) if (u) URL.revokeObjectURL(u); items.splice(items.indexOf(it), 1); card.remove(); sync(); });
   dl.addEventListener("click", async () => tick() || deliver([{ name: outName(it), blob: await png(it) }]));
 
   it.el = { card, pic, canvas, img, busy, dl, crop, up, down };
@@ -747,8 +777,10 @@ async function run() {
       catch (e) { console.error(e); report("run-failed", e, it); fail(it, "Could not process this image."); continue; }
       if (!it.mask.box) { it.mask = null; fail(it, "No clear subject in this photo."); continue; }
       if (!items.includes(it)) continue;
+      if (it.anim) try { await animate(it); } catch (e) { console.error(e); report("gif-failed", e, it); it.anim = null; it.png = null; }
+      if (!items.includes(it)) continue;
       clearInterval(it.quip);
-      it.el.busy.hidden = true; it.el.dl.disabled = false; for (const b of [it.el.crop, it.el.up, it.el.down]) b.style.visibility = ""; it.ms = lastMs;
+      it.el.busy.hidden = true; it.el.dl.disabled = false; for (const b of [it.anim ? null : it.el.crop, it.el.up, it.el.down]) if (b) b.style.visibility = ""; it.ms = lastMs;
       dbg("shown");
       dbg("reveal"); reveal(it); sync(); tick(); milestone(it);
       it.el.card.dataset.ms = lastMs;
@@ -787,7 +819,7 @@ async function rate(it, vote) {
   (vote === "up" ? down : up).style.visibility = "hidden";
   sendRating(it, vote);
   if (vote !== "down") return;
-  if (!it.retried) return retry(it);
+  if (!it.retried && !it.anim) return retry(it); // a GIF's 👎 is a vote only
   if (it.first) { // 👎 on the retry: put the first result back, so a retry never leaves things worse
     Object.assign(it, { mask: it.first.mask, maskRect: it.first.rect, png: null });
     it.first = null; drawCard(it); if (PHONE) png(it);
@@ -1272,7 +1304,7 @@ $("all").addEventListener("click", async () => {
     const list = [];
     for (const it of done) {
       let name = outName(it);
-      for (let k = 2; used.has(name); k++) name = `${it.name}-goodbye-bg-${k}.png`;
+      for (let k = 2; used.has(name); k++) name = `${it.name}-goodbye-bg-${k}.${ext(it)}`;
       used.add(name); list.push({ name, blob: await png(it) });
     }
     if (await share(list)) return;
@@ -1281,7 +1313,7 @@ $("all").addEventListener("click", async () => {
   for (const [n, it] of done.entries()) {
     toast(`Preparing ${n + 1} of ${done.length}…`, 60_000);
     let name = outName(it);
-    for (let k = 2; used.has(name); k++) name = `${it.name}-goodbye-bg-${k}.png`;
+    for (let k = 2; used.has(name); k++) name = `${it.name}-goodbye-bg-${k}.${ext(it)}`;
     used.add(name);
     files[name] = [new Uint8Array(await (await fullBlob(it)).arrayBuffer()), { level: 0 }];
   }
