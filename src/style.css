@@ -46,7 +46,8 @@ a { color: inherit; }
 .mark { font-weight: 800; font-size: 26px; letter-spacing: -0.03em; text-decoration: none; display: inline-flex; align-items: center; }
 .mark span { color: var(--brand); }
 .wave { font-style: normal; display: inline-block; margin-left: 8px; transform-origin: 70% 80%; animation: wave 1.6s ease-in-out 0.4s 2; }
-.mark:hover .wave { animation: wave 1.2s ease-in-out infinite; }
+@media (hover: hover) { .mark:hover .wave { animation: wave 1.2s ease-in-out infinite; } }
+.wave.again { animation: wave 1.2s ease-in-out 1; } /* a tap on the wordmark */
 @keyframes wave { 0%,60%,100% { transform: rotate(0); } 10%,30% { transform: rotate(16deg); } 20%,40% { transform: rotate(-10deg); } }
 
 main { flex: 1; width: 100%; max-width: 1100px; margin: 0 auto; padding: 0 24px 24px; }
@@ -61,7 +62,7 @@ main { flex: 1; width: 100%; max-width: 1100px; margin: 0 auto; padding: 0 24px 
   .big:hover { transform: translateY(-1px); box-shadow: 0 6px 16px -8px color-mix(in srgb, var(--ink) 45%, transparent); }
   }
 .big:active { transform: translateY(0) scale(.98); box-shadow: none; transition-duration: .08s; }
-body:has(.big:hover) .mark .wave { animation: wave 1.6s ease-in-out infinite; }
+@media (hover: hover) { body:has(.big:hover) .mark .wave { animation: wave 1.6s ease-in-out infinite; } }
 .big.ghost { background: transparent; color: var(--ink); }
 
 /* Once photos arrive, the hero steps aside. */

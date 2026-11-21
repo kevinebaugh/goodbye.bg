@@ -164,6 +164,14 @@ async function pollCount() {
 pollCount(); setInterval(pollCount, REFRESH);
 $("count").addEventListener("click", (e) => { tick(); confetti(e.currentTarget); });
 
+// The wordmark links home, but on this page that would reload and wipe every result. It waves instead.
+document.querySelector(".mark").addEventListener("click", (e) => {
+  e.preventDefault();
+  const wave = e.currentTarget.querySelector(".wave");
+  wave.classList.remove("again"); void wave.offsetWidth; wave.classList.add("again"); // restart the wave
+  tick();
+});
+
 function tick() {
   if (tickSwitch) tickSwitch.click();
   else if (navigator.userActivation?.hasBeenActive && matchMedia("(pointer: coarse)").matches) navigator.vibrate?.(8);
