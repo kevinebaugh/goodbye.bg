@@ -617,7 +617,7 @@ async function addSources(list, origin = "") {
     const it = { id: ++uid, name: "image", bmp: null, blob: null, w: 0, h: 0, mask: null, crop: true };
     items.push(it);
     cards.append(makeCard(it));
-    it.name = baseName(src instanceof Blob ? src.name : String(src).startsWith("data:") ? "pasted" : String(src));
+    named(it, baseName(src instanceof Blob ? src.name : String(src).startsWith("data:") ? "pasted" : String(src)));
     return [it, src];
   });
   $("grid").prepend(cards);
@@ -626,7 +626,7 @@ async function addSources(list, origin = "") {
     if (!items.includes(it)) continue;
     try {
       const { blob, name } = await toBlob(src);
-      it.name = baseName(name);
+      named(it, baseName(name));
       if (/gif/i.test(blob.type) || /\.gif$/i.test(name || "")) { // animated: every frame gets cut out
         try { const g = (await loadGif()).readGif(await blob.arrayBuffer(), MAX_FRAMES); if (g) { it.anim = g; it.crop = false; dbg("gif", { frames: g.frames.length, total: g.total }); } }
         catch (e) { console.warn("GIF frames skipped", e); }
@@ -773,6 +773,12 @@ function makeCard(it) {
 
   it.el = { card, pic, canvas, img, busy, dl, crop, up, down };
   return card;
+}
+
+// The file name tells screen readers which photo a card (and its Download, Remove…) belongs to.
+function named(it, name) {
+  it.name = name;
+  it.el.card.setAttribute("aria-label", name); it.el.img.alt = `${name}, background removed`;
 }
 
 function fail(it, msg) {
@@ -1369,7 +1375,9 @@ document.addEventListener("dblclick", (e) => e.preventDefault(), { passive: fals
 
 /* ---------- ways in ---------- */
 
-// 1. Choose files (on phones this also offers the camera and photo library).
+// 1. Choose files (on phones this also offers the camera and photo library). The button is a label for the hidden
+// input, which a keyboard can't reach on its own: Enter and Space open the picker too.
+$("pick").addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("file").click(); } });
 $("file").addEventListener("change", (e) => { addSources([...e.target.files]); e.target.value = ""; });
 
 // 2. Paste anywhere: copied images, screenshots, copied files, image links, web page selections.
