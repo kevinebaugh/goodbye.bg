@@ -633,9 +633,9 @@ async function retry(it) {
 // Only past a minimum size (dozens of photos on a phone) does the grid scroll.
 const GAP = 12, MIN_PIC = 96, MAX_PIC = 640;
 function layout() {
-  const g = $("grid"), n = g.children.length;
+  const g = $("grid"), n = g.querySelectorAll(".card").length, all = $("tools");
   if (!n) return;
-  const bar = g.querySelector(".bar")?.offsetHeight || 52, W = g.clientWidth, H = g.clientHeight;
+  const bar = g.querySelector(".bar")?.offsetHeight || 52, W = g.clientWidth, H = g.clientHeight - (all.hidden ? 0 : all.offsetHeight + GAP); // "Download all" sits under the cards
   let best = { p: 0, c: 1 };
   for (let c = 1; c <= n; c++) {
     const r = Math.ceil(n / c), p = Math.floor(Math.min((W - GAP * (c - 1)) / c, (H - GAP * (r - 1)) / r - bar));
@@ -650,10 +650,9 @@ new ResizeObserver(layout).observe($("grid"));
 
 function sync() {
   const done = items.filter((i) => i.mask).length;
-  $("all").hidden = false;
   $("all").style.visibility = done < 2 ? "hidden" : "";
   $("all").textContent = `Download all (${done})`;
-  $("tools").hidden = items.length < 2; // reserve the row early so the grid doesn't jump
+  $("tools").hidden = items.length < 2; // reserve the row early so the cards don't jump
   if (!items.length) document.body.classList.remove("has-work");
   requestAnimationFrame(layout);
 }

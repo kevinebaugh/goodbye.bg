@@ -65,7 +65,6 @@ body:has(.big:hover) .mark .wave { animation: wave 1.6s ease-in-out infinite; }
 body.has-work .hero { margin-top: 0; gap: 12px; }
 body.has-work .hero h1, body.has-work .sub { display: none; }
 
-.tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 24px 0 14px; }
 .spacer { flex: 1; }
 .btn { border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 8px 16px; cursor: pointer; font-weight: 700; font-size: 15px; }
 .btn:hover { border-color: var(--ink); }
@@ -163,10 +162,8 @@ html:has(body.app) { height: 100%; overflow: hidden; }
 body.app { height: 100dvh; min-height: 0; overflow: hidden; }
 body.app, body.app * { touch-action: none; }
 body.app main { flex: 1; min-height: 0; display: flex; flex-direction: column; padding-bottom: 8px; }
-body.app.has-work .tools { padding: 12px 0 10px; }
 body.app.has-work .grid { flex: 1; min-height: 0; grid-template-columns: repeat(var(--cols, 1), var(--p, 300px));
   grid-auto-rows: max-content; justify-content: center; align-content: start; gap: 12px; padding-top: 12px; }
-body.app.has-work .tools:not([hidden]) + .grid { padding-top: 0; }
 body.app .grid .pic { aspect-ratio: auto; height: var(--p, 300px); }
 body.app .grid.scroll { overflow-y: auto; align-content: start; }
 body.app .grid.scroll, body.app .grid.scroll * { touch-action: pan-y; }
@@ -190,7 +187,8 @@ body.app:not(.has-work) main { flex: none; margin-top: auto; }
 @container (max-width: 165px) { .rates { display: none; } }
 /* Phones with photos on screen: the grid gets the room; the privacy note is on the empty page and in the headline. */
 @media (max-width: 600px) { body.app.has-work .foot p:first-child { display: none; } }
-/* "Download all" lines up with the right edge of the cards. */
-body.app.has-work .tools { width: min(100%, calc(var(--cols, 1) * var(--p, 300px) + (var(--cols, 1) - 1) * 12px)); margin-inline: auto; }
+/* "Download all" spans the row under the cards, edge to edge with them. */
+.allrow { grid-column: 1 / -1; display: flex; }
+.allrow .btn { flex: 1; padding: 11px 16px; font-size: 16px; }
 /* With photos on screen the add buttons step down a size, so the cards get the room. */
 body.app.has-work .big { font-size: 16px; padding: 9px 22px; }
