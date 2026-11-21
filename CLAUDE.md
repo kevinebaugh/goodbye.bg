@@ -93,7 +93,8 @@ Requirement from Kevin: 10 to 30 seconds per photo is unacceptable. Target a few
 - Only the photo being worked on waves and shows a quip; waiting cards stay still. Quips are the one place
   for playful text; everything else is plain and only what people need.
 - Results are cropped to the subject by default (crop icon switches to the whole frame). 👎 retries zoomed in
-  on the subject, a second 👎 restores the first result.
+  on the subject, a second 👎 restores the first result. One vote per result: the chosen emoji stays lit and the
+  other steps aside; a retry that finds a new result brings both back for it.
 - Nothing ever overlaps the image. Every card control (crop, Download, 👍 👎, remove) lives in the bar below it.
 - A finished cut-out is an `<img>`, so long-press on iPhone offers Save to Photos (a press swaps in the
   full-size PNG). Safari ignores `touch-action` for double taps, so app.js swallows a second

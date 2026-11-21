@@ -741,8 +741,10 @@ function sendRating(it, vote) {
 
 async function rate(it, vote) {
   const { up, down } = it.el;
+  // One vote per result: the chosen one stays lit, the other steps aside (keeping its place in the bar).
   up.disabled = down.disabled = true;
   (vote === "up" ? up : down).classList.add("chosen");
+  (vote === "up" ? down : up).style.visibility = "hidden";
   sendRating(it, vote);
   if (vote !== "down") return;
   if (!it.retried) return retry(it);
@@ -764,6 +766,7 @@ async function retry(it) {
   retrying++; working("retry", it);
   const { busy, up, down, dl } = it.el;
   busy.textContent = QUIPS[Math.floor(Math.random() * QUIPS.length)]; busy.hidden = false; dl.disabled = true;
+  let changed = false;
   // Never next to a PNG being built (a full photo each): wait for those, and hold back the ones not started.
   clearTimeout(pngTimer);
   await pngChain.catch(() => {});
@@ -775,16 +778,17 @@ async function retry(it) {
       { resizeWidth: RES, resizeHeight: RES, resizeQuality: "high" });
     big.close();
     const m = await segment(part); part.close();
-    if (m.box) { it.mask = m; it.maskRect = { x: sx / it.w, y: sy / it.h, w: sw / it.w, h: sh / it.h }; it.ms = lastMs; it.png = null; }
+    if (m.box) { changed = true; it.mask = m; it.maskRect = { x: sx / it.w, y: sy / it.h, w: sw / it.w, h: sh / it.h }; it.ms = lastMs; it.png = null; }
   } catch (e) { console.warn("Retry failed", e); }
   retrying--;
   busy.hidden = true; dl.disabled = false;
   if (!items.includes(it)) { rested(); return; }
-  reveal(it);
+  if (changed) reveal(it); else it.first = null;
   rested();
   idle();
   preparePngs();
-  up.disabled = down.disabled = false; up.classList.remove("chosen"); down.classList.remove("chosen");
+  // A new result gets its own vote; if the retry found nothing better, the 👎 stands.
+  if (changed) for (const b of [up, down]) { b.disabled = false; b.classList.remove("chosen"); b.style.visibility = ""; }
 }
 
 // Everything fits on one screen: cards are square and sized so they all fit the space left.
