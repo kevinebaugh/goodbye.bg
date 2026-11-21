@@ -103,7 +103,7 @@ const tickSwitch = IOS && (() => {
 // global number and says whether this one is a hundredth. It carries nothing about the photo.
 async function milestone(it) {
   let hit = params.has("confetti");
-  try { const r = await (await fetch("/api/count", { method: "POST" })).json(); hit = r.confetti || hit; showCount(r.n); } catch {}
+  try { const r = await (await fetch("/api/count", { method: "POST" })).json(); hit = r.confetti || hit; ownCount(r.n); } catch {}
   if (hit && items.includes(it)) confetti(it.el.card);
 }
 function confetti(from) {
@@ -130,30 +130,48 @@ function confetti(from) {
   requestAnimationFrame(frame);
 }
 
-// The footer shows the real total, refreshed every 30 s while the page is in view, ticking up to each new
-// number. Hidden until it is worth showing (?count=1 shows it anyway). Tapping it throws confetti.
-const COUNT_MIN = params.has("count") ? 0 : 1000;
-let countShown = 0, countLive = 0;
-function showCount(n) {
-  if (!(n > countLive)) return;
-  countLive = n;
+// The footer count runs a step behind the real total and ticks toward it at the real pace, so it moves like a
+// live counter without ever showing more than has happened. On load it starts about one refresh (30 s) of
+// cut-outs behind, at the recent pace from /api/count; each refresh sets the next stretch to tick through,
+// one by one at uneven intervals. Hidden until it is worth showing (?count=1 shows it). Tap: confetti.
+const COUNT_MIN = params.has("count") ? 0 : 1000, REFRESH = 30_000;
+let countShown = -1, countTimer = 0;
+function renderCount(v) {
+  countShown = v;
   const el = $("count");
-  if (n < COUNT_MIN || !n) return;
-  el.hidden = false;
-  const from = countShown || Math.max(0, n - 25), t0 = performance.now(), D = from === n ? 0 : 1200;
-  const step = (now) => {
-    const t = D ? Math.min(1, (now - t0) / D) : 1, v = Math.round(from + (n - from) * (1 - (1 - t) ** 3));
-    el.textContent = `${v.toLocaleString("en-US")} ${v === 1 ? "background" : "backgrounds"} said goodbye`;
-    countShown = v;
-    if (t < 1 && countLive === n) requestAnimationFrame(step);
+  if (v < COUNT_MIN || v <= 0) return;
+  el.classList.add("on"); el.tabIndex = 0;
+  el.textContent = `${v.toLocaleString("en-US")} ${v === 1 ? "background" : "backgrounds"} said goodbye`;
+}
+function showCount(n, perMin = 0) {
+  if (!(n >= 0)) return;
+  if (countShown < 0) renderCount(Math.max(0, n - Math.round((perMin * REFRESH) / 60000)));
+  const steps = n - countShown;
+  if (steps <= 0) return;
+  // Spread the steps over the next refresh at random moments; many steps at once just roll.
+  clearTimeout(countTimer);
+  const times = Array.from({ length: Math.min(steps, 120) }, () => Math.random() * REFRESH).sort((a, b) => a - b);
+  const from = countShown, t0 = performance.now();
+  const next = (k) => {
+    if (k >= times.length) return;
+    countTimer = setTimeout(() => {
+      renderCount(Math.max(countShown, from + Math.round(((k + 1) / times.length) * steps)));
+      next(k + 1);
+    }, Math.max(0, times[k] - (performance.now() - t0)));
   };
-  requestAnimationFrame(step);
+  next(0);
+}
+// This visitor's own cut-out shows up at once: the server has counted it, so the shown number can take one
+// step right away; anything else that happened meanwhile keeps ticking in.
+function ownCount(n) {
+  if (countShown >= 0 && n > countShown) renderCount(countShown + 1);
+  showCount(n);
 }
 async function pollCount() {
   if (document.visibilityState !== "visible") return;
-  try { showCount((await (await fetch("/api/count")).json()).n); } catch {}
+  try { const r = await (await fetch("/api/count")).json(); showCount(r.n, r.perMin); } catch {}
 }
-pollCount(); setInterval(pollCount, 30_000);
+pollCount(); setInterval(pollCount, REFRESH);
 $("count").addEventListener("click", (e) => { tick(); confetti(e.currentTarget); });
 
 function tick() {
