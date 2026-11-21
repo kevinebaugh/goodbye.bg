@@ -735,6 +735,7 @@ async function run() {
   } finally { running = false; rested(); }
   if (items.some((i) => i.bmp && !i.mask && !i.failed)) return run();
   idle();
+  requestAnimationFrame(layout); // the batch is done: an empty grid cell may take the ad card now
   preparePngs(); // after the batch: don't compete with the model
 }
 
@@ -825,8 +826,37 @@ function layout() {
   const c = scroll ? Math.max(1, Math.floor((W + GAP) / (p + GAP))) : best.c;
   g.classList.toggle("scroll", scroll);
   $("main").style.setProperty("--cols", c); $("main").style.setProperty("--p", `${p}px`); // grid and tools row share them
+  placeAd(n, c, scroll);
 }
 new ResizeObserver(layout).observe($("grid"));
+
+/* ---------- ad card ----------
+   At most one affiliate card, and only in a grid cell that would otherwise be empty (3 photos in a 2x2 grid),
+   once the whole batch is done. Never between photos, never shrinks them, not part of Download all, no rating,
+   clearly marked "Ad". One partner per visit. Its link goes through /go/<id>, which counts the click. */
+let adPartner = null, adEl = null;
+const adSeen = new Set();
+fetch("/partners.json").then((r) => r.json()).then((list) => {
+  const ok = list.filter((p) => p.live || params.has("adtest")); // ?adtest=1 shows partners before their links exist
+  adPartner = ok.length ? ok[Math.floor(Math.random() * ok.length)] : null;
+  requestAnimationFrame(layout);
+}).catch(() => {});
+
+function placeAd(n, cols, scroll) {
+  const busy = running || retrying || items.some((i) => !i.mask && !i.failed);
+  const free = n >= 2 && !scroll ? Math.ceil(n / cols) * cols - n : 0;
+  if (!adPartner || busy || free < 1) { adEl?.remove(); adEl = null; return; }
+  if (adEl) return;
+  const p = adPartner, a = adEl = document.createElement("a");
+  a.className = "adcard"; a.href = `/go/${p.id}`; a.target = "_blank"; a.rel = "sponsored noopener";
+  a.innerHTML = '<div class="adpic"><span class="adicon" aria-hidden="true"></span><p class="adline"></p></div><div class="bar"><span class="adtag">Ad</span><span class="btn primary adcta"></span></div>';
+  a.querySelector(".adicon").textContent = p.emoji;
+  a.querySelector(".adline").textContent = p.line;
+  a.querySelector(".adcta").textContent = p.cta;
+  a.setAttribute("aria-label", `Ad: ${p.line} ${p.cta}`);
+  $("grid").insertBefore(a, $("tools"));
+  if (!adSeen.has(p.id)) { adSeen.add(p.id); fetch(`/go/${p.id}`, { method: "POST", keepalive: true }).catch(() => {}); }
+}
 
 function sync() {
   const done = items.filter((i) => i.mask).length;

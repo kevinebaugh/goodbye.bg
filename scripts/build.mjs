@@ -65,6 +65,10 @@ const dataDir = join(nm, "@imgly/background-removal-data/dist");
 const res = JSON.parse(readFileSync(join(dataDir, "resources.json"), "utf8"))["/models/medium"];
 const isnet = Buffer.concat(res.chunks.map((c) => readFileSync(join(dataDir, c.hash))));
 if (isnet.length !== res.size) throw new Error(`ISNet size mismatch: ${isnet.length} != ${res.size}`);
+// Ad partners the page may show (public fields only; the affiliate links stay in the /go redirect).
+const { PARTNERS } = await import(join(root, "lib/partners.mjs"));
+writeFileSync(join(dist, "partners.json"), JSON.stringify(PARTNERS.map(({ id, name, emoji, line, cta, url }) => ({ id, name, emoji, line, cta, live: !!url }))));
+
 console.log("Model:");
 writeParts(join(dist, "m", "isnet"), isnet, "isnet");
 console.log("Built dist/.");

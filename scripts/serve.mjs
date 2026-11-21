@@ -8,6 +8,7 @@ import { onRequestGet as fetchFn } from "../functions/api/fetch.js";
 import { onRequestPost as rateFn } from "../functions/api/rate.js";
 import { onRequestPost as crashFn } from "../functions/api/crash.js";
 import { onRequestPost as diagFn } from "../functions/api/diag.js";
+import { onRequestGet as goGet, onRequestPost as goPost } from "../functions/go/[id].js";
 const LIVE = process.env.LIVE || "https://goodbye-bg-git.pages.dev";
 
 const dist = new URL("../dist/", import.meta.url).pathname;
@@ -28,6 +29,12 @@ const match = (pattern, path) => pattern.endsWith("*") ? path.startsWith(pattern
 createServer(async (req, res) => {
   const path = decodeURIComponent(new URL(req.url, "http://x").pathname);
   // Run the Pages Function locally, same code as production.
+  const go = path.match(/^\/go\/([a-z0-9-]+)$/);
+  if (go) {
+    const fn = req.method === "POST" ? goPost : goGet;
+    const r = await fn({ params: { id: go[1] }, env: {}, request: new Request(`http://localhost:${port}${path}`, { method: req.method, headers: req.headers }) });
+    res.writeHead(r.status, Object.fromEntries(r.headers)).end(); return;
+  }
   const fns = { "/api/rate": rateFn, "/api/crash": crashFn, "/api/diag": diagFn };
   // The global count lives in D1 in production. Local tests count too (Kevin: "it should go up into
   // perpetuity"), so the local server passes /api/count straight through to the live site.
