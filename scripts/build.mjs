@@ -1,7 +1,8 @@
 // Builds dist/: copies src/, then adds the model and runtime.
 // No bundler. Output is plain static files for Cloudflare Pages or any static host.
-import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
 
 const root = new URL("..", import.meta.url).pathname;
 const nm = join(root, "node_modules");
@@ -43,7 +44,13 @@ writeParts(join(rt, "wasm"), readFileSync(join(ortDist, "ort-wasm-simd-threaded.
 const BUILD = Date.now().toString(36);
 writeFileSync(join(dist, "version.txt"), BUILD);
 writeFileSync(join(dist, "app.js"), readFileSync(join(dist, "app.js"), "utf8").replaceAll("%BUILD%", BUILD));
-writeFileSync(join(dist, "engine.js"), readFileSync(join(dist, "engine.js"), "utf8").replaceAll("%ORT%", ORT));
+// BiRefNet lite (MIT) for the GPU engine: committed as parts in weights/birefnet/ (made by scripts/birefnet.sh).
+// Without it the GPU engine runs ISNet.
+const birefnetSrc = join(root, "weights", "birefnet");
+const birefnetManifest = existsSync(join(birefnetSrc, "manifest.json")) ? JSON.parse(readFileSync(join(birefnetSrc, "manifest.json"), "utf8")) : null;
+// m/ is cached forever, so the folder is named after the model's hash: a new export never mixes with old parts.
+const birefnetDir = birefnetManifest ? "birefnet-" + birefnetManifest.sha256.slice(0, 8) : "";
+writeFileSync(join(dist, "engine.js"), readFileSync(join(dist, "engine.js"), "utf8").replaceAll("%ORT%", ORT).replaceAll("%BIREFNET%", birefnetDir));
 
 // fflate (MIT) for "Download all" zips.
 mkdirSync(join(dist, "vendor"));
@@ -86,4 +93,14 @@ writeFileSync(join(dist, "partners.json"), JSON.stringify(PARTNERS.map(({ id, na
 
 console.log("Model:");
 writeParts(join(dist, "m", "isnet"), isnet, "isnet");
+if (birefnetManifest) {
+  const out = join(dist, "m", birefnetDir), hash = createHash("sha256");
+  mkdirSync(out, { recursive: true });
+  for (const p of birefnetManifest.parts) { const b = readFileSync(join(birefnetSrc, p)); hash.update(b); writeFileSync(join(out, p), b); }
+  if (hash.digest("hex") !== birefnetManifest.sha256) throw new Error("weights/birefnet: parts don't match manifest.json");
+  cpSync(join(birefnetSrc, "manifest.json"), join(out, "manifest.json"));
+  cpSync(join(root, "docs/licenses/BiRefNet.txt"), join(out, "LICENSE.txt")); // MIT: the notice travels with the weights
+  console.log(`  ${birefnetDir}: ${(birefnetManifest.size / 1e6).toFixed(1)} MB in ${birefnetManifest.parts.length} parts`);
+}
+else console.log("  birefnet: not built (run scripts/birefnet.sh); the GPU engine uses ISNet");
 console.log("Built dist/.");

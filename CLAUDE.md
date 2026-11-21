@@ -22,7 +22,9 @@ Actions. The old upload-only project `goodbye-bg` can be deleted.
 - `functions/api/fetch.js` Cloudflare Pages Function. Fetches an image for a pasted link (same-origin only,
   30 MB cap, follows og:image for web pages). The only server code.
 - `scripts/build.mjs` assembles `dist/`. `scripts/serve.mjs` local server that applies `_headers` and runs the function.
-- `src/engine.js` the model worker. `scripts/narrow-onnx.py` (not in the build) rewrites wide ONNX ops for WebGPU.
+- `src/engine.js` the model worker. `weights/birefnet/` BiRefNet for the GPU engine, committed as 20 MiB parts with
+  a manifest (size, sha256); the build copies it to `m/birefnet-<hash>/`. `scripts/birefnet.sh` regenerates it
+  (download, then `deform-to-gridsample.py` and `narrow-onnx.py`; needs Python with onnx). Not part of the build.
 
 ## Rules
 
@@ -44,7 +46,7 @@ even with no warm-up run (one try in two); the CPU engine never crashed: 7.3 s a
 Debugging on phones: `?debug=1` sends step names and numbers (never photo data) to `/api/diag`, which
 only writes to the Functions log. Read it with `npx wrangler pages deployment tail <deployment-id>
 --project-name goodbye-bg-git --format json` (find the ID with `wrangler pages deployment list`).
-Other test switches: `?engine=gpu|cpu`, `?threads=N`, `?nowarm=1`, `?gpufail=init|run|hang`.
+Other test switches: `?engine=gpu|cpu`, `?model=isnet|birefnet`, `?threads=N`, `?nowarm=1`, `?gpufail=init|run|hang`.
 
 Memory on phones (measured in the iOS Simulator, CPU engine): ISNet at 1024x1024 needs about 1.5 to
 2 GB of wasm heap, mostly activations; it can't run smaller (a Concat inside is fixed to 1024). Asking
@@ -52,21 +54,26 @@ for only the first of its 13 outputs, freeing the model bytes after session crea
 time, and compositing the mask instead of copying pixels took 3 photos from 2.1 GB to 1.46 GB.
 Safari caps photos at 16 MP (canvas limit); the original bitmap is kept and scaled when drawn.
 
-One model, two engines. `src/engine.js` runs IMG.LY ISNet medium (fp16, AGPL, 88 MB) on ONNX Runtime Web
-1.31.1 inside its own module Worker. `app.js` starts it with WebGPU when the adapter has `shader-f16`, else
-with WebAssembly (4 threads). The GPU worker does a warm-up run before "Ready", which compiles the shaders
-and proves the GPU works. If the GPU fails to start, fails a run, hangs (30 s warm-up, 15 s per run), or
+Two models, two engines. `src/engine.js` runs ONNX Runtime Web 1.31.1 inside its own module Worker. `app.js`
+starts it with WebGPU when the adapter has `shader-f16`, else with WebAssembly (4 threads).
+- GPU on computers (`any-pointer: fine`): **BiRefNet lite** (MIT, fp16, 93 MB after the rewrite below).
+- CPU, and GPU on phones/tablets: IMG.LY **ISNet medium** (fp16, AGPL, 88 MB). BiRefNet on the CPU is 10 s
+  and 6.7 GB (Node, 64-bit): no.
+- Votes and crash reports call the engines `gpu-birefnet`, `gpu` (ISNet) and `cpu` (ISNet).
+
+The GPU worker does a warm-up run before "Ready", which compiles the shaders and proves the GPU works. If the GPU fails to start, fails a run, hangs (30 s warm-up, 15 s per run), or
 returns NaN, the page terminates that worker and a CPU worker redoes the same photo. A separate worker is
 required: a failed WebGPU run aborts ORT's wasm instance for the whole realm.
 
 - `?engine=gpu` or `?engine=cpu` forces one (a forced gpu never falls back). `?gpufail=init|run|hang`
   simulates a broken GPU.
-- Input (x-128)/256, output 0..1, fixed 1024x1024.
+- ISNet: input (x-128)/256, output 0..1. BiRefNet: ImageNet mean/std, output logits (the worker applies the
+  sigmoid). Both fixed 1024x1024; the page sends RGBA pixels and the worker builds its model's input.
 - Runtime is served from `rt/<version>/` (cached forever, so upgrades get new URLs). Its 28.7 MB wasm is split
   into parts (Pages limit is 25 MiB per file) and passed in as `ort.env.wasm.wasmBinary`.
 - ORT 1.21 cannot run ISNet on WebGPU (MaxPool with ceil mode unsupported).
 
-Measured 2026-11-20, Chrome 157, M5 Pro:
+ISNet, measured 2026-11-20, Chrome 157, M5 Pro:
 - **gpu: 150 to 300 ms per photo**, warm-up about 0.3 s. Four photos end to end: 1.35 s.
 - **cpu: 5 to 7 s per photo.**
 - GPU and CPU masks match on five test photos: mean difference at most 0.002, max 0.05, no pixel off by more
@@ -76,14 +83,23 @@ Measured 2026-11-20, Chrome 157, M5 Pro:
 - Tested: every forced GPU failure finishes the photo on the CPU; photos added during the first download wait
   and then run; a dropped model part is retried.
 
+BiRefNet on WebGPU (2026-11-21; numbers and side-by-sides in `docs/birefnet.md`). The onnx-community export needs
+two rewrites, both in `scripts/birefnet.sh`:
+  1. Concat ops with up to 1024 inputs and Split ops with 8, 16 and 32 outputs exceed the 10 storage
+     buffers per shader. `scripts/narrow-onnx.py` rewrites them into trees of at most 6.
+  2. The decoder's 20 deformable convs were spelled out as GatherND/Mul over all taps at once (392 MiB fp16
+     tensors for the 7x7 at 256x256x64, `std::bad_alloc`). `scripts/deform-to-gridsample.py` replaces each with
+     GridSample (bilinear, zeros, align_corners=1: what the export computes) a few kernel rows at a time
+     (at most 64 MB a chunk), a strided Conv per chunk and a sum. Mask matches the original on CPU: mean
+     difference 0.0005, nothing crosses 0.5. All 3820 nodes run on WebGPU.
+- **gpu-birefnet: 280 to 300 ms per photo** (ISNet 86 ms), session 1.2 s, warm-up 0.3 to 0.7 s. GPU memory
+  peak +3.0 GB (ISNet +1.0 GB), hence computers only.
+- Quality: much better than ISNet on close-ups over a blurred background (cats, Larry: no leftover blur),
+  busy backdrops (bicycle on graffiti: no blobs), see-through objects (headphone case), small subjects
+  (yard cat), sky gaps in the tree. Hair about the same at 1024.
+
 Rejected:
 - ISNet **small** (quint8): garbage (61% of pixels unsure).
-- **BiRefNet lite** (MIT, better edges) on WebGPU, two blockers:
-  1. Concat ops with up to 1024 inputs and Split ops with 8, 16 and 32 outputs exceed the 8 to 10 storage
-     buffers per shader. `scripts/narrow-onnx.py` rewrites them into trees of at most 6 and fixes this.
-  2. The decoder's deformable conv (7x7 taps at 256x256x64) creates 392 MiB fp16 tensors through
-     GatherND and Mul. Total memory blows the 4 GB wasm32 heap (`std::bad_alloc`). Needs a rewrite of that
-     block, a smaller input, or a different export. Not attempted.
 
 Requirement from Kevin: 10 to 30 seconds per photo is unacceptable. Target a few seconds.
 
@@ -190,8 +206,7 @@ blob3 first/retry, double1 ms, double2 megapixels):
 
 1. Mac Safari still picks the GPU engine; not tested there. A smaller GPU footprint might make WebGPU
    safe on iPhones again (try once ORT or the model changes).
-2. Better quality than ISNet for close-ups and busy backgrounds: BiRefNet on WebGPU (see blockers above) or
-   another model that fits WebGPU and a 4 GB heap.
+2. BiRefNet untested on Safari's WebGPU, Windows and Linux GPUs, and 8 GB Macs (3 GB GPU peak).
 3. Not yet tested on real devices: Android share target, desktop "Open with", folder drops, live link fetching.
 
 ## Open items outside the code
@@ -201,5 +216,5 @@ blob3 first/retry, double1 ms, double2 megapixels):
   click "Check nameservers" on the zone, then add goodbye.bg as a custom domain on `goodbye-bg-git`.
 - Git email: repo uses the GitHub noreply address. The first commit (aa3d4bd) still has the work email;
   fix with `git commit --amend --reset-author --no-edit && git push --force-with-lease` if wanted.
-- License: repo is AGPL-3.0 because the ISNet model is AGPL. If the engine moves off ISNet,
-  the license can change.
+- License: repo is AGPL-3.0 because the ISNet model is AGPL. BiRefNet (MIT) only replaces it on computer GPUs;
+  the CPU engine (iPhones, fallback) still needs ISNet, so the AGPL reason stays.

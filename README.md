@@ -2,7 +2,7 @@
 
 Remove image backgrounds in the browser. Photos never leave the device.
 
-- No uploads. The model runs locally in WebAssembly.
+- No uploads. The model runs locally, on the GPU (WebGPU) or the CPU (WebAssembly).
 - Full size output. No account. No watermark.
 - Batch: drop many photos, download all as a zip.
 
@@ -60,5 +60,7 @@ several threads. Some ad networks may not render under it. Test before launch.
 
 ## License
 
-AGPL-3.0. The segmentation model comes from `@imgly/background-removal-data` (AGPL-3.0).
+AGPL-3.0. The CPU segmentation model comes from `@imgly/background-removal-data` (AGPL-3.0).
+The GPU model on computers is BiRefNet lite (MIT, Copyright (c) 2024 ZhengPeng, `docs/licenses/BiRefNet.txt`),
+from the onnx-community fp16 export, rewritten by `scripts/birefnet.sh`.
 ONNX Runtime Web and fflate are MIT.

@@ -54,8 +54,9 @@ const nextFrame = () => new Promise((r) => requestAnimationFrame(() => setTimeou
 const baseName = (s) => (s || "image").split(/[\\/?#]/).filter(Boolean).pop()?.replace(/\.[^.]+$/, "").slice(0, 80) || "image";
 
 /* ---------- model ----------
-   ISNet runs in its own worker (engine.js). Computers and phones whose GPU can run it use
-   WebGPU (about 0.15 s a photo on a recent Mac); everyone else uses the CPU (several seconds).
+   The model runs in its own worker (engine.js). Computers whose GPU can run it use WebGPU with
+   BiRefNet (about 0.3 s a photo on a recent Mac); everyone else uses ISNet on the CPU (several seconds).
+   ?model=isnet runs ISNet on the GPU too, for comparison.
    If the GPU fails to start, fails a run, hangs, or returns garbage, its worker is thrown away
    and a CPU worker takes over the same photo. ?engine=gpu or ?engine=cpu forces one;
    ?gpufail=init|run|hang simulates a broken GPU for testing. */
@@ -81,11 +82,16 @@ function dbg(step, data = {}) {
 }
 dbg("load", { ua: navigator.userAgent.slice(0, 160), dpr: devicePixelRatio, w: innerWidth, h: innerHeight, mem: navigator.deviceMemory, coi: self.crossOriginIsolated });
 const GPU_WARMUP_TIMEOUT = 30_000, GPU_RUN_TIMEOUT = 15_000; // longer counts as hung
-let worker = null, engineName = "", engineReady = null, gpuBroken = false, jobId = 0;
+let worker = null, engineName = "", engineModel = "", engineReady = null, gpuBroken = false, jobId = 0;
+// What votes and crash reports call the engine: "gpu" and "cpu" run ISNet, "gpu-birefnet" BiRefNet.
+const engineTag = () => (engineName || "cpu") + (engineModel === "birefnet" ? "-birefnet" : "");
 const jobs = new Map();
 
 // iPhones and iPads: WebGPU runs ISNet, but often crashes the tab (out of memory) on the first real
 // photo; tested 2026-11-20 with ?debug=1. The CPU engine works there. Use it until that changes.
+// BiRefNet peaks at about 3 GB of GPU memory (ISNet about 1 GB): only computers with a mouse or trackpad get it.
+// Phones and tablets with WebGPU (Android) keep ISNet on the GPU.
+const DESKTOP = matchMedia("(any-pointer: fine)").matches;
 const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 const THREADS = +params.get("threads") || (IOS ? 2 : 4);
 
@@ -171,13 +177,13 @@ function tick() {
   else if (navigator.userActivation?.hasBeenActive && matchMedia("(pointer: coarse)").matches) navigator.vibrate?.(8);
 }
 function working(step, it) {
-  note = { step, engine: engineName || "cpu", dev: DEVICE, done: finished, mp: it ? +((it.w * it.h) / 1e6).toFixed(1) : 0 };
+  note = { step, engine: engineTag(), dev: DEVICE, done: finished, mp: it ? +((it.w * it.h) / 1e6).toFixed(1) : 0 };
   saveNote();
 }
 function saveNote() { try { localStorage.setItem(CRASH_KEY, JSON.stringify({ ...note, trail: trail.join("\n") })); } catch {} }
 // Errors the page survives but the person sees (the engine would not start, or a photo failed): sent at once.
 function report(step, e, it) {
-  const note = { step, engine: engineName || "cpu", dev: DEVICE, done: finished, mp: it ? +((it.w * it.h) / 1e6).toFixed(1) : 0,
+  const note = { step, engine: engineTag(), dev: DEVICE, done: finished, mp: it ? +((it.w * it.h) / 1e6).toFixed(1) : 0,
     error: String(e?.message || e).slice(0, 160), trail: trail.join("\n") };
   fetch("/api/crash", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(note), keepalive: true }).catch(() => {});
 }
@@ -228,7 +234,7 @@ function idle() {
 
 function startEngine(name) {
   killWorker("Engine restarted");
-  engineName = name;
+  engineName = name; engineModel = "";
   const w = worker = new Worker("engine.js", { type: "module" });
   return new Promise((resolve, reject) => {
     let timer = 0;
@@ -240,7 +246,8 @@ function startEngine(name) {
       else if (data.type === "loaded") {
         status("Starting up…");
         if (name === "gpu") timer = setTimeout(() => fail("GPU warm-up timed out"), GPU_WARMUP_TIMEOUT);
-      } else if (data.type === "ready") { clearTimeout(timer); resolve(); }
+      } else if (data.type === "model") engineModel = data.name;
+      else if (data.type === "ready") { clearTimeout(timer); resolve(); }
       else if (data.type === "failed") fail(data.error);
       else if (data.type === "result" || data.type === "error") {
         const j = jobs.get(data.id); if (!j) return;
@@ -249,7 +256,7 @@ function startEngine(name) {
       }
     };
     dbg("engine-start", { name });
-    w.postMessage({ type: "init", ep: name === "gpu" ? "webgpu" : "wasm", fail: params.get("gpufail"), debug: DEBUG, noWarm: params.has("nowarm"),
+    w.postMessage({ type: "init", ep: name === "gpu" ? "webgpu" : "wasm", model: params.get("model") || (DESKTOP ? "" : "isnet"), fail: params.get("gpufail"), debug: DEBUG, noWarm: params.has("nowarm"),
       // ?threads=N to test. iPhone: 4 threads 3.5 s a photo, 2 threads 5.0 s, 1 thread 7.3 s. But 4 threads
       // peak at 2.1 GB and crashed a big photo half the time; 2 threads peak about 300 MB lower.
       threads: THREADS });
@@ -275,7 +282,7 @@ function loadModel() {
         gpuBroken = true; await startEngine("cpu");
       }
       status(`Ready.`); dbg("ready", { engine: engineName });
-      console.info(`goodbye.bg: engine ${engineName}`);
+      console.info(`goodbye.bg: engine ${engineTag()}`);
     })();
     engineReady.catch(() => { engineReady = null; });
   }
@@ -288,7 +295,7 @@ function infer(input) {
     const j = { resolve, reject, timer: 0 };
     if (engineName === "gpu") j.timer = setTimeout(() => { jobs.delete(id); reject(new Error("GPU run timed out")); }, GPU_RUN_TIMEOUT);
     jobs.set(id, j);
-    w.postMessage({ type: "run", id, input });
+    w.postMessage({ type: "run", id, pixels: input });
   });
 }
 
@@ -298,12 +305,7 @@ async function segment(bitmap) {
   const c = new OffscreenCanvas(RES, RES), x = c.getContext("2d");
   x.drawImage(bitmap, 0, 0, RES, RES); dbg("drawn");
   const px = x.getImageData(0, 0, RES, RES).data, n = RES * RES; dbg("pixels");
-  const input = new Float32Array(3 * n); // ISNet input: (x - 128) / 256
-  for (let i = 0; i < n; i++) {
-    input[i] = (px[i * 4] - 128) / 256;
-    input[i + n] = (px[i * 4 + 1] - 128) / 256;
-    input[i + 2 * n] = (px[i * 4 + 2] - 128) / 256;
-  }
+  const input = px.slice(); // RGBA; the engine turns it into its model's input. A copy: px is used again below.
   let res;
   dbg("infer");
   try { res = await infer(input); }
@@ -807,7 +809,7 @@ function show() { document.body.classList.add("has-work"); }
    megapixels. Never the photo. 👎 then runs the model again, zoomed in on the subject, which gives
    it more pixels to work with. The retry can be rated too. */
 function sendRating(it, vote) {
-  const body = JSON.stringify({ vote, engine: engineName, retry: !!it.retried, ms: it.ms || 0, mp: +((it.w * it.h) / 1e6).toFixed(1) });
+  const body = JSON.stringify({ vote, engine: engineTag(), retry: !!it.retried, ms: it.ms || 0, mp: +((it.w * it.h) / 1e6).toFixed(1) });
   fetch("/api/rate", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
 }
 
