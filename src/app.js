@@ -817,21 +817,29 @@ function layout() {
   const g = $("grid"), n = g.querySelectorAll(".card").length, all = $("tools");
   if (!n) return;
   const bar = g.querySelector(".bar")?.offsetHeight || 52, W = g.clientWidth, H = g.clientHeight - (all.hidden ? 0 : all.offsetHeight + GAP); // "Download all" sits under the cards
-  let best = { p: 0, c: 1 };
-  for (let c = 1; c <= n; c++) {
-    const r = Math.ceil(n / c), p = Math.floor(Math.min((W - GAP * (c - 1)) / c, (H - GAP * (r - 1)) / r - bar));
-    if (p > best.p) best = { p, c };
-  }
+  const fit = (k) => {
+    let b = { p: 0, c: 1 };
+    for (let c = 1; c <= k; c++) {
+      const r = Math.ceil(k / c), p = Math.floor(Math.min((W - GAP * (c - 1)) / c, (H - GAP * (r - 1)) / r - bar));
+      if (p > b.p) b = { p, c };
+    }
+    return b;
+  };
+  let best = fit(n), extra = 0;
+  // Room for the ad card at no cost: if one more card fits without making the photos smaller (one photo on
+  // a wide screen), lay out for one more and the ad takes that cell.
+  if (adReady() && best.p >= MIN_PIC) { const b2 = fit(n + 1); if (b2.p >= best.p) { best = b2; extra = 1; } }
   const scroll = best.p < MIN_PIC, p = Math.min(MAX_PIC, Math.max(best.p, MIN_PIC));
   const c = scroll ? Math.max(1, Math.floor((W + GAP) / (p + GAP))) : best.c;
   g.classList.toggle("scroll", scroll);
   $("main").style.setProperty("--cols", c); $("main").style.setProperty("--p", `${p}px`); // grid and tools row share them
-  placeAd(n, c, scroll);
+  placeAd(n, c, scroll, extra);
 }
 new ResizeObserver(layout).observe($("grid"));
 
 /* ---------- ad card ----------
-   At most one affiliate card, and only in a grid cell that would otherwise be empty (3 photos in a 2x2 grid),
+   At most one affiliate card, and only in space that would otherwise be empty: a spare grid cell (3 photos in a
+   2x2 grid), or room for one more card that doesn't shrink the photos (one photo on a wide screen),
    once the whole batch is done. Never between photos, never shrinks them, not part of Download all, no rating,
    clearly marked "Ad". One partner per visit. Its link goes through /go/<id>, which counts the click. */
 let adPartner = null, adVariant = null, adEl = null;
@@ -847,10 +855,10 @@ fetch("/partners.json").then((r) => r.json()).then((list) => {
   requestAnimationFrame(layout);
 }).catch(() => {});
 
-function placeAd(n, cols, scroll) {
-  const busy = running || retrying || items.some((i) => !i.mask && !i.failed);
-  const free = n >= 2 && !scroll ? Math.ceil(n / cols) * cols - n : 0;
-  if (!adPartner || !adVariant || busy || free < 1) { adEl?.remove(); adEl = null; return; }
+function adReady() { return !!(adPartner && adVariant) && !running && !retrying && !items.some((i) => !i.mask && !i.failed); }
+function placeAd(n, cols, scroll, extra = 0) {
+  const free = n >= 1 && !scroll ? Math.ceil((n + extra) / cols) * cols - n : 0;
+  if (!adReady() || free < 1 || (n < 2 && !extra)) { adEl?.remove(); adEl = null; return; }
   if (adEl) return;
   try { adEl = buildAd(); }
   catch (e) { console.warn("Ad card failed", e); report("ad-failed", e); adPartner = null; } // no ad this visit rather than a broken one
@@ -873,12 +881,16 @@ function buildAd() {
   a.setAttribute("aria-label", `${adLabel}: ${x.line} ${x.cta}`);
   $("grid").insertBefore(a, $("tools"));
   if (src) {
+    a.mugSrc = src;
     try { drawMug(a.querySelector(".admug"), src); }
     catch (e) { report("mug-failed", e); const i = document.createElement("span"); i.className = "adicon"; i.textContent = p.emoji; a.querySelector(".admug").replaceWith(i); }
   }
   if (!adSeen.has(p.id)) { adSeen.add(p.id); fetch(`/go/${p.id}${q}`, { method: "POST", keepalive: true }).catch(() => {}); }
   return a;
 }
+
+// Light or dark changed: redraw the mug in the other color.
+matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => { if (adEl?.mugSrc) try { drawMug(adEl.querySelector(".admug"), adEl.mugSrc); } catch {} });
 
 // The art for the mug: the first finished card on screen, cropped tight to the subject whatever the card
 // shows, at most 640 px. Edges fade softly, so a subject cut off by the photo's frame (a cat's chest, a sofa)
@@ -918,20 +930,22 @@ function drawMug(c, src) {
   const mh = H * 0.9, mw = Math.min(W * 0.6, mh * 0.8), R = mw / 2, ry = R * 0.36;
   // Light from the front left: brightness by the angle of the surface (Lambert), plus a soft highlight.
   const LIGHT = -0.45, lit = (th) => Math.max(0, Math.cos(th - LIGHT)), shine = (th) => Math.exp(-(((th - LIGHT) / 0.22) ** 2));
+  const dark = matchMedia("(prefers-color-scheme: dark)").matches; // a black mug in dark mode, a white one in light
   const across = (g, f) => { for (let i = 0; i <= 24; i++) { const th = -Math.PI / 2 + (Math.PI * i) / 24; g.addColorStop(0.5 + Math.sin(th) / 2, f(th)); } return g; };
   const cx = W / 2 - mw * 0.1, top = (H - mh) / 2, rimY = top + ry, bot = top + mh - ry;
   // Soft shadow to set it down on the panel (light mode especially)
-  x.fillStyle = "rgba(0,0,0,.16)"; x.filter = "blur(4px)";
+  x.fillStyle = dark ? "rgba(0,0,0,.4)" : "rgba(0,0,0,.16)"; x.filter = "blur(4px)";
   x.beginPath(); x.ellipse(cx + R * 0.1, bot + ry * 0.55, R * 1.08, ry * 0.7, 0, 0, Math.PI * 2); x.fill();
   x.filter = "none";
   // Handle
-  x.lineWidth = mw * 0.12; x.strokeStyle = "#d5dcda"; x.lineCap = "round";
+  x.lineWidth = mw * 0.12; x.strokeStyle = dark ? "#33393b" : "#d5dcda"; x.lineCap = "round";
   x.beginPath(); x.ellipse(cx + R, top + mh * 0.47, mw * 0.2, mh * 0.21, 0, -Math.PI / 2.4, Math.PI / 2.4); x.stroke();
   // Body
   const body = new Path2D();
   body.moveTo(cx - R, rimY); body.lineTo(cx - R, bot); body.ellipse(cx, bot, R, ry, 0, Math.PI, 0, true); body.lineTo(cx + R, rimY); body.closePath();
   x.fillStyle = across(x.createLinearGradient(cx - R, 0, cx + R, 0), (th) => {
-    const v = Math.round(150 + 95 * lit(th) + 10 * shine(th)); return `rgb(${v - 6},${v},${v - 2})`;
+    const v = dark ? Math.round(22 + 46 * lit(th) + 55 * shine(th)) : Math.round(150 + 95 * lit(th) + 10 * shine(th));
+    return `rgb(${v - 4},${v},${v - 1})`;
   });
   x.fill(body);
   // Print: fits the visible front of the cylinder, wrapped column by column
@@ -954,9 +968,10 @@ function drawMug(c, src) {
   px.fillRect(0, 0, W, H);
   x.drawImage(print, 0, 0, W, H);
   // Rim and inside
-  x.fillStyle = "#eef2f1"; x.beginPath(); x.ellipse(cx, rimY, R, ry, 0, 0, Math.PI * 2); x.fill();
+  x.fillStyle = dark ? "#4a5254" : "#eef2f1"; x.beginPath(); x.ellipse(cx, rimY, R, ry, 0, 0, Math.PI * 2); x.fill();
   const inside = x.createLinearGradient(0, rimY - ry, 0, rimY + ry);
-  inside.addColorStop(0, "#7d8a87"); inside.addColorStop(1, "#b6c0be");
+  if (dark) { inside.addColorStop(0, "#0b0e0f"); inside.addColorStop(1, "#262b2d"); }
+  else { inside.addColorStop(0, "#7d8a87"); inside.addColorStop(1, "#b6c0be"); }
   x.fillStyle = inside; x.beginPath(); x.ellipse(cx, rimY + ry * 0.08, R * 0.9, ry * 0.78, 0, 0, Math.PI * 2); x.fill();
 }
 

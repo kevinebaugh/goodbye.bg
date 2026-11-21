@@ -129,6 +129,10 @@ rating. Links go through `/go/<id>` (functions/go/[id].js), which counts the cli
 a POST there counts the card being shown ('adseen'). EthicalAds would need the below-results slot (their rules forbid
 ads inside the main content) and a proxy (Safari blocks their images under COEP require-corp).
 
+The ad card takes only space that would otherwise be empty: a spare grid cell, or room for one more card that
+doesn't make the photos any smaller (a single photo on a wide screen gets the card beside it; on a phone it gets none).
+The mug is black in dark mode and white in light mode.
+
 Zazzle variant "mug" (the A): the visitor's first finished cut-out drawn on a mug in a canvas on the device
 (drawMug in app.js: cylinder wrap column by column, shading, rim, shadow); nothing is uploaded, and Zazzle doesn't
 receive the image. Variant "b": "Put your cut-out on anything." Both go to zazzle.com/custom. `?adv=<v>` forces a
