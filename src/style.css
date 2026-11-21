@@ -85,7 +85,8 @@ body.has-work .hero h1, body.has-work .sub { display: none; }
 .queued .busy::before { content: none; } /* waiting cards stay still */
 .failed .busy::before { content: "🙈"; animation: none; }
 /* Pinned inside the padding: as a grid item Safari sizes the image by its own height and clips the bottom. */
-.pic img { position: absolute; inset: 12px; width: calc(100% - 24px); height: calc(100% - 24px); object-fit: contain; display: none; -webkit-touch-callout: default; -webkit-tap-highlight-color: transparent; }
+.pic img, .pic canvas { position: absolute; inset: 12px; width: calc(100% - 24px); height: calc(100% - 24px); object-fit: contain; }
+.pic img { display: none; -webkit-touch-callout: default; -webkit-tap-highlight-color: transparent; }
 .pic.still img { display: block; }
 .pic.still canvas { display: none; }
 /* Nothing sits on the image. Its controls live in the bar below: crop, Download, 👍 👎, remove. */

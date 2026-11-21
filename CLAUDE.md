@@ -33,7 +33,8 @@ Actions. The old upload-only project `goodbye-bg` can be deleted.
 
 ## Engines
 
-iPhones and iPads always use the CPU engine (4 threads). Tested 2026-11-20 on Kevin's iPhone with
+iPhones and iPads always use the CPU engine (2 threads: 4 threads peaked at 2.1 GB in the Simulator and crashed an
+18.75 MP photo half the time on Kevin's iPhone; 2 threads peak about 300 MB lower). Tested 2026-11-20 on Kevin's iPhone with
 `?debug=1`: the WebGPU engine crashed the tab ("A problem repeatedly occurred") on the first real photo,
 even with no warm-up run (one try in two); the CPU engine never crashed: 7.3 s a photo on 1 thread,
 5.0 s on 2, 3.5 s on 4. Safari needs `Cross-Origin-Embedder-Policy: require-corp` (it ignores

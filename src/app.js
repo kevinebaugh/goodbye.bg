@@ -79,6 +79,7 @@ const jobs = new Map();
 // iPhones and iPads: WebGPU runs ISNet, but often crashes the tab (out of memory) on the first real
 // photo; tested 2026-11-20 with ?debug=1. The CPU engine works there. Use it until that changes.
 const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const THREADS = +params.get("threads") || (IOS ? 2 : 4);
 
 async function pickEngine() {
   const forced = params.get("engine");
@@ -123,8 +124,9 @@ function startEngine(name) {
     };
     dbg("engine-start", { name });
     w.postMessage({ type: "init", ep: name === "gpu" ? "webgpu" : "wasm", fail: params.get("gpufail"), debug: DEBUG, noWarm: params.has("nowarm"),
-      // ?threads=N to test. 4 threads: 3.5 s a photo on an iPhone (1: 7.3 s, 2: 5.0 s), no crash.
-      threads: +params.get("threads") || 4 });
+      // ?threads=N to test. iPhone: 4 threads 3.5 s a photo, 2 threads 5.0 s, 1 thread 7.3 s. But 4 threads
+      // peak at 2.1 GB and crashed a big photo half the time; 2 threads peak about 300 MB lower.
+      threads: THREADS });
   });
 }
 
@@ -158,7 +160,7 @@ function infer(input) {
 
 async function segment(bitmap) {
   await loadModel();
-  dbg("segment", { w: bitmap.width, h: bitmap.height, coi: self.crossOriginIsolated, threads: +params.get("threads") || 4 });
+  dbg("segment", { w: bitmap.width, h: bitmap.height, coi: self.crossOriginIsolated, threads: THREADS });
   const c = new OffscreenCanvas(RES, RES), x = c.getContext("2d");
   x.drawImage(bitmap, 0, 0, RES, RES); dbg("drawn");
   const px = x.getImageData(0, 0, RES, RES).data, n = RES * RES; dbg("pixels");
@@ -267,7 +269,7 @@ function render(it, W, H, bmp = it.bmp) {
 }
 
 function drawCard(it) {
-  it.el.pic.classList.remove("still");
+  // The shown image stays up until the new one is decoded (still() swaps it), so a crop toggle doesn't flicker.
   const f = it.mask ? frame(it) : { x: 0, y: 0, w: it.w, h: it.h };
   // Never draw bigger than the preview bitmap holds (a tight crop would otherwise blow up to full size).
   const k = Math.min(1, PREVIEW_SIDE / Math.max(f.w, f.h), it.bmp.width / it.w);
