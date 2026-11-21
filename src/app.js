@@ -133,13 +133,13 @@ function confetti(from) {
 // The footer count runs a step behind the real total and ticks toward it at the real pace, so it moves like a
 // live counter without ever showing more than has happened. On load it starts about one refresh (30 s) of
 // cut-outs behind, at the recent pace from /api/count; each refresh sets the next stretch to tick through,
-// one by one at uneven intervals. Hidden until it is worth showing (?count=1 shows it). Tap: confetti.
-const COUNT_MIN = params.has("count") ? 0 : 1000, REFRESH = 30_000;
+// one by one at uneven intervals. Tap: confetti.
+const REFRESH = 30_000;
 let countShown = -1, countTimer = 0;
 function renderCount(v) {
   countShown = v;
   const el = $("count");
-  if (v < COUNT_MIN || v <= 0) return;
+  if (v <= 0) return;
   el.classList.add("on"); el.tabIndex = 0;
   el.textContent = `${v.toLocaleString("en-US")} ${v === 1 ? "background" : "backgrounds"} said goodbye`;
 }
