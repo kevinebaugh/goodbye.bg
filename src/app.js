@@ -106,28 +106,18 @@ async function milestone(it) {
   try { const r = await (await fetch("/api/count", { method: "POST" })).json(); hit = r.confetti || hit; ownCount(r.n); } catch {}
   if (hit && items.includes(it)) confetti(it.el.card);
 }
-function confetti(from) {
-  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  const r = from.getBoundingClientRect(), W = innerWidth, H = innerHeight, k = Math.min(2, devicePixelRatio || 1);
-  const c = document.createElement("canvas"), x = c.getContext("2d");
-  c.className = "confetti"; c.width = W * k; c.height = H * k; x.scale(k, k);
-  document.body.append(c);
-  const colors = ["#69d2e7", "#a7dbd8", "#e0e4cc", "#2f9fb8", "#ffffff"]; // the cool side of Giant Goldfish
-  const bits = Array.from({ length: 110 }, () => ({
-    x: r.left + r.width / 2, y: r.top + r.height / 3, vx: (Math.random() - 0.5) * 13, vy: -4 - Math.random() * 11,
-    s: 5 + Math.random() * 5, a: Math.random() * 6, va: (Math.random() - 0.5) * 0.4, c: colors[(Math.random() * colors.length) | 0],
-  }));
-  const t0 = performance.now(), D = 2200;
-  const frame = (now) => {
-    const t = now - t0;
-    x.clearRect(0, 0, W, H); x.globalAlpha = Math.max(0, 1 - t / D);
-    for (const b of bits) {
-      b.vy += 0.35; b.vx *= 0.99; b.x += b.vx; b.y += b.vy; b.a += b.va;
-      x.save(); x.translate(b.x, b.y); x.rotate(b.a); x.fillStyle = b.c; x.fillRect(-b.s / 2, -b.s / 4, b.s, b.s / 2); x.restore();
-    }
-    if (t < D) requestAnimationFrame(frame); else c.remove();
-  };
-  requestAnimationFrame(frame);
+// canvas-confetti (ISC, served from /vendor), loaded the first time it is needed. It skips itself when the
+// device asks for reduced motion. Bursts from the element that earned it, in the cool side of the palette.
+let confettiLib = null;
+async function confetti(from) {
+  try {
+    confettiLib ||= (await import("./vendor/confetti.mjs")).default;
+    const r = from.getBoundingClientRect();
+    const origin = { x: (r.left + r.width / 2) / innerWidth, y: Math.min(0.9, (r.top + r.height / 3) / innerHeight) };
+    const base = { origin, colors: ["#69d2e7", "#a7dbd8", "#e0e4cc", "#2f9fb8", "#ffffff"], disableForReducedMotion: true, zIndex: 40 };
+    confettiLib({ ...base, particleCount: 90, spread: 70, startVelocity: 38 });
+    setTimeout(() => confettiLib({ ...base, particleCount: 50, spread: 110, startVelocity: 28, scalar: 0.8 }), 120);
+  } catch (e) { console.warn("Confetti failed to load", e); }
 }
 
 // The footer count runs a step behind the real total and ticks toward it at the real pace, so it moves like a
@@ -218,6 +208,15 @@ function stopEngine(reason) { killWorker(reason); engineReady = null; }
 // iPhones: the engine's memory (about 1.8 GB) only grows while the tab is open, and each photo added to it
 // until Safari killed the tab (7 to 8 photos in one session). Once nothing is waiting, shut it down; the
 // next photo starts a fresh one in under a second from the cached model.
+// Phones make each PNG ahead of time (the share sheet only opens straight from a tap). On iPhone, wait until
+// the engine just shut down has really been freed: building a 16 MP PNG while it was still in memory crashed.
+// A Download tap before then builds that one PNG on the spot.
+let pngTimer = 0;
+function preparePngs() {
+  if (!PHONE) return;
+  clearTimeout(pngTimer);
+  pngTimer = setTimeout(() => { if (!running) for (const it of items) if (it.mask) png(it); }, IOS ? 10_000 : 0);
+}
 function idle() {
   if (IOS && worker && !jobs.size && !running) { stopEngine("idle"); dbg("engine-idle"); }
 }
@@ -493,14 +492,19 @@ const fullBitmap = (it) => decode(it.blob);
 async function fullBlob(it) {
   dbg("png", { w: it.w, h: it.h });
   working("png", it);
-  const big = await fullBitmap(it);
+  // One canvas at the saved size: the photo is drawn shifted so the crop lands at 0,0 (the canvas clips the
+  // rest), the full photo is freed, then the mask cuts it out. A 16 MP photo on an iPhone crashed with the
+  // old way (full-frame canvas plus a cropped copy plus the decoded photo).
+  const f = frame(it), out = new OffscreenCanvas(f.w, f.h), x = out.getContext("2d");
   try {
-    const f = frame(it), full = render(it, it.w, it.h, big);
-    if (f.w === it.w && f.h === it.h) return await full.convertToBlob({ type: "image/png" });
-    const out = new OffscreenCanvas(f.w, f.h);
-    out.getContext("2d").drawImage(full, f.x, f.y, f.w, f.h, 0, 0, f.w, f.h);
+    const big = await fullBitmap(it);
+    try { x.imageSmoothingQuality = "high"; x.drawImage(big, -f.x, -f.y, it.w, it.h); }
+    finally { big.close(); }
+    x.globalCompositeOperation = "destination-in"; // keep the photo only where the mask is opaque
+    const r = it.maskRect || FULL;
+    x.drawImage(it.mask, r.x * it.w - f.x, r.y * it.h - f.y, r.w * it.w, r.h * it.h);
     return await out.convertToBlob({ type: "image/png" });
-  } finally { big.close(); if (!running) rested(); }
+  } finally { if (!running) rested(); }
 }
 
 // Phones save through the share sheet ("Save Image" puts it in Photos) instead of downloading to Files.
@@ -703,7 +707,7 @@ async function run() {
   } finally { running = false; rested(); }
   if (items.some((i) => i.bmp && !i.mask && !i.failed)) return run();
   idle();
-  if (PHONE) for (const it of items) if (it.mask) png(it); // after the batch: don't compete with the model
+  preparePngs(); // after the batch: don't compete with the model
 }
 
 function startQuips(it) {
@@ -763,7 +767,7 @@ async function retry(it) {
   reveal(it);
   if (!running) rested();
   idle();
-  if (PHONE) png(it);
+  preparePngs();
   up.disabled = down.disabled = false; up.classList.remove("chosen"); down.classList.remove("chosen");
 }
 
@@ -922,6 +926,7 @@ if ("launchQueue" in window) {
 }
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+if (DEBUG) window.goodbye = { items, png, frame }; // ?debug=1: for checking results by hand
 // The frame gets its src only when ads are on, so nothing loads from the ad network otherwise.
 if (ADS) { $("ad").querySelector("iframe").src = AD_SRC; $("ad").hidden = false; }
 

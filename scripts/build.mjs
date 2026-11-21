@@ -48,6 +48,8 @@ writeFileSync(join(dist, "engine.js"), readFileSync(join(dist, "engine.js"), "ut
 // fflate (MIT) for "Download all" zips.
 mkdirSync(join(dist, "vendor"));
 cpSync(join(nm, "fflate/esm/browser.js"), join(dist, "vendor/fflate.mjs"));
+// canvas-confetti (ISC) for the hundredth cut-out and taps on the count. Served from here: the page loads nothing from elsewhere.
+cpSync(join(nm, "canvas-confetti/dist/confetti.module.mjs"), join(dist, "vendor/confetti.mjs"));
 
 // The model: ISNet, 16-bit (AGPL-3.0, IMG.LY), used by both the GPU and the CPU engine.
 // The package stores it as 4 MB chunks.

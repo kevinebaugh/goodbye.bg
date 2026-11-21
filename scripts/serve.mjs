@@ -7,6 +7,7 @@ import { extname, join, normalize } from "node:path";
 import { onRequestGet as fetchFn } from "../functions/api/fetch.js";
 import { onRequestPost as rateFn } from "../functions/api/rate.js";
 import { onRequestPost as crashFn } from "../functions/api/crash.js";
+import { onRequestPost as diagFn } from "../functions/api/diag.js";
 let localCount = +(process.env.COUNT || 0);
 
 const dist = new URL("../dist/", import.meta.url).pathname;
@@ -27,7 +28,7 @@ const match = (pattern, path) => pattern.endsWith("*") ? path.startsWith(pattern
 createServer(async (req, res) => {
   const path = decodeURIComponent(new URL(req.url, "http://x").pathname);
   // Run the Pages Function locally, same code as production.
-  const fns = { "/api/rate": rateFn, "/api/crash": crashFn };
+  const fns = { "/api/rate": rateFn, "/api/crash": crashFn, "/api/diag": diagFn };
   // The global count lives in D1 in production; locally it is a number in memory.
   if (path === "/api/count") {
     if (req.method === "POST") localCount++;

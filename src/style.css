@@ -137,7 +137,6 @@ body:not(.has-work) .foot { margin: 56px auto auto; padding-bottom: max(24px, 8v
 .count { border: 0; background: none; padding: 0 6px; font: inherit; line-height: inherit; color: inherit; cursor: pointer; font-variant-numeric: tabular-nums;
   visibility: hidden; opacity: 0; transition: opacity .4s; }
 .count.on { visibility: visible; opacity: 1; }
-.confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 40; }
 .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 12px; font-size: 15px; font-weight: 600; max-width: 90vw; z-index: 30; animation: pop .25s cubic-bezier(.2,1.4,.4,1); }
 
 @media (prefers-reduced-motion: reduce) {
