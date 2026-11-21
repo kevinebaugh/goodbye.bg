@@ -7,10 +7,11 @@ import {
   ACESFilmicToneMapping, CanvasTexture, CatmullRomCurve3, Color, CylinderGeometry, DataTexture, DirectionalLight,
   DoubleSide, Group, LatheGeometry, LinearMipmapLinearFilter, Mesh, MeshDepthMaterial, MeshPhysicalMaterial,
   MeshStandardMaterial, PCFSoftShadowMap, PerspectiveCamera, PlaneGeometry, PMREMGenerator, RGBADepthPacking,
-  RepeatWrapping, RGBAFormat, Scene, ShadowMaterial, SRGBColorSpace, TorusGeometry, TubeGeometry, Vector2, Vector3,
+  CircleGeometry, RepeatWrapping, RGBAFormat, Scene, ShadowMaterial, SRGBColorSpace, TorusGeometry, TubeGeometry, Vector2, Vector3,
   WebGLRenderer,
 } from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
+import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 
 let renderer = null, envMap = null, weave = null;
 
@@ -57,6 +58,26 @@ function texture(src) {
   t.anisotropy = renderer.capabilities.getMaxAnisotropy();
   t.minFilter = LinearMipmapLinearFilter;
   return t;
+}
+
+// The cut-out with a border that follows its outline (a die-cut), as a canvas. `fill` colours the border.
+function dieCut(art, border = 0.06, fill = "#fbfbf8") {
+  const pad = Math.round(Math.max(art.width, art.height) * border), w = art.width + pad * 2, h = art.height + pad * 2;
+  const c = new OffscreenCanvas(w, h), x = c.getContext("2d");
+  for (let i = 0; i < 32; i++) { const t = (i / 32) * Math.PI * 2; x.drawImage(art, pad + Math.cos(t) * pad * 0.8, pad + Math.sin(t) * pad * 0.8); }
+  x.globalCompositeOperation = "source-in"; x.fillStyle = fill; x.fillRect(0, 0, w, h);
+  x.globalCompositeOperation = "source-over"; x.drawImage(art, pad, pad);
+  return c;
+}
+
+// Fit art (aspect) inside maxW x maxH.
+function fit(art, maxW, maxH) { const a = art.width / art.height; let w = maxW, h = w / a; if (h > maxH) { h = maxH; w = h * a; } return [w, h]; }
+
+// A print material that shows the art only inside its UV square (the rest of the surface stays bare).
+function inkMaterial(art, opts) {
+  const m = new MeshStandardMaterial({ map: texture(art), transparent: true, alphaTest: 0.02, ...opts });
+  m.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace("#include <map_fragment>", "#include <map_fragment>\nif (vMapUv.x < 0.0 || vMapUv.x > 1.0 || vMapUv.y < 0.0 || vMapUv.y > 1.0) discard;"); };
+  return m;
 }
 
 // A studio: key light from the front left above, a shadow-catching floor, the environment for reflections.
@@ -245,7 +266,113 @@ function shirt(art, dark) {
   return { scene, target: new Vector3(0, 0, 0.05), halfW: S * 0.5, halfH: S * 0.5, dir: new Vector3(0, 2.6, 0.9) };
 }
 
-const MAKERS = { mug, sticker, tote, shirt };
+// ---------- ornament: a glossy porcelain disc on a gold cap, hung from a satin ribbon ----------
+function ornament(art, dark) {
+  const R = 1, T = 0.09, scene = studio(-1.6, dark ? 0.35 : 0.18), g = new Group();
+  const porcelain = new MeshPhysicalMaterial({ color: 0xfbfbf8, roughness: 0.14, clearcoat: 1, clearcoatRoughness: 0.04 });
+  const gold = new MeshPhysicalMaterial({ color: 0xd8b25a, metalness: 1, roughness: 0.28 });
+  const disc = new Mesh(new CylinderGeometry(R, R, T, 96), porcelain); disc.rotation.x = Math.PI / 2;
+  g.add(disc);
+  // The print, fitted inside the circle.
+  const [pw, ph] = fit(art, R * 1.45, R * 1.45), side = Math.max(pw, ph) * 1.0;
+  const sq = new OffscreenCanvas(512, 512), sx = sq.getContext("2d"), k = 512 / side;
+  sx.drawImage(art, (512 - pw * k) / 2, (512 - ph * k) / 2, pw * k, ph * k);
+  const face = new Mesh(new CircleGeometry(side / 2, 96), new MeshPhysicalMaterial({ map: texture(sq), transparent: true, roughness: 0.16, clearcoat: 1, clearcoatRoughness: 0.04, polygonOffset: true, polygonOffsetFactor: -2 }));
+  face.position.z = T / 2 + 0.001;
+  g.add(face);
+  const cap = new Mesh(new CylinderGeometry(0.15, 0.17, 0.16, 32), gold); cap.position.y = R + 0.05;
+  const loop = new Mesh(new TorusGeometry(0.07, 0.018, 12, 32), gold); loop.position.y = R + 0.17;
+  const ribbon = new Mesh(new TubeGeometry(new CatmullRomCurve3([
+    new Vector3(0, R + 0.18, 0), new Vector3(-0.22, R + 0.55, 0), new Vector3(0, R + 0.85, 0), new Vector3(0.22, R + 0.55, 0), new Vector3(0, R + 0.18, 0),
+  ], true), 64, 0.035, 8, true), new MeshPhysicalMaterial({ color: 0x1f6f7a, roughness: 0.35, sheen: 1, sheenColor: new Color(0x8fd3dc) }));
+  ribbon.scale.z = 0.3;
+  g.add(cap, loop, ribbon);
+  castAll(g);
+  g.rotation.y = 0.32;
+  scene.add(g);
+  return { scene, target: new Vector3(0, 0.3, 0), halfW: 1.2, halfH: 1.6, dir: new Vector3(0, 0.12, 1) };
+}
+
+// ---------- phone case: a glossy case standing at an angle, camera bump, the cut-out on the back ----------
+function phonecase(art, dark) {
+  const W = 0.78, H = 1.62, D = 0.1, scene = studio(-H / 2, dark ? 0.45 : 0.25), g = new Group();
+  const shell = new MeshPhysicalMaterial({ color: new Color(dark ? 0x1a1c1d : 0xf4f4f1), roughness: 0.22, clearcoat: 0.8, clearcoatRoughness: 0.08 });
+  g.add(new Mesh(new RoundedBoxGeometry(W, H, D, 8, 0.11), shell));
+  const [pw, ph] = fit(art, W * 0.86, H * 0.62);
+  const back = new Mesh(new PlaneGeometry(pw, ph), new MeshPhysicalMaterial({ map: texture(art), transparent: true, roughness: 0.2, clearcoat: 0.8, polygonOffset: true, polygonOffsetFactor: -2 }));
+  back.position.set(0, -H * 0.08, D / 2 + 0.001);
+  g.add(back);
+  // Camera bump with three lenses.
+  const bump = new Mesh(new RoundedBoxGeometry(0.34, 0.34, 0.05, 6, 0.08), shell);
+  bump.position.set(-W / 2 + 0.24, H / 2 - 0.24, D / 2 + 0.02);
+  g.add(bump);
+  const glass = new MeshPhysicalMaterial({ color: 0x0b0d0e, roughness: 0.04, metalness: 0.3, clearcoat: 1 });
+  const ring = new MeshPhysicalMaterial({ color: 0xb8bcbf, metalness: 1, roughness: 0.25 });
+  for (const [x, y] of [[-0.075, 0.075], [-0.075, -0.075], [0.08, 0]]) {
+    const r = new Mesh(new CylinderGeometry(0.062, 0.062, 0.03, 32), ring); r.rotation.x = Math.PI / 2;
+    const l = new Mesh(new CylinderGeometry(0.048, 0.048, 0.034, 32), glass); l.rotation.x = Math.PI / 2;
+    r.position.set(bump.position.x + x, bump.position.y + y, D / 2 + 0.05); l.position.copy(r.position); l.position.z += 0.002;
+    g.add(r, l);
+  }
+  castAll(g);
+  g.rotation.set(-0.06, -0.42, 0.05);
+  scene.add(g);
+  return { scene, target: new Vector3(0, 0, 0), halfW: 0.75, halfH: H * 0.56, dir: new Vector3(0, 0.15, 1) };
+}
+
+// ---------- throw pillow: a plump square cushion, corners pinched, woven fabric, the cut-out on the front ----------
+function pillow(art, dark) {
+  const S = 2, scene = studio(-S / 2 + 0.05, dark ? 0.45 : 0.25), g = new Group();
+  weave.repeat.set(12, 12);
+  const fabric = new MeshStandardMaterial({ color: new Color(dark ? 0x2a2f31 : 0xece6da), roughness: 0.96, normalMap: weave, normalScale: new Vector2(0.45, 0.45), side: DoubleSide });
+  const half = (sign) => {
+    const geo = new PlaneGeometry(S, S, 70, 70), pos = geo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const u = pos.getX(i) / (S / 2), v = pos.getY(i) / (S / 2);
+      const puff = 0.46 * (1 - u ** 4) * (1 - v ** 4), wr = (noise2(u * 3 + 4, v * 3) - 0.5) * 0.035;
+      pos.setX(i, pos.getX(i) * (1 - 0.06 * (1 - v * v))); pos.setY(i, pos.getY(i) * (1 - 0.06 * (1 - u * u))); // edges bow in
+      pos.setZ(i, sign * (puff + wr));
+    }
+    geo.computeVertexNormals();
+    return geo;
+  };
+  const front = half(1);
+  g.add(new Mesh(front, fabric), new Mesh(half(-1), fabric));
+  const [pw, ph] = fit(art, S * 0.62, S * 0.62), pgeo = front.clone(), pp = pgeo.attributes.position, uv = pgeo.attributes.uv;
+  for (let i = 0; i < pp.count; i++) { pp.setZ(i, pp.getZ(i) + 0.003); uv.setXY(i, (pp.getX(i) + pw / 2) / pw, (pp.getY(i) + ph / 2) / ph); }
+  g.add(new Mesh(pgeo, inkMaterial(art, { roughness: 0.9, normalMap: weave, normalScale: new Vector2(0.3, 0.3) })));
+  castAll(g);
+  g.rotation.set(-0.12, 0.62, 0.04); // turned, so its plumpness and pinched corners show
+  scene.add(g);
+  return { scene, target: new Vector3(0, 0, 0), halfW: S * 0.6, halfH: S * 0.58, dir: new Vector3(0.15, 0.3, 1) };
+}
+
+// ---------- keychain: a die-cut clear acrylic charm on a steel ring ----------
+function keychain(art, dark) {
+  const scene = studio(-1.5, dark ? 0.35 : 0.18), g = new Group();
+  // Clear acrylic border (faintly frosted) around the cut-out, with a tab and hole for the ring.
+  const cut = dieCut(art, 0.07, "rgba(235,242,245,0.42)"), w = cut.width, h = cut.height, tab = Math.round(Math.max(w, h) * 0.09);
+  const c = new OffscreenCanvas(w, h + tab * 2), x = c.getContext("2d");
+  x.drawImage(cut, 0, tab * 2);
+  x.fillStyle = "rgba(235,242,245,0.42)"; x.beginPath(); x.arc(w / 2, tab * 1.5, tab * 1.1, 0, Math.PI * 2); x.fill();
+  x.globalCompositeOperation = "destination-out"; x.beginPath(); x.arc(w / 2, tab * 1.4, tab * 0.42, 0, Math.PI * 2); x.fill();
+  const S = 2.3, cw = (S * c.width) / Math.max(c.width, c.height), ch = (S * c.height) / Math.max(c.width, c.height);
+  const acrylic = (z) => {
+    const m = new Mesh(new PlaneGeometry(cw, ch), new MeshPhysicalMaterial({ map: texture(c), transparent: true, alphaTest: 0.05, roughness: 0.03, clearcoat: 1, clearcoatRoughness: 0.02, side: DoubleSide }));
+    m.position.z = z; return m;
+  };
+  g.add(acrylic(0.025), acrylic(-0.025));
+  const steel = new MeshPhysicalMaterial({ color: 0xc9cdd0, metalness: 1, roughness: 0.18 });
+  const holeY = ch / 2 - (tab * 1.4 / c.height) * ch;
+  const ring = new Mesh(new TorusGeometry(0.3, 0.03, 16, 64), steel); ring.rotation.y = Math.PI / 2; ring.position.set(0, holeY + 0.27, 0);
+  g.add(ring);
+  castAll(g);
+  g.rotation.set(0, 0.3, 0.05);
+  scene.add(g);
+  return { scene, target: new Vector3(0, 0.15, 0), halfW: cw * 0.62, halfH: ch * 0.62 + 0.15, dir: new Vector3(0, 0.12, 1) };
+}
+
+const MAKERS = { mug, sticker, tote, shirt, ornament, phonecase, pillow, keychain };
 
 // Render `kind` with the visitor's cut-out `art` into the 2D canvas `out` (sized by CSS).
 export function render(kind, out, art, dark) {

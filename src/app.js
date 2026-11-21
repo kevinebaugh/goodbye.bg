@@ -965,7 +965,8 @@ const product = (kind, draw2d) => async (c, src) => {
   catch (e) { console.warn("3D render failed", e); report("3d-failed", e); r3d = Promise.resolve(null); }
   draw2d(c, src);
 };
-const PRODUCTS = { mug: product("mug", drawMug), sticker: product("sticker", drawSticker), shirt: product("shirt", drawShirt), tote: product("tote", drawTote) };
+const PRODUCTS = { mug: product("mug", drawMug), sticker: product("sticker", drawSticker), shirt: product("shirt", drawShirt), tote: product("tote", drawTote),
+  ornament: product("ornament", drawSticker), phonecase: product("phonecase", drawSticker), pillow: product("pillow", drawSticker), keychain: product("keychain", drawSticker) };
 
 // Light or dark changed: redraw the product in the other color.
 matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => {
