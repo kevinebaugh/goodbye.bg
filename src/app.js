@@ -563,7 +563,14 @@ async function fullBlob(it) {
 const PHONE = matchMedia("(pointer: coarse)").matches && "canShare" in navigator;
 let pngChain = Promise.resolve();
 // One full-size PNG at a time: several at once can run a phone out of memory.
-const png = (it) => (it.png ||= (pngChain = pngChain.then(() => fullBlob(it), () => fullBlob(it))));
+// A failed one is forgotten, so the next tap tries again instead of failing forever.
+function png(it) {
+  if (!it.png) {
+    const p = (it.png = pngChain = pngChain.then(() => fullBlob(it), () => fullBlob(it)));
+    p.catch(() => { if (it.png === p) it.png = null; });
+  }
+  return it.png;
+}
 const ext = (it) => (it.anim ? "gif" : "png");
 const outName = (it) => `${it.name}-goodbye-bg.${ext(it)}`;
 
@@ -750,7 +757,11 @@ function makeCard(it) {
   });
   x.addEventListener("click", () => { dbg("removed"); clearInterval(it.quip); it.gen = -1;
     for (const u of [it.previewUrl, it.fullUrl, it.gifUrl]) if (u) URL.revokeObjectURL(u); items.splice(items.indexOf(it), 1); card.remove(); sync(); });
-  dl.addEventListener("click", async () => tick() || deliver([{ name: outName(it), blob: await png(it) }]));
+  dl.addEventListener("click", async () => {
+    tick();
+    try { await deliver([{ name: outName(it), blob: await png(it) }]); }
+    catch (e) { console.error(e); report("save-failed", e, it); toast("Could not save this image. Try again."); }
+  });
 
   it.el = { card, pic, canvas, img, busy, dl, crop, up, down };
   return card;
