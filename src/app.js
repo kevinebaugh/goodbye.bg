@@ -890,6 +890,13 @@ function buildAd(i) {
   a.querySelector(".adtag").textContent = adLabel;
   a.setAttribute("aria-label", `${adLabel}: ${x.line} ${cta}`);
   $("grid").insertBefore(a, $("tools"));
+  a.style.setProperty("--sway-delay", `${-((i * 1.7) % 6)}s`); // phones: each card sways out of step
+  a.addEventListener("pointermove", (e) => { // a few degrees of tilt toward the pointer
+    if (e.pointerType !== "mouse") return;
+    const r = a.getBoundingClientRect(), dx = (e.clientX - r.left) / r.width - 0.5, dy = (e.clientY - r.top) / r.height - 0.5;
+    a.style.setProperty("--ry", `${(dx * 14).toFixed(1)}deg`); a.style.setProperty("--rx", `${(-dy * 10).toFixed(1)}deg`);
+  });
+  a.addEventListener("pointerleave", () => { a.style.removeProperty("--ry"); a.style.removeProperty("--rx"); });
   if (src) {
     a.art = { draw, src };
     try { draw(a.querySelector(".adart"), src); }
@@ -948,19 +955,25 @@ function drawShirt(c, src) {
   x.beginPath(); x.moveTo(...P(0.36, 0.02)); x.quadraticCurveTo(...P(0.5, 0.13), ...P(0.64, 0.02)); x.stroke();
 }
 
-// A tote bag with two handles, the cut-out printed on the front. Natural canvas in light mode, black in dark.
+// A tote bag: one strap loop on the back (behind the bag) and one on the front, each spanning most of the
+// width, the cut-out printed on the front. Natural canvas in light mode, black in dark.
 function drawTote(c, src) {
   const { x, W, H, dark } = canvasFor(c), [sw, sh] = sizeOf(src);
-  const bw = Math.min(W * 0.8, H * 0.72), bh = bw * 1.04, bx = (W - bw) / 2, by = H - bh - (H - bh) * 0.25;
+  // The straps rise about 0.45 of the bag's height above it: size and place bag + straps together.
+  const bw = Math.min(W * 0.78, (H * 0.9) / 1.45 / 1.04), bh = bw * 1.04, bx = (W - bw) / 2, by = (H - bh * 1.45) / 2 + bh * 0.45;
   const cloth = dark ? "#262c2e" : "#e8dfca", edge = dark ? "#48514f" : "#cfc2a5";
-  x.lineWidth = bw * 0.07; x.strokeStyle = edge; x.lineCap = "round";
-  for (const hx of [0.3, 0.7]) { x.beginPath(); x.ellipse(bx + bw * hx, by, bw * 0.12, bh * 0.3, 0, Math.PI, 0); x.stroke(); }
+  const strap = (dy, ry, color) => {
+    x.lineWidth = bw * 0.065; x.strokeStyle = color; x.lineCap = "butt";
+    x.beginPath(); x.ellipse(bx + bw / 2, by + dy, bw * 0.26, ry, 0, Math.PI, 0); x.stroke();
+  };
+  strap(0, bh * 0.45, dark ? "#384042" : "#b9ab8d"); // back strap, behind the bag
   x.save(); x.shadowColor = dark ? "rgba(0,0,0,.5)" : "rgba(0,0,0,.18)"; x.shadowBlur = 10; x.shadowOffsetY = 4;
   x.fillStyle = cloth; x.fillRect(bx, by, bw, bh); x.restore();
   const g = x.createLinearGradient(bx, 0, bx + bw, 0);
   g.addColorStop(0, "rgba(0,0,0,.06)"); g.addColorStop(0.4, "rgba(255,255,255,.04)"); g.addColorStop(1, "rgba(0,0,0,.12)");
   x.fillStyle = g; x.fillRect(bx, by, bw, bh);
   x.fillStyle = edge; x.fillRect(bx, by, bw, bh * 0.05); // the hem at the top
+  strap(bh * 0.05, bh * 0.34, edge); // front strap, sewn on below the hem (lower than the back one)
   const s = Math.min((bw * 0.72) / sw, (bh * 0.68) / sh), w = sw * s, h = sh * s;
   x.globalAlpha = 0.95; x.drawImage(src, bx + (bw - w) / 2, by + bh * 0.1 + (bh * 0.86 - h) / 2, w, h); x.globalAlpha = 1;
 }
