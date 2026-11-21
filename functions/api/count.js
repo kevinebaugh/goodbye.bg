@@ -4,6 +4,13 @@
 
 const json = (o) => new Response(JSON.stringify(o), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
 
+// GET: the current total, for the live count in the footer.
+export async function onRequestGet({ env }) {
+  if (!env.COUNTER) return json({ n: 0 });
+  const row = await env.COUNTER.prepare("SELECT n FROM counter WHERE id = 1").first();
+  return json({ n: row?.n || 0 });
+}
+
 export async function onRequestPost({ request, env }) {
   const site = request.headers.get("Sec-Fetch-Site");
   if (site && site !== "same-origin") return new Response("Only for goodbye.bg.", { status: 403 });

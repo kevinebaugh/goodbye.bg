@@ -108,6 +108,8 @@ Anonymous counts the page sends (never photo data): 👍/👎 to `/api/rate`; cr
 leaves a note in localStorage while working on a photo; the next visit sends it if the tab died: step, engine,
 device kind, photos done, megapixels); `/api/count` adds one to a single global number in D1
 (`goodbye-bg-counter`, binding COUNTER) per finished cut-out, and every 100th gets confetti (`?confetti=1` forces it).
+The footer shows that real total (GET `/api/count`, every 30 s while visible), hidden below 1,000 (`?count=1` shows it);
+tapping it throws confetti. Kevin: tests count toward the total, never reset it.
 Haptics: a light tick on result, crop, 👍/👎 and Download (Android vibrate; iOS 18+ hidden switch control).
 iPhones shut the engine down once idle (its ~1.8 GB never shrinks; 7 to 8 photos in one tab crashed Safari).
 

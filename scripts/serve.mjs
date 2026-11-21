@@ -7,7 +7,7 @@ import { extname, join, normalize } from "node:path";
 import { onRequestGet as fetchFn } from "../functions/api/fetch.js";
 import { onRequestPost as rateFn } from "../functions/api/rate.js";
 import { onRequestPost as crashFn } from "../functions/api/crash.js";
-import { onRequestPost as countFn } from "../functions/api/count.js";
+let localCount = +(process.env.COUNT || 0);
 
 const dist = new URL("../dist/", import.meta.url).pathname;
 const port = Number(process.env.PORT) || 8788;
@@ -27,7 +27,13 @@ const match = (pattern, path) => pattern.endsWith("*") ? path.startsWith(pattern
 createServer(async (req, res) => {
   const path = decodeURIComponent(new URL(req.url, "http://x").pathname);
   // Run the Pages Function locally, same code as production.
-  const fns = { "/api/rate": rateFn, "/api/crash": crashFn, "/api/count": countFn };
+  const fns = { "/api/rate": rateFn, "/api/crash": crashFn };
+  // The global count lives in D1 in production; locally it is a number in memory.
+  if (path === "/api/count") {
+    if (req.method === "POST") localCount++;
+    res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ n: localCount, confetti: req.method === "POST" && localCount % 100 === 0 }));
+    return;
+  }
   if (fns[path] && req.method === "POST") {
     const body = await new Promise((ok) => { let d = ""; req.on("data", (c) => (d += c)); req.on("end", () => ok(d)); });
     const r = await fns[path]({ request: new Request(`http://localhost:${port}${path}`, { method: "POST", headers: req.headers, body }), env: {} });
