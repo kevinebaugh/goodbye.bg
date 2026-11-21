@@ -85,22 +85,21 @@ body.has-work .hero h1, body.has-work .sub { display: none; }
 .queued .busy { background: color-mix(in srgb, var(--card) 45%, transparent); }
 .queued .busy::before { content: none; } /* waiting cards stay still */
 .failed .busy::before { content: "🙈"; animation: none; }
-.x { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; border-radius: 50%; border: 0; background: var(--ink); color: var(--paper); cursor: pointer; opacity: 0; transition: opacity .15s; font-size: 16px; line-height: 1; }
-.crop { position: absolute; top: 8px; left: 8px; width: 28px; height: 28px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer;
-  background: var(--ink); color: var(--paper); opacity: 0; transition: opacity .15s, background .15s, color .15s; }
-.crop[aria-pressed="false"] { background: var(--card); color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--ink); }
-.x:focus-visible, .crop:focus-visible { opacity: .85; }
-@media (hover: hover) { .card:hover .x, .card:hover .crop { opacity: .85; } }
-@media (hover: none) { .x, .crop { opacity: .85; } } /* phones: no hover, so always show them */
-.bar { display: flex; padding: 10px 12px; border-top: 1px solid var(--line); }
-.bar .btn { flex: 1; }
-/* Ratings sit on the image, bottom right, like the crop and remove buttons. */
-.rates { position: absolute; right: 8px; bottom: 8px; display: flex; gap: 6px; }
-.rate { width: 30px; height: 30px; border: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
-  background: color-mix(in srgb, var(--card) 85%, transparent); box-shadow: 0 1px 3px rgb(0 0 0 / .15);
-  font-size: 15px; line-height: 1; opacity: .75; filter: grayscale(1); transition: opacity .15s, filter .15s, transform .15s; }
-.rate:focus-visible { opacity: 1; filter: none; }
-@media (hover: hover) { .rate:hover:not(:disabled) { opacity: 1; filter: none; } }
+.pic img { width: 100%; height: 100%; object-fit: contain; display: none; -webkit-touch-callout: default; -webkit-tap-highlight-color: transparent; }
+.pic.still img { display: block; }
+.pic.still canvas { display: none; }
+/* Nothing sits on the image. Its controls live in the bar below: crop, Download, 👍 👎, remove. */
+.bar { display: flex; align-items: center; gap: 4px; padding: 8px 10px; border-top: 1px solid var(--line); }
+.bar .dl { flex: 1; min-width: 0; display: flex; justify-content: center; align-items: center; margin: 0 4px; }
+.dl svg { display: none; }
+.rates { display: flex; gap: 2px; }
+.ico { flex: none; width: 30px; height: 30px; border-radius: 50%; border: 0; padding: 0; display: grid; place-items: center; cursor: pointer;
+  background: transparent; color: var(--ink); font-size: 15px; line-height: 1; opacity: .7; transition: opacity .15s, background .15s, filter .15s, transform .15s; }
+.x { font-size: 20px; }
+.crop[aria-pressed="true"] { background: color-mix(in srgb, var(--ink) 12%, transparent); opacity: .9; }
+.rate { filter: grayscale(1); }
+.ico:focus-visible { opacity: 1; }
+@media (hover: hover) { .ico:hover:not(:disabled) { opacity: 1; filter: none; background: color-mix(in srgb, var(--ink) 8%, transparent); } }
 .rate:disabled { cursor: default; }
 .rate.chosen { opacity: 1; filter: none; transform: scale(1.1); }
 
@@ -174,18 +173,20 @@ body.app.has-work .foot { padding: 8px 16px 10px; }
 /* Empty page: hero and footer stay together near the middle (main must not stretch here). */
 body.app:not(.has-work) main { flex: none; margin-top: auto; }
 
-/* Small cards (many photos on a phone): smaller controls; the tiniest drop the rating icons. */
-@container (max-width: 150px) { .rates { display: none; } }
+/* Small cards (many photos on a phone): Download becomes an icon; the tiniest drop the rating icons. */
 .card { container-type: inline-size; }
-@container (max-width: 180px) {
-  .bar { padding: 8px; }
-  .bar .btn { font-size: 13px; padding: 7px 6px; min-width: 0; }
-  .x, .crop { width: 24px; height: 24px; top: 6px; }
-  .x { right: 6px; font-size: 14px; } .crop { left: 6px; }
-  .crop svg { width: 13px; height: 13px; }
+@container (max-width: 240px) {
+  .bar { padding: 6px; gap: 2px; }
+  .bar .dl { padding: 6px; margin: 0 2px; }
+  .dl span { display: none; }
+  .dl svg { display: block; }
+  .ico { width: 26px; height: 26px; font-size: 13px; }
+  .x { font-size: 17px; }
+  .crop svg { width: 14px; height: 14px; }
   .busy { font-size: 12px; gap: 6px; padding: 8px; }
   .busy::before { font-size: 22px; }
 }
+@container (max-width: 165px) { .rates { display: none; } }
 /* Phones with photos on screen: the grid gets the room; the privacy note is on the empty page and in the headline. */
 @media (max-width: 600px) { body.app.has-work .foot p:first-child { display: none; } }
 /* "Download all" lines up with the right edge of the cards. */

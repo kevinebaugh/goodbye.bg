@@ -254,6 +254,7 @@ function render(it, W, H, bmp = it.bmp) {
 }
 
 function drawCard(it) {
+  it.el.pic.classList.remove("still");
   const f = it.mask ? frame(it) : { x: 0, y: 0, w: it.w, h: it.h };
   // Never draw bigger than the preview bitmap holds (a tight crop would otherwise blow up to full size).
   const k = Math.min(1, PREVIEW_SIDE / Math.max(f.w, f.h), it.bmp.width / it.w);
@@ -264,11 +265,43 @@ function drawCard(it) {
   if (!it.mask) return x.drawImage(it.bmp, 0, 0, W, H);
   const full = render(it, Math.max(1, Math.round(it.w * k)), Math.max(1, Math.round(it.h * k)));
   x.drawImage(full, f.x * k, f.y * k, f.w * k, f.h * k, 0, 0, W, H);
+  still(it);
+}
+
+// A finished cut-out is shown as a plain image, so a long press offers Save to Photos (iOS) and a
+// right-click offers Save image. It shows the preview; a press swaps in the full-size PNG.
+function still(it) {
+  const { canvas, img, pic } = it.el, gen = (it.gen = (it.gen || 0) + 1);
+  if (it.fullUrl) { URL.revokeObjectURL(it.fullUrl); it.fullUrl = null; }
+  canvas.toBlob(async (b) => {
+    if (!b || gen !== it.gen) return;
+    const old = it.previewUrl;
+    it.previewUrl = URL.createObjectURL(b);
+    img.src = it.previewUrl;
+    try { await img.decode(); } catch {}
+    if (gen !== it.gen) return;
+    pic.classList.add("still");
+    if (old) URL.revokeObjectURL(old);
+  }, "image/png");
+}
+
+// Long press saves what Download saves: the full-size PNG. Only one card holds it at a time (memory).
+let pressed = null;
+function holdFull(it) {
+  if (pressed && pressed !== it && pressed.previewUrl) pressed.el.img.src = pressed.previewUrl;
+  pressed = it;
+  if (!it.mask) return;
+  png(it).then((b) => {
+    if (pressed !== it || !it.el.pic.classList.contains("still")) return;
+    it.fullUrl ||= URL.createObjectURL(b);
+    if (it.el.img.src !== it.fullUrl) it.el.img.src = it.fullUrl;
+  }, () => {});
 }
 
 // The background wipes away, then the view eases in to the crop.
 function reveal(it) {
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) return drawCard(it);
+  it.el.pic.classList.remove("still"); it.gen = (it.gen || 0) + 1;
   const c = it.el.canvas, x = c.getContext("2d");
   const K = Math.min(1, PREVIEW_SIDE / Math.max(it.w, it.h)), W = Math.round(it.w * K), H = Math.round(it.h * K);
   c.width = W; c.height = H;
@@ -455,32 +488,38 @@ function makeCard(it) {
   const busy = document.createElement("div"); busy.className = "busy";
   card.classList.add("queued"); // waits quietly; only the photo being worked on waves and talks
   const x = document.createElement("button"); x.type = "button"; x.className = "x"; x.textContent = "×"; x.setAttribute("aria-label", "Remove");
-  const crop = document.createElement("button"); crop.type = "button"; crop.className = "crop"; crop.hidden = true;
+  const crop = document.createElement("button"); crop.type = "button"; crop.className = "crop"; crop.style.visibility = "hidden"; // keeps its place, so the bar never shifts
   crop.setAttribute("aria-label", "Crop to subject"); crop.setAttribute("aria-pressed", "true");
   crop.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M2 6h14a2 2 0 0 1 2 2v14"/></svg>';
-  pic.append(canvas, busy, crop, x);
+  const img = document.createElement("img"); img.alt = "Cut-out"; img.draggable = true;
+  img.addEventListener("touchstart", () => holdFull(it), { passive: true });
+  img.addEventListener("contextmenu", () => holdFull(it));
+  pic.append(canvas, img, busy);
   const bar = document.createElement("div"); bar.className = "bar";
-  const dl = document.createElement("button"); dl.type = "button"; dl.className = "btn primary"; dl.textContent = "Download"; dl.disabled = true;
+  const dl = document.createElement("button"); dl.type = "button"; dl.className = "btn primary dl"; dl.disabled = true;
+  dl.setAttribute("aria-label", "Download");
+  dl.innerHTML = '<span>Download</span><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>';
   const up = document.createElement("button"), down = document.createElement("button");
   for (const [b, label, emoji] of [[up, "Good result", "👍"], [down, "Bad result, try again", "👎"]]) {
-    b.type = "button"; b.className = "rate"; b.textContent = emoji; b.hidden = true;
+    b.type = "button"; b.className = "ico rate"; b.textContent = emoji; b.style.visibility = "hidden";
     b.setAttribute("aria-label", label); b.title = label;
   }
   up.addEventListener("click", () => rate(it, "up"));
   down.addEventListener("click", () => rate(it, "down"));
   const rates = document.createElement("div"); rates.className = "rates"; rates.append(up, down);
-  pic.append(rates);
-  bar.append(dl);
+  x.classList.add("ico"); crop.classList.add("ico");
+  bar.append(crop, dl, rates, x);
   card.append(pic, bar);
 
   crop.addEventListener("click", () => {
     it.crop = !it.crop; crop.setAttribute("aria-pressed", String(it.crop));
     it.png = null; drawCard(it); if (PHONE) png(it);
   });
-  x.addEventListener("click", () => { clearInterval(it.quip); items.splice(items.indexOf(it), 1); card.remove(); sync(); });
+  x.addEventListener("click", () => { clearInterval(it.quip); it.gen = -1;
+    for (const u of [it.previewUrl, it.fullUrl]) if (u) URL.revokeObjectURL(u); items.splice(items.indexOf(it), 1); card.remove(); sync(); });
   dl.addEventListener("click", async () => deliver([{ name: outName(it), blob: await png(it) }]));
 
-  it.el = { card, canvas, busy, dl, crop, up, down };
+  it.el = { card, pic, canvas, img, busy, dl, crop, up, down };
   return card;
 }
 
@@ -507,8 +546,7 @@ async function run() {
       if (!it.mask.box) { it.mask = null; fail(it, "No clear subject in this photo."); continue; }
       if (!items.includes(it)) continue;
       clearInterval(it.quip);
-      it.el.busy.hidden = true; it.el.dl.disabled = false; it.el.crop.hidden = !it.mask.box;
-      it.el.up.hidden = it.el.down.hidden = false; it.ms = lastMs;
+      it.el.busy.hidden = true; it.el.dl.disabled = false; for (const b of [it.el.crop, it.el.up, it.el.down]) b.style.visibility = ""; it.ms = lastMs;
       dbg("shown");
       dbg("reveal"); reveal(it); sync();
       it.el.card.dataset.ms = lastMs;
@@ -649,7 +687,15 @@ $("all").addEventListener("click", async () => {
   save(`goodbye-bg-${done.length}-images.zip`, new Blob([zipSync(files)], { type: "application/zip" }));
 });
 
-// Never zoom. Safari ignores user-scalable=no, so stop its pinch gestures here (CSS stops double-tap zoom).
+// Never zoom. Safari ignores user-scalable=no and touch-action on the page, so stop its pinch gestures
+// and its double-tap zoom here. A second tap within 350 ms is swallowed, except a press that is held.
+let lastTap = 0;
+document.addEventListener("touchend", (e) => {
+  const now = e.timeStamp;
+  if (now - lastTap < 350 && e.changedTouches.length === 1) e.preventDefault();
+  lastTap = now;
+}, { passive: false });
+document.addEventListener("dblclick", (e) => e.preventDefault(), { passive: false });
 for (const t of ["gesturestart", "gesturechange"]) document.addEventListener(t, (e) => e.preventDefault(), { passive: false });
 document.addEventListener("touchmove", (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
 
