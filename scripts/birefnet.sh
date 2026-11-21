@@ -1,6 +1,7 @@
 #!/bin/sh
-# Makes models/birefnet-webgpu.onnx, the GPU engine's model (see CLAUDE.md, "Engines").
-# Needs python3 with onnx and numpy (pip install onnx numpy). The build picks the result up if it exists.
+# Remakes weights/birefnet/ (the GPU engine's model, committed as parts under 25 MiB) from the original export.
+# Only needed to change the model; the build just copies weights/birefnet/ (see CLAUDE.md, "Engines").
+# Needs python3 with onnx and numpy (pip install onnx numpy).
 # Source: BiRefNet lite (MIT, ZhengPeng7/BiRefNet), fp16 ONNX export by onnx-community, pinned by commit and hash.
 set -eu
 cd "$(dirname "$0")/.."
@@ -14,4 +15,11 @@ echo "$SHA  $SRC" | shasum -a 256 -c -
 python3 scripts/deform-to-gridsample.py "$SRC" models/birefnet-gs.onnx 64
 python3 scripts/narrow-onnx.py models/birefnet-gs.onnx models/birefnet-webgpu.onnx 6
 rm models/birefnet-gs.onnx
-ls -l models/birefnet-webgpu.onnx
+rm -rf weights/birefnet && mkdir -p weights/birefnet
+split -b 20m -a 1 models/birefnet-webgpu.onnx weights/birefnet/part-
+node -e '
+const fs = require("fs"), d = "weights/birefnet", parts = fs.readdirSync(d).filter((f) => f.startsWith("part-")).sort();
+const names = parts.map((p, i) => { fs.renameSync(`${d}/${p}`, `${d}/${i}.bin`); return `${i}.bin`; });
+const b = fs.readFileSync("models/birefnet-webgpu.onnx");
+fs.writeFileSync(`${d}/manifest.json`, JSON.stringify({ size: b.length, sha256: require("crypto").createHash("sha256").update(b).digest("hex"), parts: names }) + "\n");'
+ls -l weights/birefnet

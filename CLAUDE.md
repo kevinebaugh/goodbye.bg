@@ -22,9 +22,9 @@ Actions. The old upload-only project `goodbye-bg` can be deleted.
 - `functions/api/fetch.js` Cloudflare Pages Function. Fetches an image for a pasted link (same-origin only,
   30 MB cap, follows og:image for web pages). The only server code.
 - `scripts/build.mjs` assembles `dist/`. `scripts/serve.mjs` local server that applies `_headers` and runs the function.
-- `src/engine.js` the model worker. `scripts/birefnet.sh` makes `models/birefnet-webgpu.onnx` (download, then
-  `deform-to-gridsample.py` and `narrow-onnx.py`); the build serves it from `m/birefnet-<hash>/` when it exists,
-  else the GPU runs ISNet.
+- `src/engine.js` the model worker. `weights/birefnet/` BiRefNet for the GPU engine, committed as 20 MiB parts with
+  a manifest (size, sha256); the build copies it to `m/birefnet-<hash>/`. `scripts/birefnet.sh` regenerates it
+  (download, then `deform-to-gridsample.py` and `narrow-onnx.py`; needs Python with onnx). Not part of the build.
 
 ## Rules
 
@@ -206,10 +206,7 @@ blob3 first/retry, double1 ms, double2 megapixels):
 
 1. Mac Safari still picks the GPU engine; not tested there. A smaller GPU footprint might make WebGPU
    safe on iPhones again (try once ORT or the model changes).
-2. BiRefNet in the Pages build: `models/` is not in git, so a GitHub build has no BiRefNet and the GPU runs
-   ISNet. Pick one: run `scripts/birefnet.sh` in the Pages build (pip install onnx numpy, downloads 115 MB from
-   Hugging Face per build), commit the 93 MB model as parts, or deploy by hand. Untested: Safari's WebGPU, Windows
-   and Linux GPUs, 8 GB Macs (3 GB GPU peak).
+2. BiRefNet untested on Safari's WebGPU, Windows and Linux GPUs, and 8 GB Macs (3 GB GPU peak).
 3. Not yet tested on real devices: Android share target, desktop "Open with", folder drops, live link fetching.
 
 ## Open items outside the code
