@@ -856,18 +856,19 @@ function layout() {
   g.classList.toggle("scroll", scroll);
   $("main").style.setProperty("--cols", c); $("main").style.setProperty("--p", `${p}px`); // grid and tools row share them
   placeAds(n, scroll ? 0 : Math.ceil(slots / c) * c - n);
-  requestAnimationFrame(() => hugFooter(scroll ? 0 : 1));
+  requestAnimationFrame(() => hugFooter(scroll ? 0 : Math.ceil(slots / c))); // rows, the cells kept for ads included
 }
 // When the cards fill the width before the height (a phone in portrait), the grid has empty space under them. The
 // footer moves up to sit under the cards and the spare space goes to the bottom of the screen. A transform, so the
 // grid keeps its size and the layout doesn't change in a loop.
-function hugFooter(on) {
-  const f = document.querySelector(".foot"), g = $("grid");
+function hugFooter(rows) {
+  const f = document.querySelector(".foot"), g = $("grid"), card = g.querySelector(".card"), all = $("tools");
   if (!f) return;
   let slack = 0;
-  if (on) {
-    const kids = [...g.children].map((k) => k.getBoundingClientRect()).filter((r) => r.height);
-    if (kids.length) slack = Math.max(0, Math.floor(g.getBoundingClientRect().bottom - Math.max(...kids.map((r) => r.bottom))));
+  if (rows && card) { // measured from the rows, so the footer doesn't jump when the ads fill their kept cells
+    const r = g.getBoundingClientRect(), h = card.getBoundingClientRect().height;
+    const used = (parseFloat(getComputedStyle(g).paddingTop) || 0) + rows * h + (rows - 1) * GAP + (all.hidden ? 0 : GAP + all.offsetHeight);
+    slack = Math.max(0, Math.floor(r.height - used));
   }
   f.style.transform = slack ? `translateY(${-slack}px)` : "";
 }
