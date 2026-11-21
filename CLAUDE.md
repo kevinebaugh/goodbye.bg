@@ -122,7 +122,7 @@ localStorage note, never sent unless something fails). Page views: the page's fi
 writes blob1 'view', blob2 device, blob3 referring host, blob4 country (no IP, no cookies). A Pages Function on `/`
 was avoided: `_headers` (COEP/COOP, which give iPhones their threads) would not apply to its responses.
 
-Ads (affiliate, Kevin 2026-11-20): `lib/partners.mjs` lists partners (Canva, Printful, Zazzle); one shows only once its
+Ads (affiliate, Kevin 2026-11-20): `lib/partners.mjs` lists partners (Printful, Printify, Zazzle; Canva's program is closed to us); one shows only once its
 `url` holds Kevin's affiliate link (`?adtest=1` shows them all, linking to home pages). The ad card fills a grid cell
 that would otherwise be empty, after the batch is done, one partner per visit, marked "Ad", not in Download all, no
 rating. Links go through `/go/<id>` (functions/go/[id].js), which counts the click (blob1 'adclick') and redirects;
