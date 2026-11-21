@@ -143,7 +143,7 @@ function renderCount(v) {
   const el = $("count");
   if (v <= 0) return;
   el.classList.add("on"); el.tabIndex = 0;
-  el.textContent = `${v.toLocaleString("en-US")} ${v === 1 ? "background" : "backgrounds"} said goodbye`;
+  el.textContent = `${v.toLocaleString("en-US")} ${v === 1 ? "background" : "backgrounds"} said goodbye.`;
 }
 function growCount() { // waits like a random arrival at the recent pace, then adds one
   clearTimeout(countTimer);
