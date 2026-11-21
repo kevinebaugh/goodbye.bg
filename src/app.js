@@ -792,7 +792,7 @@ async function retry(it) {
 const GAP = 12, MIN_PIC = 96, MAX_PIC = 640;
 function layout() {
   const g = $("grid"), n = g.querySelectorAll(".card").length, all = $("tools");
-  if (!n) return;
+  if (!n) { placeAds(0, 0); return; } // the last photo was removed: the ads go with it
   const bar = g.querySelector(".bar")?.offsetHeight || 52, W = g.clientWidth, H = g.clientHeight - (all.hidden ? 0 : all.offsetHeight + GAP); // "Download all" sits under the cards
   const fit = (k) => {
     let b = { p: 0, c: 1 };
@@ -839,8 +839,15 @@ fetch("/partners.json").then((r) => r.json()).then((list) => {
 function adsOn() { return adVariants.length > 0; }
 // As soon as one cut-out is done (the cells are reserved from the start, so nothing moves).
 function adReady() { return adsOn() && items.some((i) => i.mask?.box); }
+let adDrawnAt = "";
 function placeAds(n, free) {
   const want = adReady() && n >= 1 ? free : 0;
+  // The cards changed size (rotation, a resized window): redraw the products, or they'd stretch.
+  const size = $("main").style.getPropertyValue("--p");
+  if (size !== adDrawnAt) {
+    adDrawnAt = size;
+    requestAnimationFrame(() => { for (const a of adEls) if (a.art) { const c = a.querySelector(".adart"); if (c) try { a.art.draw(c, a.art.src); } catch {} } });
+  }
   while (adEls.length > want) { const a = adEls.pop(); adWatch.unobserve(a); a.remove(); }
   while (adEls.length < want) {
     try { adEls.push(buildAd(adEls.length)); }

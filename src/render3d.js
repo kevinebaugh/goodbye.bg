@@ -17,8 +17,10 @@ let renderer = null, envMap = null, weave = null;
 
 function setup() {
   if (renderer) return;
-  const canvas = new OffscreenCanvas(16, 16);
-  renderer = new WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+  // A normal (unattached) canvas: Safari copies an OffscreenCanvas WebGL drawing without its transparency and
+  // at the wrong size (dark floors, squashed products on iPhone).
+  const canvas = document.createElement("canvas");
+  renderer = new WebGLRenderer({ canvas, antialias: true, alpha: true, premultipliedAlpha: false, preserveDrawingBuffer: true });
   renderer.setClearColor(0x000000, 0);
   renderer.outputColorSpace = SRGBColorSpace;
   renderer.toneMapping = ACESFilmicToneMapping;
@@ -382,6 +384,7 @@ export function render(kind, out, art, dark) {
   renderer.setSize(w, h, false);
   renderer.render(made.scene, cam);
   out.width = w; out.height = h;
-  out.getContext("2d").drawImage(renderer.domElement, 0, 0);
+  const o = out.getContext("2d"); o.clearRect(0, 0, w, h);
+  o.drawImage(renderer.domElement, 0, 0, w, h, 0, 0, w, h);
   made.scene.traverse((o) => { if (o.isMesh) { o.geometry.dispose(); for (const m of [].concat(o.material)) { m.map?.dispose(); m.alphaMap?.dispose(); m.dispose(); } } });
 }
