@@ -1019,8 +1019,9 @@ function buildAd(i) {
   a.innerHTML = '<div class="adpic"><span class="adtag"></span><span class="adicon" aria-hidden="true"></span><p class="adline"></p></div><div class="bar"><span class="btn adcta"></span></div>';
   let src = null;
   const draw = PRODUCTS[x.product];
-  try { src = draw && artSource(i); } catch (e) { report("mug-failed", e); }
-  a.artIdx = i; // which of the finished cut-outs it shows; rotates (see rotateAds)
+  const cuts = finishedCuts();
+  a.artIt = cuts.length ? cuts[i % cuts.length] : null; // the cut-out it shows (changes, see nextArt); a click saves this one
+  try { src = draw && a.artIt && artOf(a.artIt); } catch (e) { report("mug-failed", e); }
   if (src) { // the visitor's own cut-out on the product, drawn here (nothing is uploaded)
     const c = document.createElement("canvas"); c.className = "adart"; c.setAttribute("aria-hidden", "true");
     a.querySelector(".adicon").replaceWith(c);
@@ -1046,8 +1047,8 @@ function buildAd(i) {
   // then the partner opens.
   a.addEventListener("click", async (e) => {
     if (!a.art) return;
-    const done = finishedCuts(), it = done[a.artIdx % done.length];
-    if (!it) return;
+    const it = a.artIt;
+    if (!it?.mask) return;
     if (!PHONE) { try { save(outName(it), await png(it)); } catch (err) { report("ad-failed", err); } return; }
     e.preventDefault();
     try { await share([{ name: outName(it), blob: await png(it) }]); } catch (err) { report("ad-failed", err); }
@@ -1215,15 +1216,15 @@ function nextArt() {
   let a = null;
   for (let k = 0; k < adEls.length && !a; k++) { const c = adEls[(beatNext + k) % adEls.length]; if (c.onScreen && c.art) { a = c; beatNext = (beatNext + k + 1) % adEls.length; } }
   if (!a) return;
-  a.artIdx = (a.artIdx + 1) % done.length;
+  const next = done[(done.indexOf(a.artIt) + 1) % done.length]; // becomes the card's once it shows, so a click saves what is on screen
   const old = a.querySelector(".adart");
   if (!old) return;
-  let src; try { src = artOf(done[a.artIdx % done.length]); } catch { return; }
+  let src; try { src = artOf(next); } catch { return; }
   // Never two at once: the current one dips out (fades, shrinks a little), then the next one rises in.
   const c = document.createElement("canvas"); c.className = "adart fading"; c.setAttribute("aria-hidden", "true");
   old.after(c);
   Promise.resolve(a.art.draw(c, src)).then(() => { // drawn first, then swapped in
-    a.art.src = src;
+    a.art.src = src; a.artIt = next;
     old.classList.add("leaving");
     setTimeout(() => { old.remove(); requestAnimationFrame(() => c.classList.remove("fading")); }, 380);
   }, () => c.remove());
