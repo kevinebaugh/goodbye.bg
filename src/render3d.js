@@ -335,9 +335,12 @@ function pillow(art, dark) {
   for (let i = 0; i < pp.count; i++) { pp.setZ(i, pp.getZ(i) + 0.003); uv.setXY(i, (pp.getX(i) + pw / 2) / pw, (pp.getY(i) + ph / 2) / ph); }
   g.add(new Mesh(pgeo, inkMaterial(art, { roughness: 0.9, normalMap: weave, normalScale: new Vector2(0.3, 0.3) })));
   castAll(g);
-  g.rotation.set(-0.12, 0.62, 0.04); // turned, so its plumpness and pinched corners show
+  g.rotation.set(-0.1, 0.42, 0.03); // turned a little, so its plumpness and pinched corners show
   scene.add(g);
-  return { scene, target: new Vector3(0, 0, 0), halfW: S * 0.6, halfH: S * 0.58, dir: new Vector3(0.15, 0.3, 1) };
+  // Centred on what the camera sees (the turned pillow's box), not its pivot, so it sits in the middle of the card.
+  g.updateMatrixWorld(true);
+  const target = new Box3().setFromObject(g).getCenter(new Vector3());
+  return { scene, target, halfW: S * 0.58, halfH: S * 0.58, dir: new Vector3(0, 0.3, 1) };
 }
 
 // ---------- keychain: a die-cut clear acrylic charm on a steel ring ----------
