@@ -249,6 +249,17 @@ body.app:not(.has-work) main { flex: none; margin-top: auto; }
 @container (max-width: 130px) { .crop { display: none; } } /* the smallest cards (a dozen photos on a phone): Download keeps room for its icon */
 /* Phones with photos on screen: the grid gets the room; the privacy note is on the empty page and in the headline. */
 @media (max-width: 600px) { body.app.has-work .foot p:first-child { display: none; } }
+/* Short screens (a phone on its side): the wordmark moves beside the buttons, the privacy note goes (it is on the
+   empty page), and the spacing tightens, so the cards get the height. */
+@media (max-height: 520px) {
+  body.app.has-work .foot p:first-child { display: none; }
+  body.app.has-work .foot { padding: 6px 16px; }
+  body.app.has-work .grid { padding-top: 12px; }
+}
+@media (max-height: 520px) and (min-width: 640px) {
+  body.app.has-work .top { position: absolute; top: 0; left: 0; padding: 12px 24px; }
+  body.app.has-work main { padding-top: 10px; }
+}
 /* "Download all" spans the row under the cards, edge to edge with them. */
 .allrow { grid-column: 1 / -1; display: flex; }
 .allrow .btn { flex: 1; --fs: 16px; }
