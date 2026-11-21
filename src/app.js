@@ -792,7 +792,8 @@ async function retry(it) {
 const GAP = 12, MIN_PIC = 96, MAX_PIC = 640;
 function layout() {
   const g = $("grid"), n = g.querySelectorAll(".card").length, all = $("tools");
-  if (!n) { placeAds(0, 0); return; } // the last photo was removed: the ads go with it
+  if (!n) { placeAds(0, 0); return; }
+  try { if (adsOn()) load3d(); } catch {} // fetch the 3D code while the first photo is still being worked on, so ads draw at once // the last photo was removed: the ads go with it
   // The tallest bar, ads included: an ad's outlined button can make its bar a few px taller than a photo's.
   const bar = Math.max(0, ...[...g.querySelectorAll(".bar")].map((b) => b.offsetHeight)) || 52, W = g.clientWidth, H = g.clientHeight - (all.hidden ? 0 : all.offsetHeight + GAP); // "Download all" sits under the cards
   const fit = (k) => {
@@ -859,7 +860,7 @@ function buildAd(i) {
   const p = adPartner, x = adVariants[i % adVariants.length], a = document.createElement("a");
   const ci = x.ctas?.length ? Math.min(adCta, x.ctas.length - 1) : -1, cta = ci >= 0 ? x.ctas[ci] : x.cta;
   const q = `?v=${x.v}&l=${adLabel.toLowerCase()}${ci >= 0 ? `&c=${ci}` : ""}`;
-  a.className = "adcard"; a.href = `/go/${p.id}${q}`; a.target = "_blank"; a.rel = "sponsored noopener";
+  a.className = "adcard loading"; a.href = `/go/${p.id}${q}`; a.target = "_blank"; a.rel = "sponsored noopener";
   a.innerHTML = '<div class="adpic"><span class="adtag"></span><span class="adicon" aria-hidden="true"></span><p class="adline"></p></div><div class="bar"><span class="btn adcta"></span></div>';
   let src = null;
   const draw = PRODUCTS[x.product];
@@ -884,12 +885,18 @@ function buildAd(i) {
     a.tilt.t = performance.now(); tiltGo();
   });
   a.addEventListener("pointerleave", () => { a.tilt.t = 0; });
+  // The card stays invisible (its cell already reserved) until its product is drawn: no empty ad panels.
+  const show = () => {
+    if (!a.classList.contains("loading")) return;
+    a.classList.remove("loading");
+    if (!adSeen.has(x.v)) { adSeen.add(x.v); fetch(`/go/${p.id}${q}`, { method: "POST", keepalive: true }).catch(() => {}); }
+  };
+  const fallback = (e) => { report("mug-failed", e); const ic = document.createElement("span"); ic.className = "adicon"; ic.textContent = p.emoji; a.querySelector(".adart")?.replaceWith(ic); a.classList.remove("artcard"); };
   if (src) {
     a.art = { draw, src };
-    try { draw(a.querySelector(".adart"), src); }
-    catch (e) { report("mug-failed", e); const ic = document.createElement("span"); ic.className = "adicon"; ic.textContent = p.emoji; a.querySelector(".adart").replaceWith(ic); }
-  }
-  if (!adSeen.has(x.v)) { adSeen.add(x.v); fetch(`/go/${p.id}${q}`, { method: "POST", keepalive: true }).catch(() => {}); }
+    try { Promise.resolve(draw(a.querySelector(".adart"), src)).catch(fallback).finally(show); }
+    catch (e) { fallback(e); show(); }
+  } else show();
   return a;
 }
 

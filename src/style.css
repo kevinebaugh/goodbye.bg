@@ -112,6 +112,7 @@ body.has-work .hero h1, body.has-work .sub { display: none; }
    panel and an "Ad" label, so it never passes for one of your photos. */
 .adcard { display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--line); border-radius: 18px; overflow: hidden;
   text-decoration: none; color: inherit; container-type: inline-size; animation: fade .4s ease-out; }
+.adcard.loading { visibility: hidden; animation: none; } /* until its product is drawn (app.js) */
 .adpic { position: relative; height: var(--p, 300px); display: grid; place-content: center; justify-items: center; gap: 10px; padding: 16px; text-align: center;
   background: color-mix(in srgb, var(--accent) 12%, var(--card)); }
 .adicon { font-size: clamp(28px, calc(var(--p, 300px) * 0.18), 56px); line-height: 1; }
