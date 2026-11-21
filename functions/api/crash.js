@@ -4,7 +4,7 @@
 // data point next to the ratings: which step it died in, the engine, the device kind, how many photos the
 // tab had finished and the photo's megapixels. Never the photo, never an IP address, no cookies.
 
-const STEPS = new Set(["load", "model", "retry", "png", "start-failed", "run-failed"]);
+const STEPS = new Set(["load", "model", "retry", "png", "start-failed", "run-failed", "ad-failed", "mug-failed"]);
 const DEVICES = new Set(["ios", "android", "desktop"]);
 
 export async function onRequestPost({ request, env }) {

@@ -134,6 +134,10 @@ Zazzle variant "mug" (the A): the visitor's first finished cut-out drawn on a mu
 receive the image. Variant "b": "Put your cut-out on anything." Both go to zazzle.com/custom. `?adv=<v>` forces a
 variant, `?adtest=1` shows partners without links.
 
+Ad blockers hide the card (class names like `adcard`) and block `/go/` beacons; that is the visitor's choice, so we
+don't work around it. A failing card is reported as crash step 'ad-failed' or 'mug-failed' (the mug falls back to the
+emoji) instead of disappearing silently.
+
 Reading the ad A/B test (blob5 = variant): `SELECT blob1 AS kind, blob2 AS partner, blob5 AS variant, count() AS n
 FROM goodbye_bg_ratings WHERE blob1 IN ('adseen','adclick') GROUP BY kind, partner, variant` (clicks / shows per variant;
 expect a few hundred clicks per variant before trusting a difference). Label test, independent of the variant:

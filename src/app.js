@@ -852,11 +852,16 @@ function placeAd(n, cols, scroll) {
   const free = n >= 2 && !scroll ? Math.ceil(n / cols) * cols - n : 0;
   if (!adPartner || !adVariant || busy || free < 1) { adEl?.remove(); adEl = null; return; }
   if (adEl) return;
-  const p = adPartner, x = adVariant, a = adEl = document.createElement("a");
+  try { adEl = buildAd(); }
+  catch (e) { console.warn("Ad card failed", e); report("ad-failed", e); adPartner = null; } // no ad this visit rather than a broken one
+}
+function buildAd() {
+  const p = adPartner, x = adVariant, a = document.createElement("a");
   const q = `?v=${x.v}&l=${adLabel.toLowerCase()}`;
   a.className = "adcard"; a.href = `/go/${p.id}${q}`; a.target = "_blank"; a.rel = "sponsored noopener";
   a.innerHTML = '<div class="adpic"><span class="adtag"></span><span class="adicon" aria-hidden="true"></span><p class="adline"></p></div><div class="bar"><span class="btn primary adcta"></span></div>';
-  const src = x.mug && mugSource();
+  let src = null;
+  try { src = x.mug && mugSource(); } catch (e) { report("mug-failed", e); }
   if (src) { // the visitor's own cut-out on a mug, drawn here (nothing is uploaded)
     const c = document.createElement("canvas"); c.className = "admug"; c.setAttribute("aria-hidden", "true");
     a.querySelector(".adicon").replaceWith(c);
@@ -866,8 +871,12 @@ function placeAd(n, cols, scroll) {
   a.querySelector(".adtag").textContent = adLabel;
   a.setAttribute("aria-label", `${adLabel}: ${x.line} ${x.cta}`);
   $("grid").insertBefore(a, $("tools"));
-  if (src) drawMug(a.querySelector(".admug"), src);
+  if (src) {
+    try { drawMug(a.querySelector(".admug"), src); }
+    catch (e) { report("mug-failed", e); const i = document.createElement("span"); i.className = "adicon"; i.textContent = p.emoji; a.querySelector(".admug").replaceWith(i); }
+  }
   if (!adSeen.has(p.id)) { adSeen.add(p.id); fetch(`/go/${p.id}${q}`, { method: "POST", keepalive: true }).catch(() => {}); }
+  return a;
 }
 
 // The art for the mug: the first finished card on screen, cropped tight to the subject whatever the card
