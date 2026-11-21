@@ -990,7 +990,8 @@ function buildAd(i) {
     if (!PHONE) { try { save(outName(it), await png(it)); } catch (err) { report("ad-failed", err); } return; }
     e.preventDefault();
     try { await share([{ name: outName(it), blob: await png(it) }]); } catch (err) { report("ad-failed", err); }
-    if (!window.open(a.href, "_blank", "noopener")) location.href = a.href;
+    const w = window.open(a.href, "_blank"); // not "noopener": that always returns null
+    if (w) w.opener = null; else location.href = a.href; // pop-up blocked: go in this tab
   });
   // The card stays invisible (its cell already reserved) until its product is drawn: no empty ad panels.
   const show = () => {
