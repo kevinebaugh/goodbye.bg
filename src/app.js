@@ -762,7 +762,7 @@ function makeCard(it) {
   dl.setAttribute("aria-label", "Download");
   dl.innerHTML = '<span>Download</span><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>';
   const up = document.createElement("button"), down = document.createElement("button");
-  for (const [b, label, emoji] of [[up, "Good result", "👍"], [down, "Bad result, try again", "👎"]]) {
+  for (const [b, label, emoji] of [[up, "Good result", "👍"], [down, "Bad result", "👎"]]) {
     b.type = "button"; b.className = "ico rate"; b.textContent = emoji; b.style.visibility = "hidden";
     b.setAttribute("aria-label", label); b.title = label;
   }
@@ -843,7 +843,7 @@ async function run() {
       if (!items.includes(it)) continue;
       clearInterval(it.quip);
       it.el.busy.hidden = true; it.el.dl.disabled = false; for (const b of [it.anim ? null : it.el.crop, it.el.up, it.el.down]) if (b) b.style.visibility = ""; it.ms = lastMs;
-      dbg("shown");
+      downLabel(it); dbg("shown");
       dbg("reveal"); reveal(it); sync(); tick(); milestone(it);
       it.el.card.dataset.ms = lastMs;
     }
@@ -923,13 +923,24 @@ function mergeRetry(first, m, rect) {
   return out;
 }
 
-async function retry(it) {
+// Where a retry zooms in: the subject with generous room. null when that is most of the photo anyway (then 👎 is a vote only).
+function zoomRect(it) {
   const s = subject(it);
-  if (!s) return;
-  // Zoom to the subject with generous room; skip if that is most of the photo anyway.
+  if (!s || it.anim) return null;
   const padX = 0.15 * (s.x1 - s.x0), padY = 0.15 * (s.y1 - s.y0);
   const x0 = Math.max(0, s.x0 - padX), y0 = Math.max(0, s.y0 - padY), x1 = Math.min(1, s.x1 + padX), y1 = Math.min(1, s.y1 + padY);
-  if ((x1 - x0) * (y1 - y0) > 0.8) return;
+  return (x1 - x0) * (y1 - y0) > 0.8 ? null : { x0, y0, x1, y1 };
+}
+// The 👎 label says what it will do.
+function downLabel(it) {
+  const t = !it.retried && zoomRect(it) ? "Bad result, try again" : "Bad result";
+  it.el.down.setAttribute("aria-label", t); it.el.down.title = t;
+}
+
+async function retry(it) {
+  const z = zoomRect(it);
+  if (!z) return;
+  const { x0, y0, x1, y1 } = z;
   it.retried = true;
   it.first = { mask: it.mask, rect: it.maskRect };
   retrying++; working("retry", it);
@@ -958,6 +969,7 @@ async function retry(it) {
   preparePngs();
   // A new result gets its own vote; if the retry found nothing better, the 👎 stands.
   if (changed) for (const b of [up, down]) { b.disabled = false; b.classList.remove("chosen"); b.style.visibility = ""; }
+  downLabel(it);
 }
 
 // Everything fits on one screen: cards are square and sized so they all fit the space left.
