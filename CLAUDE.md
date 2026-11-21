@@ -88,7 +88,7 @@ Requirement from Kevin: 10 to 30 seconds per photo is unacceptable. Target a few
 
 ## UX decisions (2026-11-20, from Kevin)
 
-- One screen, no scrolling, no zoom or pan gestures. Cards are square and sized to fit; a batch appears at
+- One screen, no scrolling. No double-tap zoom; pinch-zoom is allowed for accessibility (Kevin, 2026-11-20). Cards are square and sized to fit; a batch appears at
   once, in the order picked, and processing goes top-left first.
 - Only the photo being worked on waves and shows a quip; waiting cards stay still. Quips are the one place
   for playful text; everything else is plain and only what people need.
@@ -96,8 +96,8 @@ Requirement from Kevin: 10 to 30 seconds per photo is unacceptable. Target a few
   on the subject, a second 👎 restores the first result.
 - Nothing ever overlaps the image. Every card control (crop, Download, 👍 👎, remove) lives in the bar below it.
 - A finished cut-out is an `<img>`, so long-press on iPhone offers Save to Photos (a press swaps in the
-  full-size PNG). Safari ignores `user-scalable=no` and `touch-action`, so app.js swallows double taps
-  and pinch gestures to stop zoom.
+  full-size PNG). Safari ignores `touch-action` for double taps, so app.js swallows a second
+  tap within 350 ms.
 - Hover effects only on devices with a real pointer (phones keep :hover after a tap).
 - Palette: the cool side of Giant Goldfish only (aqua, deep teal, sage). No orange; red only for errors.
 - Every claim on the site must stay true, including once ads run.

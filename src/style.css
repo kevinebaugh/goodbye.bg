@@ -30,8 +30,8 @@
   }
 }
 * { box-sizing: border-box; }
-/* The page never zooms or pans sideways; only vertical scrolling. */
-html { touch-action: pan-y; -webkit-text-size-adjust: 100%; overflow-x: hidden; }
+/* No double-tap zoom; pinch-zoom and scrolling work. */
+html { touch-action: manipulation; -webkit-text-size-adjust: 100%; overflow-x: hidden; }
 body { overflow-x: hidden; }
 /* Phones: square previews keep the Download button in view. */
 @media (max-width: 600px) { .pic { aspect-ratio: 1; } }
@@ -166,17 +166,16 @@ body:not(.has-work) .foot { margin: 56px auto auto; padding-bottom: max(24px, 8v
 .page tbody th { font-weight: 600; color: var(--muted); }
 .page td:nth-child(2) { font-weight: 600; }
 
-/* The app is one screen: no page scrolling and no touch gestures (no zoom, no pan). Taps still work.
+/* The app is one screen: no page scrolling. Pinch-zoom works (accessibility); double-tap zoom does not.
    The text pages (remove.bg alternative, how-to) scroll normally. */
 html:has(body.app) { height: 100%; overflow: hidden; }
 body.app { height: 100dvh; min-height: 0; overflow: hidden; }
-body.app, body.app * { touch-action: none; }
+body.app, body.app * { touch-action: manipulation; } /* pinch-zoom and pan once zoomed; no double-tap zoom */
 body.app main { flex: 1; min-height: 0; display: flex; flex-direction: column; padding-bottom: 8px; }
 body.app.has-work .grid { flex: 1; min-height: 0; grid-template-columns: repeat(var(--cols, 1), var(--p, 300px));
   grid-auto-rows: max-content; justify-content: center; align-content: start; gap: 12px; padding-top: 12px; }
 body.app .grid .pic { aspect-ratio: auto; height: var(--p, 300px); }
 body.app .grid.scroll { overflow-y: auto; align-content: start; }
-body.app .grid.scroll, body.app .grid.scroll * { touch-action: pan-y; }
 body.app.has-work .foot { padding: 8px 16px 10px; }
 /* Empty page: hero and footer stay together near the middle (main must not stretch here). */
 body.app:not(.has-work) main { flex: none; margin-top: auto; }

@@ -851,8 +851,9 @@ $("all").addEventListener("click", async () => {
   save(`goodbye-bg-${done.length}-images.zip`, new Blob([zipSync(files)], { type: "application/zip" }));
 });
 
-// Never zoom. Safari ignores user-scalable=no and touch-action on the page, so stop its pinch gestures
-// and its double-tap zoom here. A second tap within 350 ms is swallowed, except a press that is held.
+// No double-tap zoom: it fired on quick taps and threw the layout off. Pinch-zoom stays (people with low
+// vision rely on it). Safari ignores touch-action for double taps, so a second tap within 350 ms is
+// swallowed here; a press that is held is not.
 let lastTap = 0;
 document.addEventListener("touchend", (e) => {
   const now = e.timeStamp;
@@ -860,8 +861,6 @@ document.addEventListener("touchend", (e) => {
   lastTap = now;
 }, { passive: false });
 document.addEventListener("dblclick", (e) => e.preventDefault(), { passive: false });
-for (const t of ["gesturestart", "gesturechange"]) document.addEventListener(t, (e) => e.preventDefault(), { passive: false });
-document.addEventListener("touchmove", (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
 
 /* ---------- ways in ---------- */
 
