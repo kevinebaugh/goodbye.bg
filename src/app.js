@@ -328,7 +328,49 @@ async function segment(bitmap) {
   const mask = new OffscreenCanvas(RES, RES);
   mask.getContext("2d").putImageData(id, 0, 0);
   mask.box = box;
+  try { mask.fix = edgeColors(px, id.data); dbg("edges"); } catch (e) { console.warn("Edge colors skipped", e); }
   return mask;
+}
+
+// Hair and other see-through edges keep some of the old background's color (sky shows through as a pale fringe).
+// Estimate the subject's own color there (blur-fusion foreground estimation, Forte & Pitie 2021) at the mask's
+// 1024 px, and return it as a layer drawn over the photo before the mask cuts it out: fully opaque pixels keep the
+// photo's own detail, the more see-through a pixel, the more its color comes from the estimate. About 4 MB a photo.
+function edgeColors(px, md) {
+  const n = RES * RES, a = new Float32Array(n);
+  for (let i = 0; i < n; i++) a[i] = md[i * 4 + 3] / 255;
+  const blur = (src, r, out) => { // box blur, separable running sums, edges clamped
+    const t = new Float32Array(n), k = 1 / (2 * r + 1);
+    for (let y = 0; y < RES; y++) {
+      const o = y * RES; let s = src[o] * (r + 1);
+      for (let x = 1; x <= r; x++) s += src[o + Math.min(x, RES - 1)];
+      for (let x = 0; x < RES; x++) { t[o + x] = s * k; s += src[o + Math.min(x + r + 1, RES - 1)] - src[o + Math.max(x - r, 0)]; }
+    }
+    for (let x = 0; x < RES; x++) {
+      let s = t[x] * (r + 1);
+      for (let y = 1; y <= r; y++) s += t[Math.min(y, RES - 1) * RES + x];
+      for (let y = 0; y < RES; y++) { out[y * RES + x] = s * k; s += t[Math.min(y + r + 1, RES - 1) * RES + x] - t[Math.max(y - r, 0) * RES + x]; }
+    }
+    return out;
+  };
+  const fix = new ImageData(RES, RES), fd = fix.data, ba1 = blur(a, 24, new Float32Array(n)), ba2 = blur(a, 3, new Float32Array(n));
+  const I = new Float32Array(n), F = new Float32Array(n), B = new Float32Array(n), u = new Float32Array(n), v = new Float32Array(n);
+  for (let c = 0; c < 3; c++) {
+    for (let i = 0; i < n; i++) I[i] = F[i] = B[i] = px[i * 4 + c] / 255;
+    for (const [r, ba] of [[24, ba1], [3, ba2]]) {
+      for (let i = 0; i < n; i++) { u[i] = F[i] * a[i]; v[i] = B[i] * (1 - a[i]); }
+      blur(u, r, u); blur(v, r, v);
+      for (let i = 0; i < n; i++) {
+        const fb = u[i] / (ba[i] + 1e-5), bb = v[i] / (1 - ba[i] + 1e-5), al = a[i];
+        F[i] = Math.min(1, Math.max(0, fb + al * (I[i] - al * fb - (1 - al) * bb))); B[i] = bb;
+      }
+    }
+    for (let i = 0; i < n; i++) fd[i * 4 + c] = F[i] * 255;
+  }
+  for (let i = 0; i < n; i++) fd[i * 4 + 3] = a[i] > 0 && a[i] < 1 ? Math.min(255, ((1 - a[i]) / 0.35) * 255) : 0; // see-through: estimate
+  const c = new OffscreenCanvas(RES, RES);
+  c.getContext("2d").putImageData(fix, 0, 0);
+  return c;
 }
 
 // The subject's bounding box (mostly opaque pixels), as fractions of the image. null if nothing is left.
@@ -396,8 +438,9 @@ function render(it, W, H, bmp = it.bmp) {
   const c = new OffscreenCanvas(W, H), x = c.getContext("2d");
   x.imageSmoothingQuality = "high";
   x.drawImage(bmp, 0, 0, W, H);
-  x.globalCompositeOperation = "destination-in"; // keep the photo only where the mask is opaque
   const r = it.maskRect || FULL; // a retry's mask covers only the zoomed-in part; the rest goes clear
+  if (it.mask.fix) x.drawImage(it.mask.fix, r.x * W, r.y * H, r.w * W, r.h * H); // the subject's own color at see-through edges
+  x.globalCompositeOperation = "destination-in"; // keep the photo only where the mask is opaque
   x.drawImage(it.mask, r.x * W, r.y * H, r.w * W, r.h * H);
   return c;
 }
@@ -505,8 +548,9 @@ async function fullBlob(it) {
     const big = await fullBitmap(it);
     try { x.imageSmoothingQuality = "high"; x.drawImage(big, -f.x, -f.y, it.w, it.h); }
     finally { big.close(); }
-    x.globalCompositeOperation = "destination-in"; // keep the photo only where the mask is opaque
     const r = it.maskRect || FULL;
+    if (it.mask.fix) x.drawImage(it.mask.fix, r.x * it.w - f.x, r.y * it.h - f.y, r.w * it.w, r.h * it.h); // see-through edges
+    x.globalCompositeOperation = "destination-in"; // keep the photo only where the mask is opaque
     x.drawImage(it.mask, r.x * it.w - f.x, r.y * it.h - f.y, r.w * it.w, r.h * it.h);
     return await out.convertToBlob({ type: "image/png" });
   } finally { pngBusy--; rested(); }
