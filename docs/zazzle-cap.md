@@ -141,7 +141,7 @@ Exact-duration claims ("for an hour") must match `TTL_MS`. Until objects are del
 2. Accept the CAP API terms: https://www.zazzle.com/my/associate/create_a_product_api_signup
 3. Declare image domains at https://www.zazzle.com/my/associate/domains:
    - `goodbye-bg-git.pages.dev`
-   - `kevin-claude-zazzle-context-bf01ce.goodbye-bg-git.pages.dev` (this branch's preview)
+   - `kevin-claude-zazzle-context.goodbye-bg-git.pages.dev` (this branch's preview)
    - `goodbye.bg`, once it registers
 4. Make one template per product: mug, sticker, shirt, tote, ornament, phonecase, pillow, keychain. Start with the mug.
    1. Zazzle → Create → pick the product.
@@ -179,4 +179,5 @@ for the R2 bucket. Tested locally on 2026-11-21:
 - `/cap/<k>.png` returns the same bytes, with the headers above.
 - `/go` waits for the upload and redirects to the CAP link. With a missing key it falls back after 10 s.
 - In the browser: "Send to Zazzle" uploaded 134 KB in about 1 s, and the bar came back afterwards.
+- Preview deploy (no bucket yet): page 200, PUT 503 "Not set up", /go redirects at once to the usual link.
 - Without `?zazzlecap=1`: no bar and no upload, the same as main.
