@@ -202,7 +202,7 @@ body.app { height: 100dvh; min-height: 0; overflow: hidden; }
 body.app, body.app * { touch-action: manipulation; } /* pinch-zoom and pan once zoomed; no double-tap zoom */
 body.app main { flex: 1; min-height: 0; display: flex; flex-direction: column; padding-bottom: 8px; }
 body.app.has-work .grid { flex: 1; min-height: 0; grid-template-columns: repeat(var(--cols, 1), var(--p, 300px));
-  grid-auto-rows: max-content; justify-content: center; align-content: start; gap: 12px; padding-top: 12px; }
+  grid-auto-rows: max-content; justify-content: center; align-content: start; gap: 12px; padding-top: 22px; } /* room under Choose photos / Paste */
 body.app .grid .pic { aspect-ratio: auto; height: var(--p, 300px); }
 body.app .grid.scroll { overflow-y: auto; align-content: start; }
 body.app.has-work .foot { padding: 20px 16px 12px; transition: transform .25s ease; } /* moved up under the cards by app.js */
