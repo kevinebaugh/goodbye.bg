@@ -66,7 +66,15 @@ const params = new URLSearchParams(location.search);
 // Step names and numbers only, never photo data. Off for everyone else.
 const DEBUG = params.has("debug"), dbgId = Math.random().toString(36).slice(2, 7);
 let dbgN = 0;
+// Every page keeps its last 20 steps (names and numbers only, never photo data). They leave the device only
+// inside a crash or error report (see working() and report()); with ?debug=1 each step is also sent live.
+const trail = [];
+let note = null; // the "working on a photo" note while one is open
 function dbg(step, data = {}) {
+  const extra = Object.keys(data).length ? " " + JSON.stringify(data).slice(0, 140) : "";
+  trail.push(`${Math.round(performance.now())} ${step}${extra}`);
+  if (trail.length > 20) trail.shift();
+  if (note) saveNote();
   if (!DEBUG) return;
   const body = JSON.stringify({ id: dbgId, n: ++dbgN, t: Math.round(performance.now()), step, ...data });
   navigator.sendBeacon?.("/api/diag", body) || fetch("/api/diag", { method: "POST", body, keepalive: true }).catch(() => {});
@@ -157,9 +165,18 @@ function ownCount(n) {
   if (countShown >= 0 && n > countShown) renderCount(countShown + 1);
   showCount(n);
 }
+// The first call after the page loads also counts the visit: just that it happened, and the site the visitor
+// came from (hostname only). The server adds device kind and country; nothing identifies the person.
+let viewSent = false;
 async function pollCount() {
   if (document.visibilityState !== "visible") return;
-  try { const r = await (await fetch("/api/count")).json(); showCount(r.n, r.perMin); } catch {}
+  let q = "";
+  if (!viewSent) {
+    viewSent = true;
+    let from = ""; try { from = document.referrer ? new URL(document.referrer).hostname : ""; } catch {}
+    q = `?view=1&from=${encodeURIComponent(from === location.hostname ? "" : from)}`;
+  }
+  try { const r = await (await fetch("/api/count" + q)).json(); showCount(r.n, r.perMin); } catch {}
 }
 pollCount(); setInterval(pollCount, REFRESH);
 $("count").addEventListener("click", (e) => { tick(); confetti(e.currentTarget); });
@@ -177,19 +194,20 @@ function tick() {
   else if (navigator.userActivation?.hasBeenActive && matchMedia("(pointer: coarse)").matches) navigator.vibrate?.(8);
 }
 function working(step, it) {
-  const note = { step, engine: engineName || "cpu", dev: DEVICE, done: finished, mp: it ? +((it.w * it.h) / 1e6).toFixed(1) : 0 };
-  try { localStorage.setItem(CRASH_KEY, JSON.stringify(note)); } catch {}
+  note = { step, engine: engineName || "cpu", dev: DEVICE, done: finished, mp: it ? +((it.w * it.h) / 1e6).toFixed(1) : 0 };
+  saveNote();
 }
+function saveNote() { try { localStorage.setItem(CRASH_KEY, JSON.stringify({ ...note, trail: trail.join("\n") })); } catch {} }
 // Errors the page survives but the person sees (the engine would not start, or a photo failed): sent at once.
 function report(step, e, it) {
   const note = { step, engine: engineName || "cpu", dev: DEVICE, done: finished, mp: it ? +((it.w * it.h) / 1e6).toFixed(1) : 0,
-    error: String(e?.message || e).slice(0, 160) };
+    error: String(e?.message || e).slice(0, 160), trail: trail.join("\n") };
   fetch("/api/crash", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(note), keepalive: true }).catch(() => {});
 }
 // Cleared only once nothing is working: no batch, no 👎 retry, no PNG being built.
 let retrying = 0, pngBusy = 0;
-function rested() { if (running || retrying || pngBusy) return; try { localStorage.removeItem(CRASH_KEY); } catch {} }
-addEventListener("pagehide", () => { try { localStorage.removeItem(CRASH_KEY); } catch {} }); // a normal close or reload
+function rested() { if (running || retrying || pngBusy) return; note = null; try { localStorage.removeItem(CRASH_KEY); } catch {} }
+addEventListener("pagehide", () => { note = null; try { localStorage.removeItem(CRASH_KEY); } catch {} }); // a normal close or reload
 (() => {
   let note = null;
   try { note = localStorage.getItem(CRASH_KEY); localStorage.removeItem(CRASH_KEY); } catch {}

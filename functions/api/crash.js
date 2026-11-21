@@ -19,7 +19,9 @@ export async function onRequestPost({ request, env }) {
   const mp = Math.max(0, Math.min(1000, Number(b?.mp) || 0));
   // For start-failed and run-failed: the engine's error message, shortened. No photo data is in it.
   const error = String(b?.error || "").replace(/https?:\/\/\S+/g, "<url>").slice(0, 160);
-  const point = { blobs: ["crash", engine, step, dev, error], doubles: [done, mp], indexes: ["crash"] };
+  // The page's last steps before it died or failed: step names, timings and sizes. No photo data.
+  const trail = String(b?.trail || "").replace(/https?:\/\/\S+/g, "<url>").slice(-2000);
+  const point = { blobs: ["crash", engine, step, dev, error, trail], doubles: [done, mp], indexes: ["crash"] };
   if (env.RATINGS) env.RATINGS.writeDataPoint(point);
   else console.log("crash (no RATINGS binding):", JSON.stringify(point));
   return new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } });

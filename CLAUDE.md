@@ -27,7 +27,8 @@ Actions. The old upload-only project `goodbye-bg` can be deleted.
 ## Rules
 
 - Content-Security-Policy on the app page allows network only to its own origin. Keep it that way.
-- No analytics, no cookies, no third-party scripts or fonts on the app page.
+- No cookies, no third-party scripts or fonts on the app page. Only anonymous counts the page sends to its own
+  server (votes, crashes, cut-outs, page views): no IP addresses, no identifiers.
 - Dark/light follows the system. No toggle.
 - Copy: plain, short, active voice.
 
@@ -115,6 +116,14 @@ ticks one by one at uneven moments. A visitor's own cut-out counts at once. Its 
 the cards. Shown from the first cut-out (Kevin, 2026-11-20); tapping it throws confetti. Kevin: tests count toward the total, never reset it.
 Haptics: a light tick on result, crop, 👍/👎 and Download (Android vibrate; iOS 18+ hidden switch control).
 iPhones shut the engine down once idle (its ~1.8 GB never shrinks; 7 to 8 photos in one tab crashed Safari).
+
+Crash reports carry the page's last 20 steps (blob6; the same step names as `?debug=1`, kept in memory and in the
+localStorage note, never sent unless something fails). Page views: the page's first GET `/api/count?view=1&from=<host>`
+writes blob1 'view', blob2 device, blob3 referring host, blob4 country (no IP, no cookies). A Pages Function on `/`
+was avoided: `_headers` (COEP/COOP, which give iPhones their threads) would not apply to its responses.
+
+Reading views: `SELECT toDate(timestamp) AS day, blob2 AS device, blob3 AS from_site, count() AS views
+FROM goodbye_bg_ratings WHERE blob1 = 'view' GROUP BY day, device, from_site ORDER BY day DESC`
 
 Reading crashes: `SELECT blob2 AS engine, blob3 AS step, blob4 AS device, count() AS n, avg(double1) AS done,
 avg(double2) AS mp FROM goodbye_bg_ratings WHERE blob1 = 'crash' GROUP BY engine, step, device`

@@ -6,7 +6,19 @@
 const WINDOW = 10 * 60 * 1000; // move the pace snapshot forward every 10 minutes
 const json = (o) => new Response(JSON.stringify(o), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
 
-export async function onRequestGet({ env }) {
+// GET ?view=1 (the page's first call after it loads) also counts a page view in the ratings dataset: the
+// device kind, the site the visitor came from (hostname only) and the country. No IP address, no cookies.
+function countView(request, env) {
+  const url = new URL(request.url);
+  if (url.searchParams.get("view") !== "1" || !env.RATINGS) return;
+  const ua = request.headers.get("User-Agent") || "";
+  const dev = /iPhone|iPad|iPod/.test(ua) ? "ios" : /Android/.test(ua) ? "android" : /Macintosh|Windows|Linux|CrOS/.test(ua) ? "desktop" : "other";
+  const from = (url.searchParams.get("from") || "").toLowerCase().replace(/^www\./, "").replace(/[^a-z0-9.-]/g, "").slice(0, 80);
+  env.RATINGS.writeDataPoint({ blobs: ["view", dev, from, request.cf?.country || ""], doubles: [1], indexes: ["view"] });
+}
+
+export async function onRequestGet({ request, env }) {
+  try { countView(request, env); } catch {}
   if (!env.COUNTER) return json({ n: 0, perMin: 0 });
   const row = await env.COUNTER.prepare("SELECT n, n_prev, t_prev FROM counter WHERE id = 1").first();
   const n = row?.n || 0, mins = row?.t_prev ? (Date.now() - row.t_prev) / 60000 : 0;
