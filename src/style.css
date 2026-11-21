@@ -128,8 +128,10 @@ body.has-work .hero h1, body.has-work .sub { display: none; }
 .adtag { position: absolute; top: 8px; left: 0; right: 0; text-align: center; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 @container (max-width: 150px) { .adtag { font-size: 8px; top: 6px; } }
 .adcard .bar { justify-content: center; }
-.adcard .adcta { flex: none; max-width: 100%; min-width: 0; text-align: center; padding-inline: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } /* sized to its words, never wider than the card */
-@media (hover: hover) { .adcard:hover .adcta { filter: brightness(1.05); } }
+/* Quiet: outlined, not filled, so the photos' Download stays the one loud button. The whole card is the link. */
+.adcard .adcta { flex: none; max-width: 100%; min-width: 0; text-align: center; padding-inline: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background: transparent; border: 1.5px solid color-mix(in srgb, var(--accent) 55%, transparent); color: var(--ink); font-weight: 600; }
+@media (hover: hover) { .adcard:hover .adcta { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); } }
 @container (max-width: 240px) { .adline { font-size: 12px; } .adcard .adcta { font-size: 13px; padding: 7px 14px; } .adpic { gap: 6px; padding: 8px; } }
 @container (max-width: 150px) { .adcard .adcta { font-size: 12px; padding: 6px 10px; } }
 
