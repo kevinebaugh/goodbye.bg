@@ -843,7 +843,7 @@ fetch("/partners.json").then((r) => r.json()).then((list) => {
   adPartner = ok.length ? ok[Math.floor(Math.random() * ok.length)] : null;
   // A/B: one of the partner's live variants, at random, for this visit.
   const vs = adPartner?.variants.filter((x) => x.live || params.has("adtest")) || [];
-  adVariant = vs.length ? vs[Math.floor(Math.random() * vs.length)] : null;
+  adVariant = vs.find((x) => x.v === params.get("adv")) || (vs.length ? vs[Math.floor(Math.random() * vs.length)] : null); // ?adv=<v> to check one
   requestAnimationFrame(layout);
 }).catch(() => {});
 
@@ -856,13 +856,73 @@ function placeAd(n, cols, scroll) {
   const q = `?v=${x.v}&l=${adLabel.toLowerCase()}`;
   a.className = "adcard"; a.href = `/go/${p.id}${q}`; a.target = "_blank"; a.rel = "sponsored noopener";
   a.innerHTML = '<div class="adpic"><span class="adtag"></span><span class="adicon" aria-hidden="true"></span><p class="adline"></p></div><div class="bar"><span class="btn primary adcta"></span></div>';
-  a.querySelector(".adicon").textContent = p.emoji;
+  const src = x.mug && mugSource();
+  if (src) { // the visitor's own cut-out on a mug, drawn here (nothing is uploaded)
+    const c = document.createElement("canvas"); c.className = "admug"; c.setAttribute("aria-hidden", "true");
+    a.querySelector(".adicon").replaceWith(c);
+  } else a.querySelector(".adicon").textContent = p.emoji;
   a.querySelector(".adline").textContent = x.line;
   a.querySelector(".adcta").textContent = x.cta;
   a.querySelector(".adtag").textContent = adLabel;
   a.setAttribute("aria-label", `${adLabel}: ${x.line} ${x.cta}`);
   $("grid").insertBefore(a, $("tools"));
+  if (src) drawMug(a.querySelector(".admug"), src);
   if (!adSeen.has(p.id)) { adSeen.add(p.id); fetch(`/go/${p.id}${q}`, { method: "POST", keepalive: true }).catch(() => {}); }
+}
+
+// The cut-out for the mug: the first finished card on screen, as shown (cropped or not).
+function mugSource() {
+  for (const card of $("grid").children) {
+    const it = items.find((i) => i.el.card === card);
+    if (!it?.mask) continue;
+    const { img, canvas, pic } = it.el;
+    if (pic.classList.contains("still") && img.complete && img.naturalWidth) return img;
+    if (canvas.width > 1) return canvas;
+  }
+  return null;
+}
+
+// A white mug seen slightly from above, handle on the right, with the cut-out wrapped around its curve:
+// each column of the picture lands where it would on a cylinder (narrower toward the edges), then shading.
+function drawMug(c, src) {
+  const k = Math.min(2, devicePixelRatio || 1), W = c.clientWidth || 200, H = c.clientHeight || 150;
+  c.width = Math.round(W * k); c.height = Math.round(H * k);
+  const x = c.getContext("2d"); x.scale(k, k);
+  const mh = H * 0.9, mw = Math.min(W * 0.6, mh * 0.8), R = mw / 2, ry = mw * 0.12;
+  const cx = W / 2 - mw * 0.1, top = (H - mh) / 2, rimY = top + ry, bot = top + mh - ry;
+  // Soft shadow to set it down on the panel (light mode especially)
+  x.fillStyle = "rgba(0,0,0,.16)"; x.filter = "blur(4px)";
+  x.beginPath(); x.ellipse(cx + R * 0.1, bot + ry * 0.55, R * 1.08, ry * 0.7, 0, 0, Math.PI * 2); x.fill();
+  x.filter = "none";
+  // Handle
+  x.lineWidth = mw * 0.12; x.strokeStyle = "#d5dcda"; x.lineCap = "round";
+  x.beginPath(); x.ellipse(cx + R, top + mh * 0.47, mw * 0.2, mh * 0.21, 0, -Math.PI / 2.4, Math.PI / 2.4); x.stroke();
+  // Body
+  const body = new Path2D();
+  body.moveTo(cx - R, rimY); body.lineTo(cx - R, bot); body.ellipse(cx, bot, R, ry, 0, Math.PI, 0, true); body.lineTo(cx + R, rimY); body.closePath();
+  const g = x.createLinearGradient(cx - R, 0, cx + R, 0);
+  g.addColorStop(0, "#c3ccca"); g.addColorStop(0.28, "#ffffff"); g.addColorStop(0.6, "#f2f5f4"); g.addColorStop(1, "#aeb9b7");
+  x.fillStyle = g; x.fill(body);
+  // Print: fits the visible front of the cylinder, wrapped column by column
+  const sw = src.naturalWidth || src.width, sh = src.naturalHeight || src.height;
+  const maxArc = 2 * Math.asin(0.82) * R, maxH = (bot - rimY) * 0.72;
+  const s = Math.min(maxArc / sw, maxH / sh), arc = sw * s, ph = sh * s, phi = arc / R;
+  const half = R * Math.sin(phi / 2), py = rimY + ry * 0.6 + (bot - rimY - ry * 0.6 - ph) / 2;
+  const print = new OffscreenCanvas(c.width, c.height), px = print.getContext("2d"); px.scale(k, k);
+  for (let col = cx - half; col < cx + half; col += 1) {
+    const th = Math.asin(Math.max(-1, Math.min(1, (col - cx) / R))), u = (th + phi / 2) / phi;
+    px.drawImage(src, Math.min(sw - 1, Math.max(0, u * sw)), 0, Math.max(1, sw / (2 * half)), sh, col, py, 1.4, ph);
+  }
+  px.globalCompositeOperation = "source-atop"; // shade the print like the mug
+  const sh2 = px.createLinearGradient(cx - R, 0, cx + R, 0);
+  sh2.addColorStop(0, "rgba(0,0,0,.28)"); sh2.addColorStop(0.3, "rgba(255,255,255,.12)"); sh2.addColorStop(0.55, "rgba(0,0,0,0)"); sh2.addColorStop(1, "rgba(0,0,0,.3)");
+  px.fillStyle = sh2; px.fillRect(0, 0, W, H);
+  x.drawImage(print, 0, 0, W, H);
+  // Rim and inside
+  x.fillStyle = "#eef2f1"; x.beginPath(); x.ellipse(cx, rimY, R, ry, 0, 0, Math.PI * 2); x.fill();
+  const inside = x.createLinearGradient(0, rimY - ry, 0, rimY + ry);
+  inside.addColorStop(0, "#7d8a87"); inside.addColorStop(1, "#b6c0be");
+  x.fillStyle = inside; x.beginPath(); x.ellipse(cx, rimY + ry * 0.08, R * 0.9, ry * 0.78, 0, 0, Math.PI * 2); x.fill();
 }
 
 function sync() {

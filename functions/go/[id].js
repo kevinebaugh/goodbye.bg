@@ -12,9 +12,9 @@ function log(env, kind, id, v, request) {
 }
 // The A/B variant the card showed ("a" is the partner's own line and link).
 function variant(p, request) {
-  const v = new URL(request.url).searchParams.get("v") || "a";
+  const v = new URL(request.url).searchParams.get("v") || p.v || "a";
   const x = (p.variants || []).find((y) => y.v === v);
-  return x ? { v, url: x.url } : { v: "a", url: p.url };
+  return x ? { v, url: x.url } : { v, url: p.url };
 }
 
 export async function onRequestGet({ params, env, request }) {

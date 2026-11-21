@@ -129,6 +129,11 @@ rating. Links go through `/go/<id>` (functions/go/[id].js), which counts the cli
 a POST there counts the card being shown ('adseen'). EthicalAds would need the below-results slot (their rules forbid
 ads inside the main content) and a proxy (Safari blocks their images under COEP require-corp).
 
+Zazzle variant "mug" (the A): the visitor's first finished cut-out drawn on a mug in a canvas on the device
+(drawMug in app.js: cylinder wrap column by column, shading, rim, shadow); nothing is uploaded, and Zazzle doesn't
+receive the image. Variant "b": "Put your cut-out on anything." Both go to zazzle.com/custom. `?adv=<v>` forces a
+variant, `?adtest=1` shows partners without links.
+
 Reading the ad A/B test (blob5 = variant): `SELECT blob1 AS kind, blob2 AS partner, blob5 AS variant, count() AS n
 FROM goodbye_bg_ratings WHERE blob1 IN ('adseen','adclick') GROUP BY kind, partner, variant` (clicks / shows per variant;
 expect a few hundred clicks per variant before trusting a difference). Label test, independent of the variant:
