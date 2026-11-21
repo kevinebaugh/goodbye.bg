@@ -303,6 +303,8 @@ async function segment(bitmap) {
   await loadModel();
   dbg("segment", { w: bitmap.width, h: bitmap.height, coi: self.crossOriginIsolated, threads: THREADS });
   const c = new OffscreenCanvas(RES, RES), x = c.getContext("2d");
+  // On white: a see-through PNG or SVG would otherwise reach the model on black, and dark outlines vanish into it.
+  x.fillStyle = "#fff"; x.fillRect(0, 0, RES, RES);
   x.drawImage(bitmap, 0, 0, RES, RES); dbg("drawn");
   const px = x.getImageData(0, 0, RES, RES).data, n = RES * RES; dbg("pixels");
   const input = px.slice(); // RGBA; the engine turns it into its model's input. A copy: px is used again below.
