@@ -792,8 +792,8 @@ async function retry(it) {
 const GAP = 12, MIN_PIC = 96, MAX_PIC = 640;
 function layout() {
   const g = $("grid"), n = g.querySelectorAll(".card").length, all = $("tools");
-  if (!n) { placeAds(0, 0); return; }
-  try { if (adsOn()) load3d(); } catch {} // fetch the 3D code while the first photo is still being worked on, so ads draw at once // the last photo was removed: the ads go with it
+  if (!n) { placeAds(0, 0); hugFooter(0); return; } // the last photo was removed: the ads go with it
+  try { if (adsOn()) load3d(); } catch {} // fetch the 3D code while the first photo is still being worked on, so ads draw at once
   // The tallest bar, ads included: an ad's outlined button can make its bar a few px taller than a photo's.
   const bar = Math.max(0, ...[...g.querySelectorAll(".bar")].map((b) => b.offsetHeight)) || 52, W = g.clientWidth, H = g.clientHeight - (all.hidden ? 0 : all.offsetHeight + GAP); // "Download all" sits under the cards
   const fit = (k) => {
@@ -812,6 +812,20 @@ function layout() {
   g.classList.toggle("scroll", scroll);
   $("main").style.setProperty("--cols", c); $("main").style.setProperty("--p", `${p}px`); // grid and tools row share them
   placeAds(n, scroll ? 0 : Math.ceil(slots / c) * c - n);
+  requestAnimationFrame(() => hugFooter(scroll ? 0 : 1));
+}
+// When the cards fill the width before the height (a phone in portrait), the grid has empty space under them. The
+// footer moves up to sit under the cards and the spare space goes to the bottom of the screen. A transform, so the
+// grid keeps its size and the layout doesn't change in a loop.
+function hugFooter(on) {
+  const f = document.querySelector(".foot"), g = $("grid");
+  if (!f) return;
+  let slack = 0;
+  if (on) {
+    const kids = [...g.children].map((k) => k.getBoundingClientRect()).filter((r) => r.height);
+    if (kids.length) slack = Math.max(0, Math.floor(g.getBoundingClientRect().bottom - Math.max(...kids.map((r) => r.bottom))));
+  }
+  f.style.transform = slack ? `translateY(${-slack}px)` : "";
 }
 new ResizeObserver(layout).observe($("grid"));
 
