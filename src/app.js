@@ -459,7 +459,9 @@ function render(it, W, H, bmp = it.bmp) {
   x.imageSmoothingQuality = "high";
   x.drawImage(bmp, 0, 0, W, H);
   const r = it.maskRect || FULL; // full frame (a retry merges into a full-frame mask, see mergeRetry)
-  if (it.mask.fix) x.drawImage(it.mask.fix, r.x * W, r.y * H, r.w * W, r.h * H); // the subject's own color at see-through edges
+  // The subject's own color at see-through edges; only where the photo has pixels (a see-through input got a halo).
+  x.globalCompositeOperation = "source-atop";
+  if (it.mask.fix) x.drawImage(it.mask.fix, r.x * W, r.y * H, r.w * W, r.h * H);
   x.globalCompositeOperation = "destination-in"; // keep the photo only where the mask is opaque
   x.drawImage(it.mask, r.x * W, r.y * H, r.w * W, r.h * H);
   return c;
@@ -571,7 +573,8 @@ async function fullBlob(it) {
     try { x.imageSmoothingQuality = "high"; x.drawImage(big, -f.x, -f.y, it.w, it.h); }
     finally { big.close(); }
     const r = it.maskRect || FULL;
-    if (it.mask.fix) x.drawImage(it.mask.fix, r.x * it.w - f.x, r.y * it.h - f.y, r.w * it.w, r.h * it.h); // see-through edges
+    x.globalCompositeOperation = "source-atop"; // see-through edges, only where the photo has pixels
+    if (it.mask.fix) x.drawImage(it.mask.fix, r.x * it.w - f.x, r.y * it.h - f.y, r.w * it.w, r.h * it.h);
     x.globalCompositeOperation = "destination-in"; // keep the photo only where the mask is opaque
     x.drawImage(it.mask, r.x * it.w - f.x, r.y * it.h - f.y, r.w * it.w, r.h * it.h);
     return await out.convertToBlob({ type: "image/png" });
