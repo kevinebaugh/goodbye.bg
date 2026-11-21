@@ -450,6 +450,7 @@ function render(it, W, H, bmp = it.bmp) {
 }
 
 function drawCard(it) {
+  if (!items.includes(it)) return; // removed (its bitmap is closed)
   // The shown image stays up until the new one is decoded (still() swaps it), so a crop toggle doesn't flicker.
   const f = it.mask ? frame(it) : { x: 0, y: 0, w: it.w, h: it.h };
   // Never draw bigger than the preview bitmap holds (a tight crop would otherwise blow up to full size).
@@ -507,6 +508,7 @@ function reveal(it) {
   const zoom = f.w !== it.w || f.h !== it.h;
   let t0 = performance.now();
   const wipe = (now) => {
+    if (!items.includes(it)) return; // removed mid-wipe (its bitmap is closed)
     const t = 1 - (1 - Math.min(1, (now - t0) / D)) ** 3, edge = t * (W + slant);
     x.clearRect(0, 0, W, H);
     x.drawImage(it.bmp, 0, 0, W, H);
@@ -760,7 +762,11 @@ function makeCard(it) {
     it.png = null; drawCard(it); if (PHONE) png(it);
   });
   x.addEventListener("click", () => { dbg("removed"); clearInterval(it.quip); it.gen = -1;
-    for (const u of [it.previewUrl, it.fullUrl, it.gifUrl]) if (u) URL.revokeObjectURL(u); items.splice(items.indexOf(it), 1); card.remove(); sync(); });
+    for (const u of [it.previewUrl, it.fullUrl, it.gifUrl]) if (u) URL.revokeObjectURL(u); items.splice(items.indexOf(it), 1);
+    // Focus goes to the next card's Remove (or the one before), not back to the top of the page.
+    const near = card.nextElementSibling?.querySelector?.(".x") || card.previousElementSibling?.querySelector?.(".x");
+    card.remove(); unshow(it); sync();
+    if (near) near.focus({ preventScroll: true }); else $("pick").focus({ preventScroll: true }); });
   dl.addEventListener("click", async () => {
     if (it.saving) return; // already on it
     it.saving = true; tick();
@@ -779,6 +785,19 @@ function makeCard(it) {
 function named(it, name) {
   it.name = name;
   it.el.card.setAttribute("aria-label", name); it.el.img.alt = `${name}, background removed`;
+}
+
+// A removed photo: ad cards showing it move on to another cut-out, and its preview bitmap is freed (iPhone memory).
+function unshow(it) {
+  const done = finishedCuts();
+  for (const a of adEls) {
+    if (a.artIt !== it) continue;
+    a.artIt = done[0] || null;
+    const c = a.querySelector(".adart");
+    if (a.artIt && a.art && c) try { a.art.src = artOf(a.artIt); Promise.resolve(a.art.draw(c, a.art.src)).catch(() => {}); } catch {}
+  }
+  if (pressed === it) pressed = null;
+  try { it.bmp?.close(); } catch {} // a run still on it stops quietly (see run)
 }
 
 function fail(it, msg) {
@@ -801,7 +820,7 @@ async function run() {
       await nextFrame();
       working(engineReady ? "model" : "load", it);
       try { it.mask = await segment(it.bmp); finished++; }
-      catch (e) { console.error(e); report("run-failed", e, it); fail(it, "Could not process this image."); continue; }
+      catch (e) { if (!items.includes(it)) continue; console.error(e); report("run-failed", e, it); fail(it, "Could not process this image."); continue; } // removed meanwhile: not a failure
       if (!it.mask.box) { it.mask = null; fail(it, "No clear subject in this photo."); continue; }
       if (!items.includes(it)) continue;
       if (it.anim) try { await animate(it); } catch (e) { console.error(e); report("gif-failed", e, it); it.anim = null; it.png = null; }
