@@ -674,7 +674,9 @@ async function decode(blob) {
   const url = URL.createObjectURL(blob);
   try {
     const img = new Image(); img.src = url; await img.decode();
-    const w = img.naturalWidth || 1024, h = img.naturalHeight || 1024;
+    let w = img.naturalWidth || 1024, h = img.naturalHeight || 1024;
+    // A drawing (SVG) has no pixels of its own: draw it at least 2048 px on its longest side, not at its nominal size (often 150).
+    if (/svg/i.test(blob.type) || /\.svg$/i.test(blob.name || "")) { const k = Math.max(1, 2048 / Math.max(w, h)); w = Math.round(w * k); h = Math.round(h * k); }
     return await createImageBitmap(img, { resizeWidth: w, resizeHeight: h });
   } catch {
     const heic = /hei[cf]/i.test(blob.type) || /\.hei[cf]$/i.test(blob.name || "");
