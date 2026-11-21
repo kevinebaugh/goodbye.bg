@@ -132,8 +132,8 @@ ads inside the main content) and a proxy (Safari blocks their images under COEP 
 Ads fill the grid (Kevin, 2026-11-20: "always fill the grid"): up to 3 photos are laid out as 4 cells (1 photo + 3 ads,
 2 + 2, 3 + 1); more photos fill out their last row. The cells are reserved from the start so photos don't resize when
 the ads arrive after the batch. Each card is a different variant (product), using a different cut-out when there are
-several, and with 2+ cut-outs each card crossfades to the next every 5 s (staggered; off when hidden or with
-reduced motion). Ads appear once the first cut-out is done. The label is centered. Products follow light/dark (black mug/shirt/tote in dark mode). Button names the product ("Make a mug", "Make a sticker", ...), outlined so Download stays the loud button.
+several, and with 2+ cut-outs one card at a time changes cut-out every 4 s, round-robin (the old one dips out, the
+next rises in), starting a full beat after ads come on screen; off when hidden or with reduced motion. Ads appear once the first cut-out is done. The label is centered. Products follow light/dark (black mug/shirt/tote in dark mode). Button names the product ("Make a mug", "Make a sticker", ...), outlined so Download stays the loud button.
 Zazzle's Create-a-Product API could pre-print the cut-out on the product, but it needs the image at a public URL, so
 only as an explicit per-photo opt-in that updates the "never uploaded" copy. Not built.
 

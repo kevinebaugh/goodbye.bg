@@ -841,7 +841,7 @@ function adsOn() { return adVariants.length > 0; }
 function adReady() { return adsOn() && items.some((i) => i.mask?.box); }
 function placeAds(n, free) {
   const want = adReady() && n >= 1 ? free : 0;
-  while (adEls.length > want) adEls.pop().remove();
+  while (adEls.length > want) { const a = adEls.pop(); adWatch.unobserve(a); a.remove(); }
   while (adEls.length < want) {
     try { adEls.push(buildAd(adEls.length)); }
     catch (e) { console.warn("Ad card failed", e); report("ad-failed", e); adVariants = []; break; } // no ads rather than broken ones
@@ -867,6 +867,7 @@ function buildAd(i) {
   a.querySelector(".adtag").textContent = adLabel;
   a.setAttribute("aria-label", `${adLabel}: ${x.line} ${cta}`);
   $("grid").insertBefore(a, $("tools"));
+  adWatch.observe(a); // the cut-out beat starts once ads are on screen
   a.style.setProperty("--sway-delay", `${-((i * 1.7) % 6)}s`); // phones: each card sways out of step
   a.addEventListener("pointermove", (e) => { // a few degrees of tilt toward the pointer
     if (e.pointerType !== "mouse") return;
@@ -988,29 +989,40 @@ function artOf(it) {
   return a;
 }
 
-// With several cut-outs, each ad card crossfades to the next one every few seconds, the cards staggered so
-// they never change together. Off when the tab is hidden or the person asks for reduced motion.
-const ROTATE = 5000;
-setInterval(() => {
+// With several cut-outs, the ad cards change cut-out one at a time on a steady beat (Kevin): every BEAT one card,
+// round-robin, never two together. The beat starts only once ads are on screen, with a full beat before the first
+// change, and stops when they leave. Off when the tab is hidden or the person asks for reduced motion.
+const BEAT = 4000;
+let beatTimer = 0, beatNext = 0;
+const onScreen = () => adEls.some((a) => a.onScreen);
+const adWatch = new IntersectionObserver((entries) => {
+  for (const e of entries) e.target.onScreen = e.isIntersecting;
+  if (onScreen() && !beatTimer) beat();
+  else if (!onScreen()) { clearTimeout(beatTimer); beatTimer = 0; }
+}, { threshold: 0.5 });
+function beat() {
+  beatTimer = setTimeout(() => { beatTimer = 0; nextArt(); if (onScreen()) beat(); }, BEAT);
+}
+function nextArt() {
   if (document.hidden || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   const done = finishedCuts();
-  if (done.length < 2) return;
-  adEls.forEach((a, k) => setTimeout(() => {
-    if (!a.isConnected || !a.art) return;
-    a.artIdx = (a.artIdx + 1) % done.length;
-    const old = a.querySelector(".adart");
-    if (!old || done.length < 2) return;
-    let src; try { src = artOf(done[a.artIdx % done.length]); } catch { return; }
-    // Never two at once: the current one dips out (fades, shrinks a little), then the next one rises in.
-    const c = document.createElement("canvas"); c.className = "adart fading"; c.setAttribute("aria-hidden", "true");
-    old.after(c);
-    Promise.resolve(a.art.draw(c, src)).then(() => { // drawn first, then swapped in
-      a.art.src = src;
-      old.classList.add("leaving");
-      setTimeout(() => { old.remove(); requestAnimationFrame(() => c.classList.remove("fading")); }, 380);
-    }, () => c.remove());
-  }, k * 1300));
-}, ROTATE);
+  if (done.length < 2 || !adEls.length) return;
+  let a = null;
+  for (let k = 0; k < adEls.length && !a; k++) { const c = adEls[(beatNext + k) % adEls.length]; if (c.onScreen && c.art) { a = c; beatNext = (beatNext + k + 1) % adEls.length; } }
+  if (!a) return;
+  a.artIdx = (a.artIdx + 1) % done.length;
+  const old = a.querySelector(".adart");
+  if (!old) return;
+  let src; try { src = artOf(done[a.artIdx % done.length]); } catch { return; }
+  // Never two at once: the current one dips out (fades, shrinks a little), then the next one rises in.
+  const c = document.createElement("canvas"); c.className = "adart fading"; c.setAttribute("aria-hidden", "true");
+  old.after(c);
+  Promise.resolve(a.art.draw(c, src)).then(() => { // drawn first, then swapped in
+    a.art.src = src;
+    old.classList.add("leaving");
+    setTimeout(() => { old.remove(); requestAnimationFrame(() => c.classList.remove("fading")); }, 380);
+  }, () => c.remove());
+}
 function mugArt(it) {
   const keep = it.crop; it.crop = true; const f = frame(it); it.crop = keep;
   const k = Math.min(1, 640 / Math.max(f.w, f.h), it.bmp.width / it.w);
