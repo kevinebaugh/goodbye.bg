@@ -882,8 +882,9 @@ function mugSource() {
   return null;
 }
 
-// A white mug seen slightly from above, handle on the right, with the cut-out wrapped around its curve:
-// each column of the picture lands where it would on a cylinder (narrower toward the edges), then shading.
+// A white mug seen slightly from above, handle on the right, with the cut-out wrapped around it in 3D:
+// each column of the picture lands where it would on a cylinder (narrower toward the edges) and sits lower
+// the further forward it is, so straight lines curve like the rim's ellipse. Then shading.
 function drawMug(c, src) {
   const k = Math.min(2, devicePixelRatio || 1), W = c.clientWidth || 200, H = c.clientHeight || 150;
   c.width = Math.round(W * k); c.height = Math.round(H * k);
@@ -905,13 +906,14 @@ function drawMug(c, src) {
   x.fillStyle = g; x.fill(body);
   // Print: fits the visible front of the cylinder, wrapped column by column
   const sw = src.naturalWidth || src.width, sh = src.naturalHeight || src.height;
-  const maxArc = 2 * Math.asin(0.82) * R, maxH = (bot - rimY) * 0.72;
+  const maxArc = 2 * Math.asin(0.92) * R, maxH = (bot - rimY - ry) * 0.78;
   const s = Math.min(maxArc / sw, maxH / sh), arc = sw * s, ph = sh * s, phi = arc / R;
-  const half = R * Math.sin(phi / 2), py = rimY + ry * 0.6 + (bot - rimY - ry * 0.6 - ph) / 2;
+  const half = R * Math.sin(phi / 2), py = rimY + ry * 0.4 + (bot - rimY - ry - ph) / 2;
   const print = new OffscreenCanvas(c.width, c.height), px = print.getContext("2d"); px.scale(k, k);
   for (let col = cx - half; col < cx + half; col += 1) {
     const th = Math.asin(Math.max(-1, Math.min(1, (col - cx) / R))), u = (th + phi / 2) / phi;
-    px.drawImage(src, Math.min(sw - 1, Math.max(0, u * sw)), 0, Math.max(1, sw / (2 * half)), sh, col, py, 1.4, ph);
+    const dy = ry * Math.cos(th); // seen from above: the front of the cylinder sits lower than its sides
+    px.drawImage(src, Math.min(sw - 1, Math.max(0, u * sw)), 0, Math.max(1, sw / (2 * half)), sh, col, py + dy, 1.4, ph);
   }
   px.globalCompositeOperation = "source-atop"; // shade the print like the mug
   const sh2 = px.createLinearGradient(cx - R, 0, cx + R, 0);
@@ -1060,7 +1062,7 @@ if ("launchQueue" in window) {
 }
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
-if (DEBUG) window.goodbye = { items, png, frame }; // ?debug=1: for checking results by hand
+if (DEBUG) window.goodbye = { items, png, frame, drawMug, mugSource }; // ?debug=1: for checking results by hand
 // The frame gets its src only when ads are on, so nothing loads from the ad network otherwise.
 if (ADS) { $("ad").querySelector("iframe").src = AD_SRC; $("ad").hidden = false; }
 
