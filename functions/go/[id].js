@@ -7,7 +7,8 @@ function device(request) {
   return /iPhone|iPad|iPod/.test(ua) ? "ios" : /Android/.test(ua) ? "android" : /Macintosh|Windows|Linux|CrOS/.test(ua) ? "desktop" : "other";
 }
 function log(env, kind, id, v, request) {
-  env.RATINGS?.writeDataPoint({ blobs: [kind, id, device(request), request.cf?.country || "", v], doubles: [1], indexes: [kind] });
+  const l = new URL(request.url).searchParams.get("l") === "sponsored" ? "sponsored" : "ad"; // label test
+  env.RATINGS?.writeDataPoint({ blobs: [kind, id, device(request), request.cf?.country || "", v, l], doubles: [1], indexes: [kind] });
 }
 // The A/B variant the card showed ("a" is the partner's own line and link).
 function variant(p, request) {

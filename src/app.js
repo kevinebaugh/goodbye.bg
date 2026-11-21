@@ -835,6 +835,8 @@ new ResizeObserver(layout).observe($("grid"));
    once the whole batch is done. Never between photos, never shrinks them, not part of Download all, no rating,
    clearly marked "Ad". One partner per visit. Its link goes through /go/<id>, which counts the click. */
 let adPartner = null, adVariant = null, adEl = null;
+// Label test, independent of the partner's A/B variant: "Ad" or "Sponsored", picked at random per visit.
+const adLabel = Math.random() < 0.5 ? "Ad" : "Sponsored";
 const adSeen = new Set();
 fetch("/partners.json").then((r) => r.json()).then((list) => {
   const ok = list.filter((p) => p.live || params.has("adtest")); // ?adtest=1 shows partners before their links exist
@@ -851,14 +853,16 @@ function placeAd(n, cols, scroll) {
   if (!adPartner || !adVariant || busy || free < 1) { adEl?.remove(); adEl = null; return; }
   if (adEl) return;
   const p = adPartner, x = adVariant, a = adEl = document.createElement("a");
-  a.className = "adcard"; a.href = `/go/${p.id}?v=${x.v}`; a.target = "_blank"; a.rel = "sponsored noopener";
-  a.innerHTML = '<div class="adpic"><span class="adicon" aria-hidden="true"></span><p class="adline"></p></div><div class="bar"><span class="adtag">Ad</span><span class="btn primary adcta"></span></div>';
+  const q = `?v=${x.v}&l=${adLabel.toLowerCase()}`;
+  a.className = "adcard"; a.href = `/go/${p.id}${q}`; a.target = "_blank"; a.rel = "sponsored noopener";
+  a.innerHTML = '<div class="adpic"><span class="adtag"></span><span class="adicon" aria-hidden="true"></span><p class="adline"></p></div><div class="bar"><span class="btn primary adcta"></span></div>';
   a.querySelector(".adicon").textContent = p.emoji;
   a.querySelector(".adline").textContent = x.line;
   a.querySelector(".adcta").textContent = x.cta;
-  a.setAttribute("aria-label", `Ad: ${x.line} ${x.cta}`);
+  a.querySelector(".adtag").textContent = adLabel;
+  a.setAttribute("aria-label", `${adLabel}: ${x.line} ${x.cta}`);
   $("grid").insertBefore(a, $("tools"));
-  if (!adSeen.has(p.id)) { adSeen.add(p.id); fetch(`/go/${p.id}?v=${x.v}`, { method: "POST", keepalive: true }).catch(() => {}); }
+  if (!adSeen.has(p.id)) { adSeen.add(p.id); fetch(`/go/${p.id}${q}`, { method: "POST", keepalive: true }).catch(() => {}); }
 }
 
 function sync() {

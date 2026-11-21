@@ -131,7 +131,8 @@ ads inside the main content) and a proxy (Safari blocks their images under COEP 
 
 Reading the ad A/B test (blob5 = variant): `SELECT blob1 AS kind, blob2 AS partner, blob5 AS variant, count() AS n
 FROM goodbye_bg_ratings WHERE blob1 IN ('adseen','adclick') GROUP BY kind, partner, variant` (clicks / shows per variant;
-expect a few hundred clicks per variant before trusting a difference).
+expect a few hundred clicks per variant before trusting a difference). Label test, independent of the variant:
+blob6 = 'ad' or 'sponsored' (the card's label, picked at random per visit); group by blob6 the same way.
 
 Reading views: `SELECT toDate(timestamp) AS day, blob2 AS device, blob3 AS from_site, count() AS views
 FROM goodbye_bg_ratings WHERE blob1 = 'view' GROUP BY day, device, from_site ORDER BY day DESC`
