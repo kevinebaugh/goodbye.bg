@@ -122,9 +122,10 @@ body.has-work .hero h1, body.has-work .sub { display: none; }
 /* The label sits in the panel's corner, so the button keeps the whole bar whatever the label says. */
 .adtag { position: absolute; top: 10px; left: 12px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 .adcard .bar { justify-content: center; }
-.adcard .adcta { flex: none; text-align: center; padding-inline: 22px; white-space: nowrap; } /* sized to its words, not the whole bar */
+.adcard .adcta { flex: none; max-width: 100%; min-width: 0; text-align: center; padding-inline: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } /* sized to its words, never wider than the card */
 @media (hover: hover) { .adcard:hover .adcta { filter: brightness(1.05); } }
 @container (max-width: 240px) { .adline { font-size: 12px; } .adcard .adcta { font-size: 13px; padding: 7px 14px; } .adpic { gap: 6px; padding: 8px; } }
+@container (max-width: 150px) { .adcard .adcta { font-size: 12px; padding: 6px 10px; } }
 
 /* Full-window drop target with corner brackets. */
 .dropzone { position: fixed; inset: 0; z-index: 20; display: none; place-items: center; pointer-events: none;
