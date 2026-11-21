@@ -1,6 +1,7 @@
 // GET /go/<partner>: counts the click on the ad card (partner, device kind, country; no IP, no cookies)
 // and sends the visitor on to that partner's affiliate link. POST /go/<partner> counts that the card was shown.
-import { PARTNERS } from "../../lib/partners.mjs";
+import { PARTNERS, capLink } from "../../lib/partners.mjs";
+import { KEY } from "../api/cap/[key].js";
 
 function device(request) {
   const ua = request.headers.get("User-Agent") || "";
@@ -16,16 +17,35 @@ function log(env, kind, id, v, request) {
 function variant(p, request) {
   const v = new URL(request.url).searchParams.get("v") || p.v || "a";
   const x = (p.variants || []).find((y) => y.v === v);
-  return x ? { v, url: x.url } : { v, url: p.url };
+  return x ? { v, url: x.url, product: x.product } : { v, url: p.url, product: p.product };
+}
+
+// Prototype (?zazzlecap=1): the visitor chose "Send to Zazzle", so the page is uploading the cut-out to /api/cap/<k>
+// while this tab opens. Wait for it (a few seconds at most), then send them to the product with it on.
+// If it never arrives, or the product has no template yet, they get the usual page.
+async function capTarget(p, x, request, env) {
+  const k = new URL(request.url).searchParams.get("k");
+  if (!k || !KEY.test(k) || !env.CAP) return null;
+  const image = `${new URL(request.url).origin}/cap/${k}.png`;
+  if (!capLink(p, x.product, image)) return null; // no template for this product yet: don't wait
+  const until = Date.now() + 10_000;
+  while (!(await env.CAP.head(`cap/${k}.png`))) {
+    if (Date.now() > until) return null;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  return capLink(p, x.product, image);
 }
 
 export async function onRequestGet({ params, env, request }) {
   const p = PARTNERS.find((x) => x.id === params.id);
   if (!p) return Response.redirect(new URL("/", request.url), 302);
   const x = variant(p, request);
+  let cap = null;
+  try { cap = await capTarget(p, x, request, env); } catch {}
   try { log(env, "adclick", p.id, x.v, request); } catch {}
+  if (cap) try { log(env, "adcap", p.id, x.v, request); } catch {} // the click also sent the cut-out
   // Before the affiliate link exists (testing with ?adtest=1) the card goes to the partner's home page.
-  return new Response(null, { status: 302, headers: { Location: x.url || p.url || p.home, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
+  return new Response(null, { status: 302, headers: { Location: cap || x.url || p.url || p.home, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
 }
 
 export async function onRequestPost({ params, env, request }) {

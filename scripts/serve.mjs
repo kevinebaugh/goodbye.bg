@@ -9,6 +9,23 @@ import { onRequestPost as rateFn } from "../functions/api/rate.js";
 import { onRequestPost as crashFn } from "../functions/api/crash.js";
 import { onRequestPost as diagFn } from "../functions/api/diag.js";
 import { onRequestGet as goGet, onRequestPost as goPost } from "../functions/go/[id].js";
+import { onRequestPut as capPut } from "../functions/api/cap/[key].js";
+import { onRequestGet as capGet, onRequestHead as capHead } from "../functions/cap/[file].js";
+
+import { ZAZZLE_CAP } from "../lib/partners.mjs";
+// Local only: CAP_TEST_MEMBER=<id> CAP_TEST_PD=<pd> fills every product's template, to try the redirect.
+if (process.env.CAP_TEST_PD) { ZAZZLE_CAP.member ||= process.env.CAP_TEST_MEMBER || "000000000000000000"; for (const k in ZAZZLE_CAP.pd) ZAZZLE_CAP.pd[k] ||= process.env.CAP_TEST_PD; }
+// In-memory stand-in for the R2 bucket (binding CAP) behind the ?zazzlecap=1 prototype.
+const capStore = new Map();
+const capObj = (k) => { const o = capStore.get(k); return o && { key: k, size: o.body.byteLength, customMetadata: o.meta, body: new Blob([o.body]).stream() }; };
+const CAP = {
+  async put(k, body, opt = {}) { if (opt.onlyIf && capStore.has(k)) return null; capStore.set(k, { body: Buffer.from(body), meta: opt.customMetadata || {} }); return capObj(k); },
+  async head(k) { return capObj(k) || null; },
+  async get(k) { return capObj(k) || null; },
+  async delete(k) { for (const x of [].concat(k)) capStore.delete(x); },
+  async list({ prefix = "" } = {}) { return { objects: [...capStore.keys()].filter((k) => k.startsWith(prefix)).map(capObj) }; },
+};
+const readBody = (req) => new Promise((ok) => { const d = []; req.on("data", (c) => d.push(c)); req.on("end", () => ok(Buffer.concat(d))); });
 const LIVE = process.env.LIVE || "https://goodbye-bg-git.pages.dev";
 
 const dist = new URL("../dist/", import.meta.url).pathname;
@@ -32,8 +49,19 @@ createServer(async (req, res) => {
   const go = path.match(/^\/go\/([a-z0-9-]+)$/);
   if (go) {
     const fn = req.method === "POST" ? goPost : goGet;
-    const r = await fn({ params: { id: go[1] }, env: {}, request: new Request(new URL(req.url, `http://localhost:${port}`), { method: req.method, headers: req.headers }) });
+    const r = await fn({ params: { id: go[1] }, env: { CAP }, request: new Request(new URL(req.url, `http://localhost:${port}`), { method: req.method, headers: req.headers }) });
     res.writeHead(r.status, Object.fromEntries(r.headers)).end(); return;
+  }
+  const capUp = path.match(/^\/api\/cap\/([^/]+)$/);
+  if (capUp && req.method === "PUT") {
+    const body = await readBody(req);
+    const r = await capPut({ params: { key: capUp[1] }, env: { CAP }, request: new Request(`http://localhost:${port}${path}`, { method: "PUT", headers: req.headers, body }) });
+    res.writeHead(r.status, Object.fromEntries(r.headers)).end(await r.text()); return;
+  }
+  const capDown = path.match(/^\/cap\/([^/]+)$/);
+  if (capDown) {
+    const r = await (req.method === "HEAD" ? capHead : capGet)({ params: { file: capDown[1] }, env: { CAP }, request: new Request(new URL(req.url, `http://localhost:${port}`)) });
+    res.writeHead(r.status, Object.fromEntries(r.headers)).end(r.body ? Buffer.from(await r.arrayBuffer()) : undefined); return;
   }
   const fns = { "/api/rate": rateFn, "/api/crash": crashFn, "/api/diag": diagFn };
   // The global count lives in D1 in production. Local tests count too (Kevin: "it should go up into

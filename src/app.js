@@ -1090,6 +1090,9 @@ function buildAd(i) {
     if (!a.art) return;
     const it = a.artIt;
     if (!it?.mask) return;
+    // Prototype (?zazzlecap=1): ask first, then send this one cut-out to Zazzle only if the visitor says so.
+    if (CAP && p.id === "zazzle" && !it.anim && !e.target.closest('[data-cap="skip"]')) { e.preventDefault(); return capClick(a, it, e); }
+    if (CAP) capReset(a);
     if (!PHONE) { try { save(outName(it), await png(it)); } catch (err) { report("ad-failed", err); } return; }
     e.preventDefault();
     try { await share([{ name: outName(it), blob: await png(it) }]); } catch (err) { report("ad-failed", err); }
@@ -1113,6 +1116,65 @@ function buildAd(i) {
     catch (e) { fallback(e); show(); }
   } else show();
   return a;
+}
+
+/* ---------- send the cut-out to Zazzle (prototype, ?zazzlecap=1, off by default) ----------
+   A click on a Zazzle card swaps its bar for two choices: "Send to Zazzle" or "Don’t send". Only "Send to Zazzle" uploads,
+   and only that one cut-out: the page PUTs it to /api/cap/<random key> (unreachable after an hour, deleted soon after) and opens
+   /go/zazzle?...&k=<key>, which waits for it and sends the visitor to a Zazzle product with the cut-out on it.
+   "Don’t send" is today's behaviour (save the cut-out here, open Zazzle). See docs/zazzle-cap.md. */
+const CAP = params.has("zazzlecap");
+const CAP_MAX = 2400; // px on the long side: about 300 dpi across a mug's or shirt's print area, and a quick upload
+function capReset(a) {
+  if (!a.capBar) return;
+  a.querySelector(".bar").replaceWith(a.capBar); a.capBar = null; a.classList.remove("capask");
+}
+async function capClick(a, it, e) {
+  const act = e.target.closest("[data-cap]")?.dataset.cap;
+  if (!act) { // first click: ask
+    if (a.capBar) return;
+    const bar = a.querySelector(".bar"), ask = document.createElement("div");
+    ask.className = "bar capbar";
+    ask.innerHTML = '<span class="btn sm adcta capsend" data-cap="send" role="button" tabindex="0">Send to Zazzle</span><span class="btn sm ghost" data-cap="skip" role="button" tabindex="0">Don’t send</span>';
+    ask.querySelector(".capsend").title = "Sends this cut-out to Zazzle. Our link to it stops working after an hour.";
+    a.capBar = bar; bar.replaceWith(ask); a.classList.add("capask");
+    for (const el of ask.children) el.addEventListener("keydown", (k) => { if (k.key === "Enter" || k.key === " ") { k.preventDefault(); el.click(); } });
+    ask.querySelector(".capsend").focus();
+    tick();
+    return;
+  }
+  if (act !== "send" || a.capBusy) return;
+  a.capBusy = true;
+  const send = a.querySelector(".capsend"); send.setAttribute("aria-busy", "true");
+  const b = new Uint8Array(16); crypto.getRandomValues(b);
+  const key = btoa(String.fromCharCode(...b)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const href = `${a.href}&k=${key}`;
+  // Open Zazzle's tab straight from the tap (pop-up blockers), while the upload runs; /go waits for it.
+  const w = window.open(href, "_blank");
+  if (w) w.opener = null;
+  try {
+    const blob = await capBlob(it);
+    const r = await fetch(`/api/cap/${key}`, { method: "PUT", headers: { "Content-Type": "image/png" }, body: blob });
+    if (!r.ok) throw new Error(`cap upload ${r.status}`);
+  } catch (err) { // /go gives up after a few seconds and opens the usual page; computers still get the cut-out saved
+    report("cap-failed", err);
+    if (!PHONE) try { save(outName(it), await png(it)); } catch {}
+  }
+  a.capBusy = false;
+  capReset(a);
+  if (!w) location.href = href; // pop-up blocked: go in this tab
+}
+// The cut-out as Download gives it (cropped to the subject unless the card shows the whole frame), at most CAP_MAX px.
+async function capBlob(it) {
+  const full = await png(it);
+  const bm = await createImageBitmap(full);
+  try {
+    const k = Math.min(1, CAP_MAX / Math.max(bm.width, bm.height));
+    if (k === 1) return full;
+    const c = new OffscreenCanvas(Math.round(bm.width * k), Math.round(bm.height * k)), x = c.getContext("2d");
+    x.imageSmoothingQuality = "high"; x.drawImage(bm, 0, 0, c.width, c.height);
+    return await c.convertToBlob({ type: "image/png" });
+  } finally { bm.close(); }
 }
 
 // Product drawings for the ad card, each from the visitor's own cut-out. Light and dark versions.

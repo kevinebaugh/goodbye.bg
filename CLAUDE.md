@@ -162,7 +162,7 @@ the ads arrive after the batch. Each card is a different variant (product), usin
 several, and with 2+ cut-outs one card at a time changes cut-out every 4 s, round-robin (the old one dips out, the
 next rises in), starting a full beat after ads come on screen; off when hidden or with reduced motion. Ads appear once the first cut-out is done; they wait 1.1 s after it (the cut-out gets the stage), come in one after another with a shimmering placeholder, and each product rises in once drawn (at least 0.45 s after its card), and the 3D code is fetched while the first photo is still being worked on. The label is centered. Products follow light/dark (black mug/shirt/tote in dark mode). Button names the product ("Make a mug", "Make a sticker", ...), outlined so Download stays the loud button.
 Zazzle's Create-a-Product API could pre-print the cut-out on the product, but it needs the image at a public URL, so
-only as an explicit per-photo opt-in that updates the "never uploaded" copy. Not built.
+only as an explicit per-photo opt-in that updates the "never uploaded" copy.. Prototype behind `?zazzlecap=1` (branch `kevin-claude/zazzle-context-bf01ce`, not on main): findings, design, copy changes and Kevin's steps in `docs/zazzle-cap.md`.
 
 Products render in real 3D (src/render3d.js + Three.js 0.187.0, MIT, bundled by esbuild into dist/render3d.mjs,
 ~150 KB gzipped, loaded only when ads show): lathe-turned glazed mug with a real handle, die-cut vinyl sticker with a

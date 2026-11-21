@@ -1,0 +1,30 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "env": {
+        "PORT": "8790"
+      },
+      "port": 8790
+    },
+    {
+      "name": "dev-cap",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "env": {
+        "PORT": "8791",
+        "CAP_TEST_PD": "222222222222222222"
+      },
+      "port": 8791
+    }
+  ]
+}
