@@ -1327,7 +1327,8 @@ $("all").addEventListener("click", async () => {
     let name = outName(it);
     for (let k = 2; used.has(name); k++) name = `${it.name}-goodbye-bg-${k}.${ext(it)}`;
     used.add(name);
-    files[name] = [new Uint8Array(await (await fullBlob(it)).arrayBuffer()), { level: 0 }];
+    // An animated cut-out is its GIF (fullBlob would draw one still PNG). Stills are built fresh, not kept (memory).
+    files[name] = [new Uint8Array(await (await (it.anim ? png(it) : fullBlob(it))).arrayBuffer()), { level: 0 }];
   }
   hideToast();
   save(`goodbye-bg-${done.length}-images.zip`, new Blob([zipSync(files)], { type: "application/zip" }));
