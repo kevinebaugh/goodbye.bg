@@ -438,7 +438,7 @@ function render(it, W, H, bmp = it.bmp) {
   const c = new OffscreenCanvas(W, H), x = c.getContext("2d");
   x.imageSmoothingQuality = "high";
   x.drawImage(bmp, 0, 0, W, H);
-  const r = it.maskRect || FULL; // a retry's mask covers only the zoomed-in part; the rest goes clear
+  const r = it.maskRect || FULL; // full frame (a retry merges into a full-frame mask, see mergeRetry)
   if (it.mask.fix) x.drawImage(it.mask.fix, r.x * W, r.y * H, r.w * W, r.h * H); // the subject's own color at see-through edges
   x.globalCompositeOperation = "destination-in"; // keep the photo only where the mask is opaque
   x.drawImage(it.mask, r.x * W, r.y * H, r.w * W, r.h * H);
@@ -794,6 +794,41 @@ async function rate(it, vote) {
   }
 }
 
+// A retry's mask covers only the zoomed-in part. Outside it the first result stays (it used to go clear, which
+// sliced arms off at a straight line and dropped bodies), and a feathered band blends the two where they meet.
+// Full-frame result, sized so the zoomed part keeps its 1024 px (at most 2048 on a side).
+function mergeRetry(first, m, rect) {
+  const k = Math.min(2048 / RES, 1 / Math.max(rect.w, rect.h)), W = Math.round(RES * k), H = W;
+  const rx = rect.x * W, ry = rect.y * H, rw = rect.w * W, rh = rect.h * H, band = Math.max(4, 0.04 * Math.min(rw, rh));
+  // The weight of the new mask: 1 inside the zoomed part, fading out over the band on sides inside the photo.
+  const wt = new OffscreenCanvas(W, H), wx = wt.getContext("2d");
+  wx.fillStyle = "#000"; wx.fillRect(rx, ry, rw, rh);
+  wx.globalCompositeOperation = "destination-in";
+  const sides = [[rect.x > 0.001, rx, 0, rx + band, 0], [rect.x + rect.w < 0.999, rx + rw, 0, rx + rw - band, 0],
+    [rect.y > 0.001, 0, ry, 0, ry + band], [rect.y + rect.h < 0.999, 0, ry + rh, 0, ry + rh - band]];
+  for (const [inside, x0, y0, x1, y1] of sides) {
+    if (!inside) continue;
+    const g = wx.createLinearGradient(x0, y0, x1, y1); g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, "#000");
+    wx.fillStyle = g; wx.fillRect(0, 0, W, H);
+  }
+  const layer = (oldC, newC, oldRect) => { // old * (1 - w) + new * w
+    const out = new OffscreenCanvas(W, H), o = out.getContext("2d"), r0 = oldRect || FULL;
+    o.drawImage(oldC, r0.x * W, r0.y * H, r0.w * W, r0.h * H);
+    o.globalCompositeOperation = "destination-out"; o.drawImage(wt, 0, 0);
+    const t = new OffscreenCanvas(W, H), tx = t.getContext("2d");
+    tx.drawImage(newC, rx, ry, rw, rh); tx.globalCompositeOperation = "destination-in"; tx.drawImage(wt, 0, 0);
+    o.globalCompositeOperation = "lighter"; o.drawImage(t, 0, 0);
+    return out;
+  };
+  const out = layer(first.mask, m, first.rect);
+  if (m.fix) out.fix = layer(first.mask.fix || new OffscreenCanvas(1, 1), m.fix, first.rect);
+  // The subject's box, read at the model's size.
+  const small = new OffscreenCanvas(RES, RES), sx = small.getContext("2d");
+  sx.drawImage(out, 0, 0, RES, RES);
+  out.box = subjectBox(sx.getImageData(0, 0, RES, RES));
+  return out;
+}
+
 async function retry(it) {
   const s = subject(it);
   if (!s) return;
@@ -818,7 +853,7 @@ async function retry(it) {
       { resizeWidth: RES, resizeHeight: RES, resizeQuality: "high" });
     big.close();
     const m = await segment(part); part.close();
-    if (m.box) { changed = true; it.mask = m; it.maskRect = { x: sx / it.w, y: sy / it.h, w: sw / it.w, h: sh / it.h }; it.ms = lastMs; it.png = null; }
+    if (m.box) { changed = true; it.mask = mergeRetry(it.first, m, { x: sx / it.w, y: sy / it.h, w: sw / it.w, h: sh / it.h }); it.maskRect = null; it.ms = lastMs; it.png = null; }
   } catch (e) { console.warn("Retry failed", e); }
   retrying--;
   busy.hidden = true; dl.disabled = false;

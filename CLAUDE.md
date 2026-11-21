@@ -93,7 +93,7 @@ Requirement from Kevin: 10 to 30 seconds per photo is unacceptable. Target a few
   once, in the order picked, and processing goes top-left first.
 - Only the photo being worked on waves and shows a quip; waiting cards stay still. Quips are the one place
   for playful text; everything else is plain and only what people need.
-- Results are cropped to the subject by default (crop icon switches to the whole frame). 👎 retries zoomed in
+- Results are cropped to the subject by default (crop icon switches to the whole frame). 👎 retries zoomed in (merged into the first result outside the zoomed part, feathered where they meet; mergeRetry)
   on the subject, a second 👎 restores the first result. One vote per result: the chosen emoji stays lit and the
   other steps aside; a retry that finds a new result brings both back for it.
 - Nothing ever overlaps the image. Every card control (crop, Download, 👍 👎, remove) lives in the bar below it.
