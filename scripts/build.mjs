@@ -67,9 +67,10 @@ const isnet = Buffer.concat(res.chunks.map((c) => readFileSync(join(dataDir, c.h
 if (isnet.length !== res.size) throw new Error(`ISNet size mismatch: ${isnet.length} != ${res.size}`);
 // Ad partners the page may show (public fields only; the affiliate links stay in the /go redirect).
 const { PARTNERS } = await import(join(root, "lib/partners.mjs"));
-writeFileSync(join(dist, "partners.json"), JSON.stringify(PARTNERS.map(({ id, name, emoji, v = "a", mug, line, cta, url, variants = [] }) => ({
+writeFileSync(join(dist, "partners.json"), JSON.stringify(PARTNERS.map(({ id, name, emoji, v = "a", product, line, cta, ctas, url, variants = [] }) => ({
   id, name, emoji, live: !!url,
-  variants: [{ v, mug: !!mug, line, cta, live: !!url }, ...variants.map((x) => ({ v: x.v, mug: !!x.mug, line: x.line, cta: x.cta, live: !!(url && x.url) }))],
+  variants: [{ v, product, line, cta, ctas, live: !!url },
+    ...variants.map((x) => ({ v: x.v, product: x.product, line: x.line, cta: x.cta, ctas: x.ctas, live: !!(url && x.url) }))],
 }))));
 
 console.log("Model:");

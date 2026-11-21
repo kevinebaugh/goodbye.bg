@@ -7,8 +7,10 @@ function device(request) {
   return /iPhone|iPad|iPod/.test(ua) ? "ios" : /Android/.test(ua) ? "android" : /Macintosh|Windows|Linux|CrOS/.test(ua) ? "desktop" : "other";
 }
 function log(env, kind, id, v, request) {
-  const l = new URL(request.url).searchParams.get("l") === "sponsored" ? "sponsored" : "ad"; // label test
-  env.RATINGS?.writeDataPoint({ blobs: [kind, id, device(request), request.cf?.country || "", v, l], doubles: [1], indexes: [kind] });
+  const q = new URL(request.url).searchParams;
+  const l = q.get("l") === "sponsored" ? "sponsored" : "ad"; // label test
+  const c = String(q.get("c") || "").replace(/[^a-z0-9-]/g, "").slice(0, 20); // button-wording test
+  env.RATINGS?.writeDataPoint({ blobs: [kind, id, device(request), request.cf?.country || "", v, l, c], doubles: [1], indexes: [kind] });
 }
 // The A/B variant the card showed ("a" is the partner's own line and link).
 function variant(p, request) {

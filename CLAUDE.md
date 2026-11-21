@@ -142,6 +142,10 @@ Ad blockers hide the card (class names like `adcard`) and block `/go/` beacons; 
 don't work around it. A failing card is reported as crash step 'ad-failed' or 'mug-failed' (the mug falls back to the
 emoji) instead of disappearing silently.
 
+Product test: Zazzle's variants are products drawn from the visitor's cut-out (mug, sticker, shirt, tote; drawProduct
+functions in app.js, light and dark) plus "b" (text card); one per visit. Button-wording test: "Make it on Zazzle" vs
+"Make it", blob7 = c (0 or 1), independent of the product and the label.
+
 Reading the ad A/B test (blob5 = variant): `SELECT blob1 AS kind, blob2 AS partner, blob5 AS variant, count() AS n
 FROM goodbye_bg_ratings WHERE blob1 IN ('adseen','adclick') GROUP BY kind, partner, variant` (clicks / shows per variant;
 expect a few hundred clicks per variant before trusting a difference). Label test, independent of the variant:

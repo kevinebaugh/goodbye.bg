@@ -865,37 +865,108 @@ function placeAd(n, cols, scroll, extra = 0) {
 }
 function buildAd() {
   const p = adPartner, x = adVariant, a = document.createElement("a");
-  const q = `?v=${x.v}&l=${adLabel.toLowerCase()}`;
+  // Button-wording test: one of the variant's wordings at random, counted as c=0, c=1, ...
+  const ci = x.ctas?.length ? Math.floor(Math.random() * x.ctas.length) : -1, cta = ci >= 0 ? x.ctas[ci] : x.cta;
+  const q = `?v=${x.v}&l=${adLabel.toLowerCase()}${ci >= 0 ? `&c=${ci}` : ""}`;
   a.className = "adcard"; a.href = `/go/${p.id}${q}`; a.target = "_blank"; a.rel = "sponsored noopener";
   a.innerHTML = '<div class="adpic"><span class="adtag"></span><span class="adicon" aria-hidden="true"></span><p class="adline"></p></div><div class="bar"><span class="btn primary adcta"></span></div>';
   let src = null;
-  try { src = x.mug && mugSource(); } catch (e) { report("mug-failed", e); }
-  if (src) { // the visitor's own cut-out on a mug, drawn here (nothing is uploaded)
-    const c = document.createElement("canvas"); c.className = "admug"; c.setAttribute("aria-hidden", "true");
+  const draw = PRODUCTS[x.product];
+  try { src = draw && artSource(); } catch (e) { report("mug-failed", e); }
+  if (src) { // the visitor's own cut-out on the product, drawn here (nothing is uploaded)
+    const c = document.createElement("canvas"); c.className = "adart"; c.setAttribute("aria-hidden", "true");
     a.querySelector(".adicon").replaceWith(c);
-    a.classList.add("mugcard"); // the mug says it; the line stays in the label for screen readers
+    a.classList.add("artcard"); // the picture says it; the line stays in the label for screen readers
   } else a.querySelector(".adicon").textContent = p.emoji;
   a.querySelector(".adline").textContent = x.line;
-  a.querySelector(".adcta").textContent = x.cta;
+  a.querySelector(".adcta").textContent = cta;
   a.querySelector(".adtag").textContent = adLabel;
-  a.setAttribute("aria-label", `${adLabel}: ${x.line} ${x.cta}`);
+  a.setAttribute("aria-label", `${adLabel}: ${x.line} ${cta}`);
   $("grid").insertBefore(a, $("tools"));
   if (src) {
-    a.mugSrc = src;
-    try { drawMug(a.querySelector(".admug"), src); }
-    catch (e) { report("mug-failed", e); const i = document.createElement("span"); i.className = "adicon"; i.textContent = p.emoji; a.querySelector(".admug").replaceWith(i); }
+    a.art = { draw, src };
+    try { draw(a.querySelector(".adart"), src); }
+    catch (e) { report("mug-failed", e); const i = document.createElement("span"); i.className = "adicon"; i.textContent = p.emoji; a.querySelector(".adart").replaceWith(i); }
   }
   if (!adSeen.has(p.id)) { adSeen.add(p.id); fetch(`/go/${p.id}${q}`, { method: "POST", keepalive: true }).catch(() => {}); }
   return a;
 }
 
-// Light or dark changed: redraw the mug in the other color.
-matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => { if (adEl?.mugSrc) try { drawMug(adEl.querySelector(".admug"), adEl.mugSrc); } catch {} });
+// Product drawings for the ad card, each from the visitor's own cut-out. Light and dark versions.
+function canvasFor(c) {
+  const k = Math.min(2, devicePixelRatio || 1), W = c.clientWidth || 200, H = c.clientHeight || 150;
+  c.width = Math.round(W * k); c.height = Math.round(H * k);
+  const x = c.getContext("2d"); x.scale(k, k);
+  return { x, k, W, H, dark: matchMedia("(prefers-color-scheme: dark)").matches };
+}
+const sizeOf = (src) => [src.naturalWidth || src.width, src.naturalHeight || src.height];
 
-// The art for the mug: the first finished card on screen, cropped tight to the subject whatever the card
+// A die-cut sticker: the cut-out with a white border that follows its outline, tilted, casting a shadow.
+function drawSticker(c, src) {
+  const { x, k, W, H, dark } = canvasFor(c), [sw, sh] = sizeOf(src);
+  const s = Math.min((W * 0.74) / sw, (H * 0.8) / sh), w = sw * s, h = sh * s, b = Math.max(3, Math.min(w, h) * 0.05), tilt = -0.08;
+  const o = new OffscreenCanvas(c.width, c.height), ox = o.getContext("2d");
+  ox.scale(k, k); ox.translate(W / 2, H / 2); ox.rotate(tilt);
+  for (let i = 0; i < 24; i++) { const t = (i / 24) * Math.PI * 2; ox.drawImage(src, -w / 2 + Math.cos(t) * b, -h / 2 + Math.sin(t) * b, w, h); }
+  ox.setTransform(1, 0, 0, 1, 0, 0); ox.globalCompositeOperation = "source-in"; ox.fillStyle = "#fbfcfb"; ox.fillRect(0, 0, o.width, o.height);
+  x.save(); x.shadowColor = dark ? "rgba(0,0,0,.55)" : "rgba(0,0,0,.25)"; x.shadowBlur = 12; x.shadowOffsetY = 5;
+  x.drawImage(o, 0, 0, W, H); x.restore();
+  x.save(); x.translate(W / 2, H / 2); x.rotate(tilt); x.drawImage(src, -w / 2, -h / 2, w, h);
+  const g = x.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2); // a little gloss
+  g.addColorStop(0, "rgba(255,255,255,.18)"); g.addColorStop(0.45, "rgba(255,255,255,0)"); g.addColorStop(1, "rgba(255,255,255,0)");
+  x.globalCompositeOperation = "source-atop"; x.fillStyle = g; x.fillRect(-w / 2 - b, -h / 2 - b, w + 2 * b, h + 2 * b); x.restore();
+}
+
+// A t-shirt laid flat, the cut-out on the chest. Black shirt in dark mode, white in light.
+function drawShirt(c, src) {
+  const { x, W, H, dark } = canvasFor(c), [sw, sh] = sizeOf(src);
+  const S = Math.min(W * 0.92, H * 0.95), ox = (W - S) / 2, oy = (H - S * 0.96) / 2, P = (u, v) => [ox + u * S, oy + v * S];
+  const pts = [[0.36, 0.02], null, [0.64, 0.02], [0.85, 0.09], [1, 0.31], [0.87, 0.4], [0.79, 0.32], [0.79, 0.96], [0.21, 0.96], [0.21, 0.32], [0.13, 0.4], [0, 0.31], [0.15, 0.09]];
+  const shirt = new Path2D(); shirt.moveTo(...P(0.36, 0.02)); shirt.quadraticCurveTo(...P(0.5, 0.13), ...P(0.64, 0.02));
+  for (const pt of pts.slice(3)) shirt.lineTo(...P(...pt));
+  shirt.closePath();
+  x.save(); x.shadowColor = dark ? "rgba(0,0,0,.5)" : "rgba(0,0,0,.18)"; x.shadowBlur = 10; x.shadowOffsetY = 4;
+  x.fillStyle = dark ? "#1f2426" : "#f6f7f5"; x.fill(shirt); x.restore();
+  // Fabric: soft folds and shading
+  x.save(); x.clip(shirt);
+  const g = x.createLinearGradient(ox, 0, ox + S, 0);
+  g.addColorStop(0, dark ? "rgba(255,255,255,.05)" : "rgba(0,0,0,.06)"); g.addColorStop(0.5, "rgba(0,0,0,0)"); g.addColorStop(1, dark ? "rgba(0,0,0,.25)" : "rgba(0,0,0,.08)");
+  x.fillStyle = g; x.fillRect(ox, oy, S, S);
+  // Print on the chest, below the collar
+  const s = Math.min((S * 0.5) / sw, (S * 0.56) / sh), w = sw * s, h = sh * s;
+  x.globalAlpha = 0.96; x.drawImage(src, ox + S * 0.5 - w / 2, oy + S * 0.17, w, h);
+  x.restore();
+  // Collar
+  x.strokeStyle = dark ? "#2d3336" : "#dfe4e2"; x.lineWidth = S * 0.025;
+  x.beginPath(); x.moveTo(...P(0.36, 0.02)); x.quadraticCurveTo(...P(0.5, 0.13), ...P(0.64, 0.02)); x.stroke();
+}
+
+// A tote bag with two handles, the cut-out printed on the front. Natural canvas in light mode, black in dark.
+function drawTote(c, src) {
+  const { x, W, H, dark } = canvasFor(c), [sw, sh] = sizeOf(src);
+  const bw = Math.min(W * 0.8, H * 0.72), bh = bw * 1.04, bx = (W - bw) / 2, by = H - bh - (H - bh) * 0.25;
+  const cloth = dark ? "#262c2e" : "#e8dfca", edge = dark ? "#48514f" : "#cfc2a5";
+  x.lineWidth = bw * 0.07; x.strokeStyle = edge; x.lineCap = "round";
+  for (const hx of [0.3, 0.7]) { x.beginPath(); x.ellipse(bx + bw * hx, by, bw * 0.12, bh * 0.3, 0, Math.PI, 0); x.stroke(); }
+  x.save(); x.shadowColor = dark ? "rgba(0,0,0,.5)" : "rgba(0,0,0,.18)"; x.shadowBlur = 10; x.shadowOffsetY = 4;
+  x.fillStyle = cloth; x.fillRect(bx, by, bw, bh); x.restore();
+  const g = x.createLinearGradient(bx, 0, bx + bw, 0);
+  g.addColorStop(0, "rgba(0,0,0,.06)"); g.addColorStop(0.4, "rgba(255,255,255,.04)"); g.addColorStop(1, "rgba(0,0,0,.12)");
+  x.fillStyle = g; x.fillRect(bx, by, bw, bh);
+  x.fillStyle = edge; x.fillRect(bx, by, bw, bh * 0.05); // the hem at the top
+  const s = Math.min((bw * 0.72) / sw, (bh * 0.68) / sh), w = sw * s, h = sh * s;
+  x.globalAlpha = 0.95; x.drawImage(src, bx + (bw - w) / 2, by + bh * 0.1 + (bh * 0.86 - h) / 2, w, h); x.globalAlpha = 1;
+}
+
+const PRODUCTS = { mug: (c, src) => drawMug(c, src), sticker: drawSticker, shirt: drawShirt, tote: drawTote };
+
+// Light or dark changed: redraw the product in the other color.
+matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => { if (adEl?.art) try { adEl.art.draw(adEl.querySelector(".adart"), adEl.art.src); } catch {} });
+
+// The art for the product: the first finished card on screen, cropped tight to the subject whatever the card
 // shows, at most 640 px. Edges fade softly, so a subject cut off by the photo's frame (a cat's chest, a sofa)
 // ends like a printed design instead of a hard straight line.
-function mugSource() {
+function artSource() {
   for (const card of $("grid").children) {
     const it = items.find((i) => i.el.card === card);
     if (it?.mask?.box) return mugArt(it);
@@ -1110,7 +1181,7 @@ if ("launchQueue" in window) {
 }
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
-if (DEBUG) window.goodbye = { items, png, frame, drawMug, mugSource, mugArt }; // ?debug=1: for checking results by hand
+if (DEBUG) window.goodbye = { items, png, frame, PRODUCTS, artSource, mugArt }; // ?debug=1: for checking results by hand
 // The frame gets its src only when ads are on, so nothing loads from the ad network otherwise.
 if (ADS) { $("ad").querySelector("iframe").src = AD_SRC; $("ad").hidden = false; }
 
