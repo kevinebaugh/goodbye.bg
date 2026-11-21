@@ -8,7 +8,7 @@ import { onRequestGet as fetchFn } from "../functions/api/fetch.js";
 import { onRequestPost as rateFn } from "../functions/api/rate.js";
 import { onRequestPost as crashFn } from "../functions/api/crash.js";
 import { onRequestPost as diagFn } from "../functions/api/diag.js";
-let localCount = +(process.env.COUNT || 0);
+const LIVE = process.env.LIVE || "https://goodbye-bg-git.pages.dev";
 
 const dist = new URL("../dist/", import.meta.url).pathname;
 const port = Number(process.env.PORT) || 8788;
@@ -29,10 +29,13 @@ createServer(async (req, res) => {
   const path = decodeURIComponent(new URL(req.url, "http://x").pathname);
   // Run the Pages Function locally, same code as production.
   const fns = { "/api/rate": rateFn, "/api/crash": crashFn, "/api/diag": diagFn };
-  // The global count lives in D1 in production; locally it is a number in memory.
+  // The global count lives in D1 in production. Local tests count too (Kevin: "it should go up into
+  // perpetuity"), so the local server passes /api/count straight through to the live site.
   if (path === "/api/count") {
-    if (req.method === "POST") localCount++;
-    res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ n: localCount, confetti: req.method === "POST" && localCount % 100 === 0 }));
+    try {
+      const r = await fetch(`${LIVE}/api/count`, { method: req.method === "POST" ? "POST" : "GET" });
+      res.writeHead(r.status, { "Content-Type": "application/json", "Cache-Control": "no-store" }).end(await r.text());
+    } catch { res.writeHead(200, { "Content-Type": "application/json" }).end('{"n":0}'); }
     return;
   }
   if (fns[path] && req.method === "POST") {
