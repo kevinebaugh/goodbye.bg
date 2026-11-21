@@ -125,6 +125,19 @@ for GIFs (👎 is a vote only). Measured: 10 frames at 360x540 in 5.7 s on the G
   full-size PNG). Safari ignores `touch-action` for double taps, so app.js swallows a second
   tap within 350 ms.
 - Hover effects only on devices with a real pointer (phones keep :hover after a tap).
+- QA pass 2026-11-21 (details in git log):
+  - 👎 zooms in only when the subject's padded box is under 80% of the photo; otherwise it is a vote only and its
+    label says "Bad result" instead of "Bad result, try again" (most phone photos fill the frame).
+  - Cards under 166 px wide drop 👍 👎; under 131 px (a dozen photos on a phone) they also drop the crop toggle, so
+    Download keeps its icon. A phone in portrait with 1 to 3 photos (2 columns, 157 px cards) has no 👍 👎: a known gap.
+  - Short screens (height 520 px or less, a phone on its side): the wordmark sits left of the buttons (buttons go
+    right), the privacy note is hidden, spacing tightens; the empty page shrinks the headline so the footer fits.
+  - Download and Download all shimmer while a big PNG or the zip is built; repeat taps don't start it again. A failed
+    save says so. Failed cards hide Download.
+  - See-through inputs (PNG cut-outs, SVG logos) reach the model on white, or on black when the subject is light.
+    SVGs are drawn at least 2048 px on their longest side.
+  - Drags that start on the page (a cut-out dragged out) are ignored if dropped back on it.
+  - Removing a photo frees its bitmap and moves any ad card showing it to another cut-out; focus goes to the next card.
 - Buttons follow one small system in style.css (Kevin, 2026-11-21: "a mature design system"): spacing tokens
   `--s1..--s5` (4 px scale), heights `--h-sm/md/lg` (32/40/48), every button a size plus a variant (`.primary`,
   `.ghost`, plain). Set `--h`, `--px`, `--fs` instead of padding by hand. Whimsy: lift on hover, press on click.
@@ -172,7 +185,7 @@ environment (RoomEnvironment, no download), a soft blob shadow (not a shadow map
 whole floor turned into a dark slab); each product sways slowly and leans toward a moving mouse, a few degrees at most; one shared WebGL context, ~20 ms a render. The 2D canvas
 drawings in app.js are the fallback (crash step '3d-failed'). The mug camera centres on the body, not the handle.
 
-Clicking an ad card also saves the cut-out shown on it, ready to upload on the partner's site: a normal download on computers; on phones the share sheet comes first (Safari won't save from a tab that went to the background), then the partner opens (tested in the iOS Simulator 2026-11-21).
+Clicking an ad card also saves the cut-out shown on it (the card keeps that photo as `artIt`), ready to upload on the partner's site: a normal download on computers; on phones the share sheet comes first (Safari won't save from a tab that went to the background), then the partner opens (tested in the iOS Simulator 2026-11-21).
 
 Zazzle variant "mug" (the A): the visitor's first finished cut-out drawn on a mug in a canvas on the device
 (drawMug in app.js: cylinder wrap column by column, shading, rim, shadow); nothing is uploaded, and Zazzle doesn't
