@@ -903,7 +903,12 @@ function drawMug(c, src) {
   const k = Math.min(2, devicePixelRatio || 1), W = c.clientWidth || 200, H = c.clientHeight || 150;
   c.width = Math.round(W * k); c.height = Math.round(H * k);
   const x = c.getContext("2d"); x.scale(k, k);
-  const mh = H * 0.9, mw = Math.min(W * 0.6, mh * 0.8), R = mw / 2, ry = mw * 0.12;
+  // ry/R sets how far we look down on the mug: 0.36 shows the rim as an open ellipse, so the print visibly
+  // curves around the body (at 0.24 it looked flat, like a card standing inside the mug).
+  const mh = H * 0.9, mw = Math.min(W * 0.6, mh * 0.8), R = mw / 2, ry = R * 0.36;
+  // Light from the front left: brightness by the angle of the surface (Lambert), plus a soft highlight.
+  const LIGHT = -0.45, lit = (th) => Math.max(0, Math.cos(th - LIGHT)), shine = (th) => Math.exp(-(((th - LIGHT) / 0.22) ** 2));
+  const across = (g, f) => { for (let i = 0; i <= 24; i++) { const th = -Math.PI / 2 + (Math.PI * i) / 24; g.addColorStop(0.5 + Math.sin(th) / 2, f(th)); } return g; };
   const cx = W / 2 - mw * 0.1, top = (H - mh) / 2, rimY = top + ry, bot = top + mh - ry;
   // Soft shadow to set it down on the panel (light mode especially)
   x.fillStyle = "rgba(0,0,0,.16)"; x.filter = "blur(4px)";
@@ -915,12 +920,13 @@ function drawMug(c, src) {
   // Body
   const body = new Path2D();
   body.moveTo(cx - R, rimY); body.lineTo(cx - R, bot); body.ellipse(cx, bot, R, ry, 0, Math.PI, 0, true); body.lineTo(cx + R, rimY); body.closePath();
-  const g = x.createLinearGradient(cx - R, 0, cx + R, 0);
-  g.addColorStop(0, "#c3ccca"); g.addColorStop(0.28, "#ffffff"); g.addColorStop(0.6, "#f2f5f4"); g.addColorStop(1, "#aeb9b7");
-  x.fillStyle = g; x.fill(body);
+  x.fillStyle = across(x.createLinearGradient(cx - R, 0, cx + R, 0), (th) => {
+    const v = Math.round(150 + 95 * lit(th) + 10 * shine(th)); return `rgb(${v - 6},${v},${v - 2})`;
+  });
+  x.fill(body);
   // Print: fits the visible front of the cylinder, wrapped column by column
   const sw = src.naturalWidth || src.width, sh = src.naturalHeight || src.height;
-  const maxArc = 2 * Math.asin(0.92) * R, maxH = (bot - rimY - ry) * 0.9;
+  const maxArc = 2 * Math.asin(0.97) * R, maxH = (bot - rimY - ry) * 0.9;
   const s = Math.min(maxArc / sw, maxH / sh), arc = sw * s, ph = sh * s, phi = arc / R;
   const half = R * Math.sin(phi / 2), py = rimY + ry * 0.2 + (bot - rimY - ry - ph) / 2;
   const print = new OffscreenCanvas(c.width, c.height), px = print.getContext("2d"); px.scale(k, k);
@@ -930,9 +936,10 @@ function drawMug(c, src) {
     px.drawImage(src, Math.min(sw - 1, Math.max(0, u * sw)), 0, Math.max(1, sw / (2 * half)), sh, col, py + dy, 1.4, ph);
   }
   px.globalCompositeOperation = "source-atop"; // shade the print like the mug
-  const sh2 = px.createLinearGradient(cx - R, 0, cx + R, 0);
-  sh2.addColorStop(0, "rgba(0,0,0,.28)"); sh2.addColorStop(0.3, "rgba(255,255,255,.12)"); sh2.addColorStop(0.55, "rgba(0,0,0,0)"); sh2.addColorStop(1, "rgba(0,0,0,.3)");
-  px.fillStyle = sh2; px.fillRect(0, 0, W, H);
+  px.fillStyle = across(px.createLinearGradient(cx - R, 0, cx + R, 0), (th) => `rgba(0,0,0,${(0.62 * (1 - lit(th))).toFixed(3)})`);
+  px.fillRect(0, 0, W, H);
+  px.fillStyle = across(px.createLinearGradient(cx - R, 0, cx + R, 0), (th) => `rgba(255,255,255,${(0.22 * shine(th)).toFixed(3)})`);
+  px.fillRect(0, 0, W, H);
   x.drawImage(print, 0, 0, W, H);
   // Rim and inside
   x.fillStyle = "#eef2f1"; x.beginPath(); x.ellipse(cx, rimY, R, ry, 0, 0, Math.PI * 2); x.fill();
