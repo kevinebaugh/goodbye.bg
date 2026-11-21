@@ -110,9 +110,9 @@ Anonymous counts the page sends (never photo data): 👍/👎 to `/api/rate`; cr
 leaves a note in localStorage while working on a photo; the next visit sends it if the tab died: step, engine,
 device kind, photos done, megapixels); `/api/count` adds one to a single global number in D1
 (`goodbye-bg-counter`, binding COUNTER) per finished cut-out, and every 100th gets confetti (`?confetti=1` forces it).
-The footer shows that real total, ticking like a live counter but never ahead of it: it starts ~30 s of cut-outs behind
-(GET `/api/count` returns the total and the pace since a snapshot the row keeps 10 to 20 min back) and each 30 s refresh
-ticks one by one at uneven moments. A visitor's own cut-out counts at once. Its line is always reserved, so it never moves
+The footer: one GET `/api/count` on load (total + pace since a snapshot the row keeps 10 to 20 min back), then it grows
+locally at that pace with random gaps, no more requests (Kevin: "one accurate-ish number on load, then contrived growth";
+it can drift ahead of the real total). A visitor's own cut-out counts at once. Its line is always reserved, so it never moves
 the cards. Shown from the first cut-out (Kevin, 2026-11-20); tapping it throws confetti. Kevin: tests count toward the total, never reset it.
 Haptics: a light tick on result, crop, 👍/👎 and Download (Android vibrate; iOS 18+ hidden switch control).
 iPhones shut the engine down once idle (its ~1.8 GB never shrinks; 7 to 8 photos in one tab crashed Safari).

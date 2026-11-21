@@ -128,12 +128,10 @@ async function confetti(from) {
   } catch (e) { console.warn("Confetti failed to load", e); }
 }
 
-// The footer count runs a step behind the real total and ticks toward it at the real pace, so it moves like a
-// live counter without ever showing more than has happened. On load it starts about one refresh (30 s) of
-// cut-outs behind, at the recent pace from /api/count; each refresh sets the next stretch to tick through,
-// one by one at uneven intervals. Tap: confetti.
-const REFRESH = 30_000;
-let countShown = -1, countTimer = 0;
+// The footer count: one request on load for the total and the recent pace (Kevin: "one accurate-ish number on
+// load, then contrived growth"), then it grows here at that pace, one at a time at random moments, with no more
+// requests. It never goes backwards. This visitor's own cut-outs count at once (that request is made anyway).
+let countShown = -1, countPace = 0, countTimer = 0;
 function renderCount(v) {
   countShown = v;
   const el = $("count");
@@ -141,44 +139,23 @@ function renderCount(v) {
   el.classList.add("on"); el.tabIndex = 0;
   el.textContent = `${v.toLocaleString("en-US")} ${v === 1 ? "background" : "backgrounds"} said goodbye`;
 }
-function showCount(n, perMin = 0) {
-  if (!(n >= 0)) return;
-  if (countShown < 0) renderCount(Math.max(0, n - Math.round((perMin * REFRESH) / 60000)));
-  const steps = n - countShown;
-  if (steps <= 0) return;
-  // Spread the steps over the next refresh at random moments; many steps at once just roll.
+function growCount() { // waits like a random arrival at the recent pace, then adds one
   clearTimeout(countTimer);
-  const times = Array.from({ length: Math.min(steps, 120) }, () => Math.random() * REFRESH).sort((a, b) => a - b);
-  const from = countShown, t0 = performance.now();
-  const next = (k) => {
-    if (k >= times.length) return;
-    countTimer = setTimeout(() => {
-      renderCount(Math.max(countShown, from + Math.round(((k + 1) / times.length) * steps)));
-      next(k + 1);
-    }, Math.max(0, times[k] - (performance.now() - t0)));
-  };
-  next(0);
+  if (!(countPace > 0)) return;
+  const wait = (-Math.log(1 - Math.random()) / countPace) * 60000;
+  countTimer = setTimeout(() => { if (!document.hidden) renderCount(countShown + 1); growCount(); }, Math.min(wait, 30 * 60000));
 }
-// This visitor's own cut-out shows up at once: the server has counted it, so the shown number can take one
-// step right away; anything else that happened meanwhile keeps ticking in.
-function ownCount(n) {
-  if (countShown >= 0 && n > countShown) renderCount(countShown + 1);
-  showCount(n);
-}
-// The first call after the page loads also counts the visit: just that it happened, and the site the visitor
-// came from (hostname only). The server adds device kind and country; nothing identifies the person.
-let viewSent = false;
-async function pollCount() {
-  if (document.visibilityState !== "visible") return;
-  let q = "";
-  if (!viewSent) {
-    viewSent = true;
-    let from = ""; try { from = document.referrer ? new URL(document.referrer).hostname : ""; } catch {}
-    q = `?view=1&from=${encodeURIComponent(from === location.hostname ? "" : from)}`;
-  }
-  try { const r = await (await fetch("/api/count" + q)).json(); showCount(r.n, r.perMin); } catch {}
-}
-pollCount(); setInterval(pollCount, REFRESH);
+function ownCount(n) { renderCount(Math.max(countShown + 1, n || 0)); }
+// That one request also counts the visit: just that it happened, and the site the visitor came from (hostname
+// only). The server adds device kind and country; nothing identifies the person.
+(async () => {
+  let from = ""; try { from = document.referrer ? new URL(document.referrer).hostname : ""; } catch {}
+  try {
+    const r = await (await fetch(`/api/count?view=1&from=${encodeURIComponent(from === location.hostname ? "" : from)}`)).json();
+    if (r.n >= 0) renderCount(Math.max(countShown, r.n));
+    countPace = r.perMin || 0; growCount();
+  } catch {}
+})();
 $("count").addEventListener("click", (e) => { tick(); confetti(e.currentTarget); });
 
 // The wordmark links home, but on this page that would reload and wipe every result. It waves instead.
