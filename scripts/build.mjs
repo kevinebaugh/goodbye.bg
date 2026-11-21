@@ -65,6 +65,13 @@ const dataDir = join(nm, "@imgly/background-removal-data/dist");
 const res = JSON.parse(readFileSync(join(dataDir, "resources.json"), "utf8"))["/models/medium"];
 const isnet = Buffer.concat(res.chunks.map((c) => readFileSync(join(dataDir, c.hash))));
 if (isnet.length !== res.size) throw new Error(`ISNet size mismatch: ${isnet.length} != ${res.size}`);
+// Photoreal product previews: src/render3d.js bundled with Three.js (MIT) into one minified file, loaded only
+// when ads show. The unbundled source isn't served.
+const esbuild = await import("esbuild");
+await esbuild.build({ entryPoints: [join(root, "src/render3d.js")], bundle: true, format: "esm", minify: true, target: "es2022",
+  outfile: join(dist, "render3d.mjs"), legalComments: "none", logLevel: "warning" });
+rmSync(join(dist, "render3d.js"));
+
 // Ad partners the page may show (public fields only; the affiliate links stay in the /go redirect).
 const { PARTNERS } = await import(join(root, "lib/partners.mjs"));
 writeFileSync(join(dist, "partners.json"), JSON.stringify(PARTNERS.map(({ id, name, emoji, v = "a", product, line, cta, ctas, url, variants = [] }) => ({

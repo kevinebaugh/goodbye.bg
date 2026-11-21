@@ -13,12 +13,14 @@
   },
   "devDependencies": {
     "@imgly/background-removal-data": "1.4.5",
+    "esbuild": "0.28.2",
     "fflate": "0.8.2",
     "onnxruntime-web": "1.31.1",
     "wrangler": "4.157.0"
   },
   "dependencies": {
     "@fontsource-variable/nunito": "5.3.0",
-    "canvas-confetti": "1.9.4"
+    "canvas-confetti": "1.9.4",
+    "three": "0.187.0"
   }
 }

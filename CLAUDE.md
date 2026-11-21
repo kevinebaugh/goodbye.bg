@@ -137,6 +137,12 @@ reduced motion). Ads appear once the first cut-out is done. The label is centere
 Zazzle's Create-a-Product API could pre-print the cut-out on the product, but it needs the image at a public URL, so
 only as an explicit per-photo opt-in that updates the "never uploaded" copy. Not built.
 
+Products render in real 3D (src/render3d.js + Three.js 0.187.0, MIT, bundled by esbuild into dist/render3d.mjs,
+~150 KB gzipped, loaded only when ads show): lathe-turned glazed mug with a real handle, die-cut vinyl sticker with a
+peeling corner, canvas tote with straps front and back, flat-lay t-shirt with folds; physical materials, a studio
+environment (RoomEnvironment, no download), soft shadow; one shared WebGL context, ~20 ms a render. The 2D canvas
+drawings in app.js are the fallback (crash step '3d-failed'). The mug camera centres on the body, not the handle.
+
 Zazzle variant "mug" (the A): the visitor's first finished cut-out drawn on a mug in a canvas on the device
 (drawMug in app.js: cylinder wrap column by column, shading, rim, shadow); nothing is uploaded, and Zazzle doesn't
 receive the image. Variant "b": "Put your cut-out on anything." Both go to zazzle.com/custom. `?adv=<v>` forces a

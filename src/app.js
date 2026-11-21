@@ -978,7 +978,16 @@ function drawTote(c, src) {
   x.globalAlpha = 0.95; x.drawImage(src, bx + (bw - w) / 2, by + bh * 0.1 + (bh * 0.86 - h) / 2, w, h); x.globalAlpha = 1;
 }
 
-const PRODUCTS = { mug: (c, src) => drawMug(c, src), sticker: drawSticker, shirt: drawShirt, tote: drawTote };
+// Photoreal 3D first (render3d.mjs: Three.js, loaded on first use); the 2D drawings above if WebGL isn't there.
+let r3d = null;
+const load3d = () => (r3d ||= import("./render3d.mjs").catch((e) => { report("3d-failed", e); return null; }));
+const product = (kind, draw2d) => async (c, src) => {
+  const m = await load3d();
+  if (m) try { m.render(kind, c, src, matchMedia("(prefers-color-scheme: dark)").matches); return; }
+  catch (e) { console.warn("3D render failed", e); report("3d-failed", e); r3d = Promise.resolve(null); }
+  draw2d(c, src);
+};
+const PRODUCTS = { mug: product("mug", drawMug), sticker: product("sticker", drawSticker), shirt: product("shirt", drawShirt), tote: product("tote", drawTote) };
 
 // Light or dark changed: redraw the product in the other color.
 matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => {
@@ -1018,10 +1027,11 @@ setInterval(() => {
     // Never two at once: the current one dips out (fades, shrinks a little), then the next one rises in.
     const c = document.createElement("canvas"); c.className = "adart fading"; c.setAttribute("aria-hidden", "true");
     old.after(c);
-    try { a.art.draw(c, src); } catch { c.remove(); return; }
-    a.art.src = src;
-    old.classList.add("leaving");
-    setTimeout(() => { old.remove(); requestAnimationFrame(() => c.classList.remove("fading")); }, 380);
+    Promise.resolve(a.art.draw(c, src)).then(() => { // drawn first, then swapped in
+      a.art.src = src;
+      old.classList.add("leaving");
+      setTimeout(() => { old.remove(); requestAnimationFrame(() => c.classList.remove("fading")); }, 380);
+    }, () => c.remove());
   }, k * 1300));
 }, ROTATE);
 function mugArt(it) {
