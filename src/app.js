@@ -1373,7 +1373,15 @@ async function deliver(files) {
   if (!(await share(files))) save(files[0].name, files[0].blob);
 }
 
+let zipping = false;
 $("all").addEventListener("click", async () => {
+  if (zipping) return; // a second tap while it works would build it all again
+  zipping = true; $("all").setAttribute("aria-busy", "true");
+  try { await saveAll(); }
+  catch (e) { console.error(e); report("zip-failed", e); toast("Could not save them all. Try again, or save them one by one."); }
+  finally { zipping = false; $("all").removeAttribute("aria-busy"); }
+});
+async function saveAll() {
   const done = items.filter((i) => i.mask), files = {}, used = new Set();
   if (PHONE) {
     const list = [];
@@ -1390,12 +1398,13 @@ $("all").addEventListener("click", async () => {
     let name = outName(it);
     for (let k = 2; used.has(name); k++) name = `${it.name}-goodbye-bg-${k}.${ext(it)}`;
     used.add(name);
-    // An animated cut-out is its GIF (fullBlob would draw one still PNG). Stills are built fresh, not kept (memory).
-    files[name] = [new Uint8Array(await (await (it.anim ? png(it) : fullBlob(it))).arrayBuffer()), { level: 0 }];
+    // An animated cut-out is its GIF (fullBlob would draw one still PNG); a PNG already made is reused. The rest are
+    // built fresh and not kept (memory).
+    files[name] = [new Uint8Array(await (await (it.anim || it.png ? png(it) : fullBlob(it))).arrayBuffer()), { level: 0 }];
   }
   hideToast();
   save(`goodbye-bg-${done.length}-images.zip`, new Blob([zipSync(files)], { type: "application/zip" }));
-});
+}
 
 // No double-tap zoom: it fired on quick taps and threw the layout off. Pinch-zoom stays (people with low
 // vision rely on it). Safari ignores touch-action for double taps, so a second tap within 350 ms is
