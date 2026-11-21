@@ -865,6 +865,7 @@ function buildAd() {
   if (src) { // the visitor's own cut-out on a mug, drawn here (nothing is uploaded)
     const c = document.createElement("canvas"); c.className = "admug"; c.setAttribute("aria-hidden", "true");
     a.querySelector(".adicon").replaceWith(c);
+    a.classList.add("mugcard"); // the mug says it; the line stays in the label for screen readers
   } else a.querySelector(".adicon").textContent = p.emoji;
   a.querySelector(".adline").textContent = x.line;
   a.querySelector(".adcta").textContent = x.cta;
@@ -935,9 +936,11 @@ function drawMug(c, src) {
   x.fill(body);
   // Print: fits the visible front of the cylinder, wrapped column by column
   const sw = src.naturalWidth || src.width, sh = src.naturalHeight || src.height;
-  const maxArc = 2 * Math.asin(0.97) * R, maxH = (bot - rimY - ry) * 0.9;
+  // The print's edges curve exactly like the rim and the base (both drop by ry at the front), so it can use
+  // nearly the whole body height between them.
+  const maxArc = 2 * Math.asin(0.97) * R, maxH = (bot - rimY) * 0.86;
   const s = Math.min(maxArc / sw, maxH / sh), arc = sw * s, ph = sh * s, phi = arc / R;
-  const half = R * Math.sin(phi / 2), py = rimY + ry * 0.2 + (bot - rimY - ry - ph) / 2;
+  const half = R * Math.sin(phi / 2), py = rimY + (bot - rimY - ph) / 2;
   const print = new OffscreenCanvas(c.width, c.height), px = print.getContext("2d"); px.scale(k, k);
   for (let col = cx - half; col < cx + half; col += 1) {
     const th = Math.asin(Math.max(-1, Math.min(1, (col - cx) / R))), u = (th + phi / 2) / phi;
