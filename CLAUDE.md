@@ -145,7 +145,7 @@ environment (RoomEnvironment, no download), a soft blob shadow (not a shadow map
 whole floor turned into a dark slab); each product sways slowly and leans toward a moving mouse, a few degrees at most; one shared WebGL context, ~20 ms a render. The 2D canvas
 drawings in app.js are the fallback (crash step '3d-failed'). The mug camera centres on the body, not the handle.
 
-Clicking an ad card also saves the cut-out shown on it (a normal download, like Download), ready to upload on the partner's site.
+Clicking an ad card also saves the cut-out shown on it, ready to upload on the partner's site: a normal download on computers; on phones the share sheet comes first (Safari won't save from a tab that went to the background), then the partner opens (tested in the iOS Simulator 2026-11-21).
 
 Zazzle variant "mug" (the A): the visitor's first finished cut-out drawn on a mug in a canvas on the device
 (drawMug in app.js: cylinder wrap column by column, shading, rim, shadow); nothing is uploaded, and Zazzle doesn't
