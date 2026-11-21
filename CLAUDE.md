@@ -141,7 +141,7 @@ Ads fill the grid (Kevin, 2026-11-20: "always fill the grid"): up to 3 photos ar
 2 + 2, 3 + 1); more photos fill out their last row. The cells are reserved from the start so photos don't resize when
 the ads arrive after the batch. Each card is a different variant (product), using a different cut-out when there are
 several, and with 2+ cut-outs one card at a time changes cut-out every 4 s, round-robin (the old one dips out, the
-next rises in), starting a full beat after ads come on screen; off when hidden or with reduced motion. Ads appear once the first cut-out is done; each card stays hidden (cell reserved) until its product is drawn, and the 3D code is fetched while the first photo is still being worked on. The label is centered. Products follow light/dark (black mug/shirt/tote in dark mode). Button names the product ("Make a mug", "Make a sticker", ...), outlined so Download stays the loud button.
+next rises in), starting a full beat after ads come on screen; off when hidden or with reduced motion. Ads appear once the first cut-out is done; they wait 1.1 s after it (the cut-out gets the stage), come in one after another with a shimmering placeholder, and each product rises in once drawn (at least 0.45 s after its card), and the 3D code is fetched while the first photo is still being worked on. The label is centered. Products follow light/dark (black mug/shirt/tote in dark mode). Button names the product ("Make a mug", "Make a sticker", ...), outlined so Download stays the loud button.
 Zazzle's Create-a-Product API could pre-print the cut-out on the product, but it needs the image at a public URL, so
 only as an explicit per-photo opt-in that updates the "never uploaded" copy. Not built.
 

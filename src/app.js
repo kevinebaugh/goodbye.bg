@@ -968,8 +968,14 @@ function adsOn() { return adVariants.length > 0; }
 // As soon as one cut-out is done (the cells are reserved from the start, so nothing moves).
 function adReady() { return adsOn() && items.some((i) => i.mask?.box); }
 let adDrawnAt = "";
+// The first cut-out gets the stage: the ads wait a beat after it (its wipe takes about 0.9 s), then come in.
+const ADS_PAUSE = 1100;
+let adsAt = 0;
 function placeAds(n, free) {
-  const want = adReady() && n >= 1 ? free : 0;
+  let want = adReady() && n >= 1 ? free : 0;
+  if (!want) adsAt = 0;
+  else if (!adsAt) { adsAt = performance.now() + ADS_PAUSE; setTimeout(() => requestAnimationFrame(layout), ADS_PAUSE); want = 0; }
+  else if (performance.now() < adsAt) want = 0;
   // The cards changed size (rotation, a resized window): redraw the products, or they'd stretch.
   const size = $("main").style.getPropertyValue("--p");
   if (size !== adDrawnAt) {
@@ -1025,8 +1031,12 @@ function buildAd(i) {
     const w = window.open(a.href, "_blank"); // not "noopener": that always returns null
     if (w) w.opener = null; else location.href = a.href; // pop-up blocked: go in this tab
   });
-  // The card stays invisible (its cell already reserved) until its product is drawn: no empty ad panels.
-  const show = () => {
+  // The card comes in with a shimmering placeholder where the product goes, and the product rises in once
+  // drawn (never sooner than a moment after the card, one card after another).
+  const born = performance.now(), at = 450 + i * 160;
+  a.style.animationDelay = `${i * 120}ms`;
+  const show = () => setTimeout(unveil, Math.max(0, born + at - performance.now()));
+  const unveil = () => {
     if (!a.classList.contains("loading")) return;
     a.classList.remove("loading");
     if (!adSeen.has(x.v)) { adSeen.add(x.v); fetch(`/go/${p.id}${q}`, { method: "POST", keepalive: true }).catch(() => {}); }
