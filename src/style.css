@@ -47,7 +47,7 @@ button, input { font: inherit; color: inherit; }
 :focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
 a { color: inherit; }
 
-.top { padding: 18px 24px; }
+.top { padding: 18px max(24px, env(safe-area-inset-left)); }
 .mark { font-weight: 800; font-size: 26px; letter-spacing: -0.03em; text-decoration: none; display: inline-flex; align-items: center; }
 .mark span { color: var(--brand); }
 .wave { font-style: normal; display: inline-block; margin-left: 8px; transform-origin: 70% 80%; animation: wave 1.6s ease-in-out 0.4s 2; }
@@ -55,7 +55,7 @@ a { color: inherit; }
 .wave.again { animation: wave 1.2s ease-in-out 1; } /* a tap on the wordmark */
 @keyframes wave { 0%,60%,100% { transform: rotate(0); } 10%,30% { transform: rotate(16deg); } 20%,40% { transform: rotate(-10deg); } }
 
-main { flex: 1; width: 100%; max-width: 1100px; margin: 0 auto; padding: 0 24px 24px; }
+main { flex: 1; width: 100%; max-width: 1100px; margin: 0 auto; padding: 0 max(24px, env(safe-area-inset-right)) 24px max(24px, env(safe-area-inset-left)); } /* clear of the notch on a phone on its side */
 
 .hero { margin: 7vh auto 0; max-width: 640px; display: grid; justify-items: center; gap: 18px; text-align: center; transition: margin .3s; }
 .hero h1 { margin: 0; font-size: clamp(38px, 7vw, 68px); line-height: 1; letter-spacing: -0.04em; font-weight: 800; text-wrap: balance; }
@@ -252,13 +252,18 @@ body.app:not(.has-work) main { flex: none; margin-top: auto; }
 /* Short screens (a phone on its side): the wordmark moves beside the buttons, the privacy note goes (it is on the
    empty page), and the spacing tightens, so the cards get the height. */
 @media (max-height: 520px) {
+  body.app .top { padding-block: 10px; }
+  body.app:not(.has-work) .hero { gap: 12px; }
+  body.app:not(.has-work) .hero h1 { font-size: 36px; }
+  body.app:not(.has-work) .foot { margin-top: 12px; padding-block: 8px; }
   body.app.has-work .foot p:first-child { display: none; }
   body.app.has-work .foot { padding: 6px 16px; }
   body.app.has-work .grid { padding-top: 12px; }
 }
-@media (max-height: 520px) and (min-width: 640px) {
-  body.app.has-work .top { position: absolute; top: 0; left: 0; padding: 12px 24px; }
+@media (max-height: 520px) and (min-width: 560px) {
+  body.app.has-work .top { position: absolute; top: 0; left: 0; padding: 12px max(24px, env(safe-area-inset-left)); }
   body.app.has-work main { padding-top: 10px; }
+  body.app.has-work .hero { max-width: none; width: 100%; justify-items: end; } /* the buttons go right, clear of the wordmark */
 }
 /* "Download all" spans the row under the cards, edge to edge with them. */
 .allrow { grid-column: 1 / -1; display: flex; }
