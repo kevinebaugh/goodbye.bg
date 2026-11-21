@@ -870,16 +870,30 @@ function placeAd(n, cols, scroll) {
   if (!adSeen.has(p.id)) { adSeen.add(p.id); fetch(`/go/${p.id}${q}`, { method: "POST", keepalive: true }).catch(() => {}); }
 }
 
-// The cut-out for the mug: the first finished card on screen, as shown (cropped or not).
+// The art for the mug: the first finished card on screen, cropped tight to the subject whatever the card
+// shows, at most 640 px. Edges fade softly, so a subject cut off by the photo's frame (a cat's chest, a sofa)
+// ends like a printed design instead of a hard straight line.
 function mugSource() {
   for (const card of $("grid").children) {
     const it = items.find((i) => i.el.card === card);
-    if (!it?.mask) continue;
-    const { img, canvas, pic } = it.el;
-    if (pic.classList.contains("still") && img.complete && img.naturalWidth) return img;
-    if (canvas.width > 1) return canvas;
+    if (it?.mask?.box) return mugArt(it);
   }
   return null;
+}
+function mugArt(it) {
+  const keep = it.crop; it.crop = true; const f = frame(it); it.crop = keep;
+  const k = Math.min(1, 640 / Math.max(f.w, f.h), it.bmp.width / it.w);
+  const full = render(it, Math.max(1, Math.round(it.w * k)), Math.max(1, Math.round(it.h * k)));
+  const w = Math.max(1, Math.round(f.w * k)), h = Math.max(1, Math.round(f.h * k));
+  const c = new OffscreenCanvas(w, h), x = c.getContext("2d");
+  x.drawImage(full, f.x * k, f.y * k, f.w * k, f.h * k, 0, 0, w, h);
+  x.globalCompositeOperation = "destination-in";
+  for (const [x1, y1] of [[w, 0], [0, h]]) {
+    const g = x.createLinearGradient(0, 0, x1, y1);
+    g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(0.07, "#000"); g.addColorStop(0.93, "#000"); g.addColorStop(1, "rgba(0,0,0,0)");
+    x.fillStyle = g; x.fillRect(0, 0, w, h);
+  }
+  return c;
 }
 
 // A white mug seen slightly from above, handle on the right, with the cut-out wrapped around it in 3D:
@@ -906,9 +920,9 @@ function drawMug(c, src) {
   x.fillStyle = g; x.fill(body);
   // Print: fits the visible front of the cylinder, wrapped column by column
   const sw = src.naturalWidth || src.width, sh = src.naturalHeight || src.height;
-  const maxArc = 2 * Math.asin(0.92) * R, maxH = (bot - rimY - ry) * 0.78;
+  const maxArc = 2 * Math.asin(0.92) * R, maxH = (bot - rimY - ry) * 0.9;
   const s = Math.min(maxArc / sw, maxH / sh), arc = sw * s, ph = sh * s, phi = arc / R;
-  const half = R * Math.sin(phi / 2), py = rimY + ry * 0.4 + (bot - rimY - ry - ph) / 2;
+  const half = R * Math.sin(phi / 2), py = rimY + ry * 0.2 + (bot - rimY - ry - ph) / 2;
   const print = new OffscreenCanvas(c.width, c.height), px = print.getContext("2d"); px.scale(k, k);
   for (let col = cx - half; col < cx + half; col += 1) {
     const th = Math.asin(Math.max(-1, Math.min(1, (col - cx) / R))), u = (th + phi / 2) / phi;
@@ -1062,7 +1076,7 @@ if ("launchQueue" in window) {
 }
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
-if (DEBUG) window.goodbye = { items, png, frame, drawMug, mugSource }; // ?debug=1: for checking results by hand
+if (DEBUG) window.goodbye = { items, png, frame, drawMug, mugSource, mugArt }; // ?debug=1: for checking results by hand
 // The frame gets its src only when ads are on, so nothing loads from the ad network otherwise.
 if (ADS) { $("ad").querySelector("iframe").src = AD_SRC; $("ad").hidden = false; }
 
