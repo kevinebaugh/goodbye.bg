@@ -182,6 +182,12 @@ function working(step, it) {
   const note = { step, engine: engineName || "cpu", dev: DEVICE, done: finished, mp: it ? +((it.w * it.h) / 1e6).toFixed(1) : 0 };
   try { localStorage.setItem(CRASH_KEY, JSON.stringify(note)); } catch {}
 }
+// Errors the page survives but the person sees (the engine would not start, or a photo failed): sent at once.
+function report(step, e, it) {
+  const note = { step, engine: engineName || "cpu", dev: DEVICE, done: finished, mp: it ? +((it.w * it.h) / 1e6).toFixed(1) : 0,
+    error: String(e?.message || e).slice(0, 160) };
+  fetch("/api/crash", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(note), keepalive: true }).catch(() => {});
+}
 function rested() { try { localStorage.removeItem(CRASH_KEY); } catch {} }
 addEventListener("pagehide", rested);
 (() => {
@@ -252,7 +258,15 @@ function loadModel() {
       const name = await pickEngine();
       try { await startEngine(name); }
       catch (e) {
-        if (name !== "gpu") throw e;
+        if (name !== "gpu") {
+          // The CPU engine can fail to start when memory is short (a tab that just crashed, or an engine that
+          // was just shut down and not yet freed). Report it, wait a moment, try once more.
+          report("start-failed", e); dbg("cpu-start-failed", { error: String(e?.message || e).slice(0, 200) });
+          await new Promise((r) => setTimeout(r, 3000));
+          await startEngine("cpu");
+          status(`Ready.`); dbg("ready", { engine: engineName });
+          return;
+        }
         console.warn("GPU engine failed to start, switching to CPU.", e); dbg("gpu-start-failed", { error: String(e?.message || e).slice(0, 200) });
         gpuBroken = true; await startEngine("cpu");
       }
@@ -677,7 +691,7 @@ async function run() {
       await nextFrame();
       working(engineReady ? "model" : "load", it);
       try { it.mask = await segment(it.bmp); finished++; }
-      catch (e) { console.error(e); fail(it, "Could not process this image."); continue; }
+      catch (e) { console.error(e); report("run-failed", e, it); fail(it, "Could not process this image."); continue; }
       if (!it.mask.box) { it.mask = null; fail(it, "No clear subject in this photo."); continue; }
       if (!items.includes(it)) continue;
       clearInterval(it.quip);

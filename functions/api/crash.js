@@ -4,7 +4,7 @@
 // data point next to the ratings: which step it died in, the engine, the device kind, how many photos the
 // tab had finished and the photo's megapixels. Never the photo, never an IP address, no cookies.
 
-const STEPS = new Set(["load", "model", "retry", "png"]);
+const STEPS = new Set(["load", "model", "retry", "png", "start-failed", "run-failed"]);
 const DEVICES = new Set(["ios", "android", "desktop"]);
 
 export async function onRequestPost({ request, env }) {
@@ -17,7 +17,9 @@ export async function onRequestPost({ request, env }) {
   const dev = DEVICES.has(b?.dev) ? b.dev : "other";
   const done = Math.max(0, Math.min(1000, Number(b?.done) || 0));
   const mp = Math.max(0, Math.min(1000, Number(b?.mp) || 0));
-  const point = { blobs: ["crash", engine, step, dev], doubles: [done, mp], indexes: ["crash"] };
+  // For start-failed and run-failed: the engine's error message, shortened. No photo data is in it.
+  const error = String(b?.error || "").replace(/https?:\/\/\S+/g, "<url>").slice(0, 160);
+  const point = { blobs: ["crash", engine, step, dev, error], doubles: [done, mp], indexes: ["crash"] };
   if (env.RATINGS) env.RATINGS.writeDataPoint(point);
   else console.log("crash (no RATINGS binding):", JSON.stringify(point));
   return new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } });
