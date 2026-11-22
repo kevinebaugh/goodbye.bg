@@ -11,7 +11,8 @@ Remove image backgrounds in the browser. Photos never leave the device.
 - Choose files (phones also offer camera and photo library)
 - Paste anywhere: copied images, screenshots, copied files, image links, copied web page selections
 - Paste button for touch devices
-- Drag and drop: files, whole folders, images dragged from other tabs
+- Drag and drop: files, whole folders, ZIPs, images dragged from other tabs
+- Formats: whatever the browser opens, plus HEIC and TIFF on any browser and camera RAW (its built-in JPEG), via `src/formats.js`
 - Link field: an image link, or a web page link (uses its preview image)
 - `goodbye.bg/?url=<link>` for bookmarklets and other apps
 - Android share sheet, after Add to Home screen (`src/sw.js`, `src/manifest.webmanifest`)

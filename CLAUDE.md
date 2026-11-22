@@ -111,6 +111,19 @@ longer GIFs keep every n-th frame and add up the delays) and the result is an an
 (soft edges become hard). The card plays it; Download and long-press save the GIF. No crop and no zoomed retry
 for GIFs (👎 is a vote only). Measured: 10 frames at 360x540 in 5.7 s on the GPU engine.
 
+## Formats and ZIPs (2026-11-22)
+
+Anything the browser opens goes straight in. HEIC and TIFF on Chrome/Edge/Firefox and camera RAW everywhere go to
+`src/formats.js` (bundled to `dist/formats.mjs`), a module Worker started per file and terminated after it:
+- HEIC: libheif 1.23.5 (`libheif-js`, LGPL-3.0; `libheif.wasm` 1.4 MB served next to it with `libheif-LICENSE.txt`).
+  Fetched only when a HEIC arrives on a browser without HEIC. 1920x2306 decodes in about 0.16 s.
+- TIFF: UTIF (`utif2`, MIT), the largest colour picture in the file, EXIF orientation applied.
+- RAW (DNG, CR2, CR3, NEF, ARW, RAF, ORF, RW2, ...): the largest baseline JPEG the camera stored inside, turned by the
+  TIFF orientation. No developing. Older Canons store only about 2 MP (a 40D-era CR2 gave 1936x1288); a NEF gave
+  the full 4256x2832. A RAW without a usable preview says so.
+- ZIPs (picked, dropped or in a dropped folder) open with fflate's `unzipSync`: pictures by extension, in natural name
+  order, skipping `__MACOSX` and dot-files, at most `MAX_BATCH`.
+
 ## UX decisions (2026-11-20, from Kevin)
 
 - One screen, no scrolling. No double-tap zoom; pinch-zoom is allowed for accessibility (Kevin, 2026-11-20). Cards are square and sized to fit; a batch appears at

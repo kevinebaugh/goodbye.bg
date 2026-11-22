@@ -15,7 +15,9 @@
     "@imgly/background-removal-data": "1.4.5",
     "esbuild": "0.28.2",
     "fflate": "0.8.2",
+    "libheif-js": "1.23.5",
     "onnxruntime-web": "1.31.1",
+    "utif2": "4.1.0",
     "wrangler": "4.157.0"
   },
   "dependencies": {

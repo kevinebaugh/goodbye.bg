@@ -3,7 +3,7 @@
 // only allows requests back to this site. The one server call is /api/fetch, used only
 // when the visitor gives us a link to an image that lives on another site.
 
-import { zipSync } from "./vendor/fflate.mjs";
+import { zipSync, unzipSync } from "./vendor/fflate.mjs";
 
 const RES = 1024;            // model input size
 const MAX_SIDE = 8192;       // larger images are scaled down to fit in memory
@@ -628,8 +628,34 @@ async function animate(it) {
 
 const PREVIEW_MAX = 1600; // longest side of the bitmap kept per photo (previews and the model input)
 
+// File names we treat as pictures when the browser gives no type (folders, ZIPs): the usual ones, HEIC, TIFF and camera RAW.
+const RAW_EXT = "dng|cr2|cr3|crw|nef|nrw|arw|srf|sr2|orf|rw2|raf|pef|srw|raw|rwl|3fr|erf|kdc|dcr|mrw|x3f|iiq|mos|mef";
+const IMG_EXT = new RegExp(`\\.(jpe?g|jfif|png|webp|gif|avif|bmp|svg|ico|hei[cf]|tiff?|jxl|${RAW_EXT})$`, "i");
+const isZip = (f) => f instanceof Blob && (/zip/i.test(f.type) || /\.zip$/i.test(f.name || ""));
+
+// A ZIP becomes the pictures inside it, in name order (folders inside are fine; Mac "__MACOSX" copies and dot-files are not pictures).
+async function unzipImages(zip) {
+  const names = [];
+  const files = unzipSync(new Uint8Array(await zip.arrayBuffer()), {
+    filter: (f) => IMG_EXT.test(f.name) && !/(^|\/)(__MACOSX\/|\.)/.test(f.name) && f.originalSize > 0 && f.originalSize < 200e6 && names.push(f.name) <= MAX_BATCH,
+  });
+  return Object.keys(files).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+    .map((n) => new File([files[n]], n.split("/").pop(), { type: mimeOf(n) }));
+}
+const mimeOf = (n) => ({ jpg: "image/jpeg", jpeg: "image/jpeg", jfif: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif", avif: "image/avif",
+  bmp: "image/bmp", svg: "image/svg+xml", ico: "image/x-icon", heic: "image/heic", heif: "image/heif", tif: "image/tiff", tiff: "image/tiff" })[n.split(".").pop().toLowerCase()] || "";
+
 async function addSources(list, origin = "") {
-  list = list.filter(Boolean).slice(0, MAX_BATCH);
+  list = list.filter(Boolean);
+  if (list.some(isZip)) {
+    const out = [];
+    for (const src of list) {
+      if (!isZip(src)) { out.push(src); continue; }
+      try { out.push(...await unzipImages(src)); } catch (e) { console.warn(e); toast("Could not open that ZIP."); }
+    }
+    list = out;
+  }
+  list = list.slice(0, MAX_BATCH);
   if (!list.length) { toast("No image found there. Try a photo file, a copied image, or an image link."); return; }
   show();
   // All cards appear at once, so the layout settles once instead of jumping with every photo.
@@ -691,8 +717,10 @@ async function toBlob(src) {
 }
 
 // createImageBitmap covers JPG, PNG, WebP, GIF, AVIF, BMP. An <img> also covers SVG,
-// ICO and anything else this browser can show (HEIC in Safari).
+// ICO and anything else this browser can show (HEIC and TIFF in Safari). The rest (HEIC and TIFF elsewhere,
+// camera RAW everywhere) goes to formats.mjs in its own worker, started only then and stopped after each file.
 async function decode(blob) {
+  if (new RegExp(`\\.(${RAW_EXT})$`, "i").test(blob.name || "")) return decodeElsewhere(blob); // a browser may show a RAW's tiny thumbnail
   try { return await createImageBitmap(blob); } catch {}
   const url = URL.createObjectURL(blob);
   try {
@@ -702,9 +730,23 @@ async function decode(blob) {
     if (/svg/i.test(blob.type) || /\.svg$/i.test(blob.name || "")) { const k = Math.max(1, 2048 / Math.max(w, h)); w = Math.round(w * k); h = Math.round(h * k); }
     return await createImageBitmap(img, { resizeWidth: w, resizeHeight: h });
   } catch {
-    const heic = /hei[cf]/i.test(blob.type) || /\.hei[cf]$/i.test(blob.name || "");
-    throw new Error(heic ? "This browser can't open HEIC photos. Use Safari, or export the photo as JPG." : "This file isn't an image this browser can open.");
+    return decodeElsewhere(blob);
   } finally { URL.revokeObjectURL(url); }
+}
+
+async function decodeElsewhere(blob) {
+  dbg("formats", { type: blob.type });
+  const w = new Worker("/formats.mjs", { type: "module" });
+  try {
+    const buf = await blob.arrayBuffer();
+    const r = await new Promise((res, rej) => {
+      w.onmessage = (e) => res(e.data);
+      w.onerror = (e) => { e.preventDefault?.(); rej(new Error("Could not open this image. Check your connection and try again.")); };
+      w.postMessage({ buf, name: blob.name || "", type: blob.type || "" }, [buf]);
+    });
+    if (r.bitmap) return r.bitmap;
+    throw new Error(r.raw ? "This RAW file has no full-size preview inside. Export it as JPG first." : "This file isn't an image goodbye.bg can open.");
+  } finally { w.terminate(); }
 }
 
 // Pull image links out of pasted or dropped text and HTML.
@@ -724,7 +766,7 @@ async function filesFromEntry(entry, out) {
   if (out.length >= MAX_BATCH) return;
   if (entry.isFile) {
     const f = await new Promise((res, rej) => entry.file(res, rej));
-    if (f.type.startsWith("image/") || /\.(hei[cf]|avif|jxl)$/i.test(f.name)) out.push(f);
+    if (f.type.startsWith("image/") || IMG_EXT.test(f.name) || isZip(f)) out.push(f);
   } else if (entry.isDirectory) {
     const reader = entry.createReader();
     for (;;) {
