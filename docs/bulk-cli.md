@@ -14,7 +14,9 @@ computer, sold once. Nothing here has been bought, signed up for or published.
 - One file for macOS: built and run (169 MB, BiRefNet only), see "Shipping it".
 - A window for people who don't use a terminal: `goodbye-bg` with no arguments opens a local page in the browser
   (section below). Same speed as the command line.
-- Not done: Windows and Linux runs, signing, a licence check, a native app (Dock icon, no Terminal window).
+- Windows x64 and Linux x64 one-file builds, made on the Mac (141 MB and 180 MB). Linux ran in Docker (CPU); Windows is
+  built but has never run. See "Windows and Linux".
+- Not done: a Windows run, a GPU on Linux, signing, a licence check, a native app (Dock icon, no Terminal window).
 
 ## A window: `goodbye-bg` with no arguments (prototype 2026-11-22)
 
@@ -68,12 +70,15 @@ API reference documents them (https://www.remove.bg/api; the OpenAPI file https:
 read 2026-11-22). Details and the full list in `tools/bulk/README.md`.
 
 - Checked: remove.bg's own two curl samples, run unchanged but for the URL (the `image_url` one needs `--allow-urls`);
-  53 checks in `tools/bulk/test/serve-test.mjs` (parameters, headers, JSON replies, HEIC, 23 of remove.bg's error codes); the Python `removebg` 0.4 and Node `remove.bg` 1.3.0 wrappers, file, URL and base64 calls each,
+  65 checks in `tools/bulk/test/serve-test.mjs` (parameters, headers, JSON replies, HEIC, shadows, 23 of remove.bg's error codes); the Python `removebg` 0.4 and Node `remove.bg` 1.3.0 wrappers, file, URL and base64 calls each,
   with a dummy key and no account.
 - Covered: the three image sources, `size` (with remove.bg's default `preview` = 0.25 MP and its caps), `format`
   auto/png/jpg/webp/zip, `channels=alpha`, `bg_color`, `bg_image_file`/`bg_image_url`, `crop` + `crop_margin`,
   `scale`, `position`, `roi`, `X-Width`/`X-Height`/`X-Foreground-*`/`X-Credits-Charged: 0`, their error shape and codes.
-- Not covered: shadows (a 400 `unsupported_parameter`), foreground classification (`type` is ignored, no `X-Type`),
+- Shadows: `shadow_type`, `shadow_opacity` (plain or per type) and `add_shadow` draw the site's soft ground shadow
+  (the seller option, ported). One look for every type: remove.bg's "3D" and car shadows are their own, ours isn't.
+  The type is the request's `type`, or "other"; nothing is detected.
+- Not covered: foreground classification (`type` only picks per-type shadow settings, no `X-Type`),
   car-window semitransparency, rate-limit headers, `/improve`. The cut-out is ours, not theirs.
 - The catch: both wrappers hard-code `https://api.remove.bg`. Python is a one-line override at run time; Node needs
   the constant in `dist/index.js` replaced. Scripts that call the API directly (curl, `requests`, `fetch`, most
@@ -186,15 +191,24 @@ Checked on the binary:
   ID Installer" certificate from the same membership.
 - **Not tried:** any of the signed path (needs the membership).
 
-### Windows and Linux (not built)
+### Windows and Linux (built on the Mac, 2026-11-22)
 
-What they would need:
-- **Each platform's own build.** onnxruntime-node's npm package already carries Windows x64 (WebGPU, DirectML,
-  68 MB) and Linux x64 (WebGPU, 47 MB) binaries; `build-sea.mjs` picks the running platform's. sharp's binaries come per
-  platform (`npm install --os=win32 --cpu=x64` fetches `@img/sharp-win32-x64`). SEA needs that platform's own `node`
-  binary, and Windows needs `.exe` signing handled after injection. Assembling a Windows or Linux file on a Mac is
-  probably possible with those flags, but it can't be tested here, so the honest route is **CI on each OS** (GitHub
-  Actions has macOS arm64, Windows x64 and Linux x64 runners; free for public repos). Not set up.
+- **Both build on the Mac, no CI.** `build-sea.mjs --target win32-x64` or `linux-x64`: Node 26's `--build-sea` injects
+  into another platform's official Node (PE or ELF). The script downloads that Node from nodejs.org (sha256 checked)
+  and sharp's binaries with `npm pack` (checked against `package-lock.json`); onnxruntime-node already carries Windows
+  x64 (WebGPU, DirectML, 68 MB) and Linux x64 (WebGPU, 47 MB) binaries.
+- **Windows x64: 141 MB, 79 MB zipped.** Checked: a valid PE32+ x86-64 file, the SEA fuse set, and the bundle lists
+  `onnxruntime.dll`, `DirectML.dll`, `dxcompiler.dll`, sharp and libvips. **Never run**: there is no Windows machine
+  here. Unknowns: whether it starts at all, WebGPU (there's no dxil.dll next to dxcompiler.dll), DirectML, the
+  PowerShell folder dialog, Explorer. DirectML.dll and dxcompiler.dll are under Microsoft's licences (not MIT); their
+  texts must be added before a release.
+- **Linux x64: 180 MB, 76 MB zipped** (nodejs.org's Linux Node keeps debug symbols). Ran in Docker on this Mac
+  (Debian 12, x86-64 emulated): `--licenses`, a folder run and `serve` with curl all worked; no GPU in the container,
+  so it said so and used the CPU (4.7 s a photo, emulated). The cut-out matches the Mac's CPU engine within 3/255.
+  Needs `libatomic.so.1` (desktop distributions have it; slim containers need `apt-get install libatomic1`). Not run:
+  a real Linux GPU (Vulkan), the window, other distributions.
+- Exact commands and the per-platform table: `tools/bulk/README.md`, "Windows x64 and Linux x64, built on the Mac".
+- A run on a real Windows PC with a GPU is the missing step before selling there.
 - **Windows:** without a signature, SmartScreen shows "Windows protected your PC" (More info > Run anyway) until a file
   builds up reputation. Signing:
   - Microsoft's Trusted Signing, about $10 a month, with identity checks, open to individuals in some

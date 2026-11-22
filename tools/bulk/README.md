@@ -87,7 +87,8 @@ mean pixel difference 0.002. ISNet (haze fix on): mean IoU 0.991, median 0.996. 
 Tested: recursion into subfolders, symlinked photos, a PNG cut-out as input, a HEIC from `sips` (prebuilt sharp
 can't decode HEVC, so libheif-js does it), an EXIF-rotated JPEG, `--bg` with `--size` and `--pad`, `--crop` with
 WebP, Ctrl-C and resume (28 done, 72 left, then 100 with nothing redone), the settings guard, forced GPU failures.
-Not tested: Windows, Linux, Intel Macs, a real iPhone HEIC with a rotation flag, tens of thousands of files.
+Not tested: Windows (built, never run), Linux on real hardware (the one-file build ran in Docker on the CPU, see
+below), Intel Macs, a real iPhone HEIC with a rotation flag, tens of thousands of files.
 
 ## A window: `goodbye-bg` with no arguments
 
@@ -189,6 +190,15 @@ Covered, as documented:
   `bg_image_file`, `bg_image_url` (cover, centred), `crop` (tight to the subject) with `crop_margin` (px or %, 1, 2
   or 4 values, at most 50% or 500 px a side), `scale` (10% to 100%) and `position` (`original`, `center`, one or two
   percentages), `roi` (px or %; the mask is cleared outside it).
+- **Shadows**: `shadow_type` (`drop`, `3D`, `car`, `auto`, `none`, or per foreground type as `shadow_type[product]=drop`),
+  `shadow_opacity` (0 to 100 or `auto`, also per type) and the old `add_shadow`. Every shadow type gets the same look:
+  the site's soft ground shadow (its seller option "Shadow", ported in `lib/shadow.cjs`), an ellipse under the subject
+  as wide as 90% of it, darkest in the middle. `shadow_opacity=50` (the default) is the site's look; 100 is twice as
+  dark. It goes between the cut-out and any `bg_color` or background image. With `crop` the canvas grows at the bottom
+  to hold it; without, it stops at the photo's edge. A subject cut off by the photo's bottom edge gets none, as on the
+  site. `channels=alpha` and zip's `alpha.png` include the shadow. The foreground type is the request's `type`, or
+  `other` without one: `shadow_type=auto` is then a drop shadow, `shadow_type[product]=drop` needs `type=product`, and
+  `add_shadow=true` (remove.bg's car shadow) needs `type=car`. The default opacity is 90 for `type=car`, 50 otherwise.
 - Response: the image (or `{"data": {"result_b64", "foreground_*"}}` with `Accept: application/json`), headers
   `X-Width`, `X-Height`, `X-Foreground-Top/Left/Width/Height`, `X-Credits-Charged: 0`.
 - Errors: status 400 and `{"errors": [{"code", "title", "detail"}]}` with remove.bg's codes and titles:
@@ -202,15 +212,14 @@ Covered, as documented:
   check the balance first).
 
 Not covered, or different:
-- **Shadows** (`shadow_type` other than `none`, `add_shadow=true` with `type=car`): 400 `unsupported_parameter`
-  (our code; remove.bg has none for this). `add_shadow=true` without `type=car` is accepted, because remove.bg only
-  ever drew a car shadow for a car.
-- **No classification**: `type` and `type_level` are accepted and ignored (the models find any subject), and there is
-  no `X-Type` header.
+- **Shadows are one style**: remove.bg draws a different shadow per type (a cast "3D" shadow for people, a car
+  shadow); here all of them are the site's ground shadow.
+- **No classification**: `type` and `type_level` are accepted (the models find any subject; `type` only picks the
+  per-type shadow settings), and there is no `X-Type` header.
 - `semitransparency` is accepted and ignored (remove.bg uses it for car windows only); edges stay soft.
 - No rate limits, no `X-RateLimit-*` headers, never 402 or 403 for keys. `POST /v1.0/improve` answers 404.
 - Inputs: also AVIF, TIFF, GIF (first frame) and HEIC, which remove.bg refuses.
-- Our own codes, same shape: `url_fetch_disabled`, `unsupported_parameter`, `invalid_type`, `invalid_type_level`,
+- Our own codes, same shape: `url_fetch_disabled`, `invalid_shadow_type`, `invalid_type`, `invalid_type_level`,
   `invalid_json`, `invalid_body`, and 500 `internal_error`.
 - `zip` with `channels=alpha` gives the matte as a PNG. Quality settings (JPG 92, WebP 90) are ours.
 - The cut-out is BiRefNet's (or ISNet's), not remove.bg's. With `size=auto` and nothing else it is byte for byte
@@ -242,8 +251,10 @@ Numbers (same Mac, 100 photos from the quality set at 1.6 MP, BiRefNet on the GP
 
 One client at a time leaves the GPU idle while its photo is decoded, encoded and sent; two or more keep it busy and
 reach the model's limit (about 275 ms a photo), the same as the folder mode. Peak memory footprint 4.1 GB, as in
-folder mode. `node test/serve-test.mjs <photo>` checks 53 behaviours against a running server started with `--allow-urls` (all pass), including HEIC and background images;
-`node test/serve-bench.mjs <folder> --clients 4` measures.
+folder mode. `node test/serve-test.mjs <photo>` checks 65 behaviours against a running server started with
+`--allow-urls` (all pass on two COCO photos, 2026-11-22), including HEIC, background images and shadows; the shadow
+checks need a photo whose subject isn't cut by its bottom edge. `node test/shadow-test.mjs` checks the shadow and its
+parameters without a server or the model (39). `node test/serve-bench.mjs <folder> --clients 4` measures.
 
 ## One file: `scripts/build-sea.mjs`
 
@@ -265,6 +276,37 @@ anything naming ISNet's model remains. `--open` keeps ISNet (an AGPL build; chec
 - Native addons, their libraries and worker threads must be real files, hence the unpacking. The LGPL libraries stay
   separate, replaceable files there.
 - Not signed (ad hoc only): see "Shipping it" in `docs/bulk-cli.md` for Gatekeeper, and for Windows and Linux.
+
+### Windows x64 and Linux x64, built on the Mac
+
+    node scripts/build-sea.mjs --node <nodejs.org node> --target win32-x64 --out ./goodbye-bg.exe
+    node scripts/build-sea.mjs --node <nodejs.org node> --target linux-x64 --out ./goodbye-bg
+
+`node --build-sea` can inject into another platform's Node (the SEA config's `executable`), so no CI and no other
+machine are needed. The build fetches that platform's official Node of the same version from nodejs.org (sha256
+checked against SHASUMS256.txt) and sharp's binaries for it with `npm pack` (sha512 checked against
+`package-lock.json`); onnxruntime-node's npm package already carries Windows and Linux binaries. Both are cached in
+`dist-sea/.cache` (ignored by git). Built 2026-11-22 with Node 26.13.1:
+
+| | Linux x64 | Windows x64 |
+|---|---|---|
+| File | ELF 64-bit x86-64, **180 MB** (76 MB zipped) | PE32+ x86-64 console, **141 MB** (79 MB zipped) |
+| Native parts inside | `libonnxruntime.so.1` 47.6 MB, binding, sharp + `libvips-cpp.so` 18.7 MB | `onnxruntime.dll` 31.7 MB, `DirectML.dll` 18.5 MB, `dxcompiler.dll` 18.0 MB, binding, sharp + `libvips-42.dll` 19.0 MB |
+| Checked | Static checks, and **ran it** in Docker (`debian:bookworm-slim`, linux/amd64 under emulation): `--licenses`, a folder run, `serve` + curl | Static checks only |
+| Not checked | WebGPU on a real Linux GPU (Vulkan), the window, other distributions | **Running at all**, WebGPU/DirectML, the window, the folder dialog (PowerShell), SmartScreen |
+
+- Static checks on both: `file` type, the SEA fuse flipped (`NODE_SEA_FUSE_...:1`), and the embedded `build.json`
+  listing the platform's native files with their sizes.
+- Linux in Docker: no GPU there, so the GPU start failed ("Couldn't load Vulkan") and it carried on on the CPU, as
+  designed; 4.7 s a photo for BiRefNet under x86 emulation. The cut-out's alpha matches the Mac's CPU engine within
+  3/255 (mean difference 0.000) on a 1920x1080 photo. `serve` answered `/account` and `/removebg` (200, 667x375 PNG).
+- Linux needs `libatomic.so.1` (Node 26's own requirement): present on desktop distributions, missing from slim
+  containers (`apt-get install libatomic1`). glibc 2.36 tested; Node 26 needs 2.28 or newer.
+- The Linux file is larger because nodejs.org's Linux `node` carries debug symbols; `strip` would shrink it (not tried).
+- Windows ships DirectML.dll and dxcompiler.dll from onnxruntime-node. Their licences are Microsoft's, not MIT, and their
+  texts are not in the npm package; `LICENSES/README.txt` names them and says to add the texts before shipping.
+- No dxil.dll next to dxcompiler.dll: whether WebGPU (Dawn on D3D12) starts without it is unknown; the engine falls
+  back to DirectML and then the CPU.
 
 ## Licences
 
