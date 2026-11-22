@@ -276,7 +276,7 @@ try {
   const gpu = await p.ev(`(async () => { try { const a = await navigator.gpu?.requestAdapter(); return !!a && a.features.has("shader-f16"); } catch { return false; } })()`).catch(() => false);
   engine = gpu ? "gpu" : "cpu";
   console.log(`      (engine for the main run: ${engine}${gpu ? "" : ", no WebGPU in this headless Chrome"})`);
-  const app = (q = "") => `${base}/?engine=${engine}&adtest=1&confetti=0${q}`;
+  const app = (q = "") => `${base}/?engine=${engine}&adtest=1&adpartner=zazzle&confetti=0${q}`;
 
   await check(`one photo (${engine}): result and PNG download`, async () => {
     await p.go(app());
