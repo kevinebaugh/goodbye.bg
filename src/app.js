@@ -1416,7 +1416,20 @@ function offerUndo(u) {
   const bar = $("undo"), ring = bar.querySelector(".ring circle");
   bar.hidden = false;
   ring.style.animation = "none"; void ring.getBoundingClientRect(); ring.style.animation = ""; // restart the countdown
+  undoLeft = UNDO_MS; undoClock();
 }
+// The deadline is a timer, not the ring's animation (reduced motion turns animations off, and the pill stayed forever).
+// Hover or focus on the pill pauses it, like the ring.
+const UNDO_MS = 5000;
+let undoTimer = 0, undoLeft = 0, undoAt = 0;
+function undoClock() {
+  clearTimeout(undoTimer); undoTimer = 0;
+  if (!pendingUndo || $("undo").matches(":hover, :focus-within")) return;
+  undoAt = performance.now();
+  undoTimer = setTimeout(() => { undoTimer = 0; if (pendingUndo) settle(pendingUndo); }, undoLeft);
+}
+for (const ev of ["pointerenter", "focusin"]) $("undo").addEventListener(ev, () => { if (undoTimer) { clearTimeout(undoTimer); undoTimer = 0; undoLeft = Math.max(0, undoLeft - (performance.now() - undoAt)); } });
+for (const ev of ["pointerleave", "focusout"]) $("undo").addEventListener(ev, () => setTimeout(undoClock, 0));
 function settle(u) {
   if (pendingUndo === u) { pendingUndo = null; $("undo").hidden = true; }
   const { it } = u; it.gen = -1;
@@ -1444,7 +1457,6 @@ function undoRemove() {
   it.el.card.querySelector(".x")?.focus({ preventScroll: true });
 }
 $("undobtn").addEventListener("click", () => { tick(); undoRemove(); });
-$("undo").querySelector(".ring circle").addEventListener("animationend", () => { if (pendingUndo) settle(pendingUndo); });
 addEventListener("keydown", (e) => {
   if (pendingUndo && (e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "z" && !/input|textarea/i.test(e.target.tagName)) { e.preventDefault(); undoRemove(); }
 });
