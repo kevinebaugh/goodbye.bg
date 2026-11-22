@@ -143,7 +143,7 @@ function renderCount(v) {
   const el = $("count");
   if (v <= 0) return;
   el.classList.add("on"); el.tabIndex = 0;
-  el.textContent = `${v.toLocaleString("en-US")} ${v === 1 ? "background" : "backgrounds"} said goodbye.`;
+  el.textContent = `Goodbye to ${v.toLocaleString("en-US")} ${v === 1 ? "background" : "backgrounds"} since 2026.`;
 }
 function growCount() { // waits like a random arrival at the recent pace, then adds one
   clearTimeout(countTimer);
@@ -625,13 +625,13 @@ const MAX_FRAMES = IOS || !navigator.gpu ? 16 : 100;
 let gifMod = null;
 const loadGif = () => (gifMod ||= import("./gif.mjs"));
 async function animate(it) {
-  const { frames, w, h } = it.anim, busy = it.el.busy;
+  const { frames, w, h } = it.anim;
   clearInterval(it.quip);
   const cut = (mask, src) => render({ mask }, w, h, src).getContext("2d").getImageData(0, 0, w, h).data;
   const out = [{ rgba: cut(it.mask, frames[0].canvas), delay: frames[0].delay }];
   for (let i = 1; i < frames.length; i++) {
     if (!items.includes(it)) return;
-    busy.textContent = `Frame ${i + 1} of ${frames.length}`;
+    say(it, `Frame ${i + 1} of ${frames.length}`);
     working("gif", it);
     const m = await segment(frames[i].canvas);
     out.push({ rgba: cut(m, frames[i].canvas), delay: frames[i].delay });
@@ -842,7 +842,8 @@ function makeCard(it) {
   bgb.setAttribute("aria-label", "Background"); bgb.title = "Background"; bgb.setAttribute("aria-expanded", "false");
   bgb.innerHTML = '<span class="sw"></span>';
   const pick = bgPicker(it, crop, x);
-  bar.append(crop, bgb, dl, rates, x, pick);
+  const say = document.createElement("p"); say.className = "say"; // the quip while this photo is worked on: in the bar, never on the photo
+  bar.append(crop, bgb, dl, rates, say, x, pick);
   card.append(pic, bar);
   bgb.addEventListener("click", () => { tick(); if (bar.classList.contains("picking")) closePick(); else openPick(it); });
 
@@ -867,7 +868,7 @@ function makeCard(it) {
     finally { clearTimeout(slow); dl.removeAttribute("aria-busy"); it.saving = false; }
   });
 
-  it.el = { card, pic, canvas, img, busy, dl, crop, up, down, bar, bgb, pick };
+  it.el = { card, pic, canvas, img, busy, dl, crop, up, down, bar, bgb, pick, say };
   return card;
 }
 
@@ -967,7 +968,7 @@ function unshow(it) {
 
 // A finished card: its controls come on.
 function ready(it) {
-  clearInterval(it.quip); it.el.card.classList.remove("queued");
+  clearInterval(it.quip); it.el.card.classList.remove("queued", "working");
   it.el.busy.hidden = true; it.el.dl.disabled = false;
   for (const b of [it.anim ? null : it.el.crop, it.anim ? null : it.el.bgb, it.el.up, it.el.down]) if (b) b.style.visibility = "";
   for (const b of it.el.card.querySelectorAll(".crop")) b.setAttribute("aria-pressed", String(it.crop));
@@ -980,6 +981,7 @@ function fail(it, msg) {
   it.el.card.classList.remove("queued");
   clearInterval(it.quip);
   it.failed = true;
+  it.el.card.classList.remove("working");
   it.el.card.classList.add("failed");
   it.el.busy.textContent = msg;
 }
@@ -1014,12 +1016,18 @@ async function run() {
 }
 
 function startQuips(it) {
-  const { card, busy } = it.el;
-  card.classList.remove("queued");
+  it.el.card.classList.remove("queued");
   let line = Math.floor(Math.random() * QUIPS.length);
-  busy.textContent = QUIPS[line];
+  say(it, QUIPS[line]);
   clearInterval(it.quip);
-  it.quip = setInterval(() => { if (!it.failed) busy.textContent = QUIPS[++line % QUIPS.length]; }, 1600);
+  it.quip = setInterval(() => { if (!it.failed) say(it, QUIPS[++line % QUIPS.length]); }, 1600);
+}
+// One line of status in the bar (each new line rises in); the card shows the bar's status instead of its controls.
+function say(it, text) {
+  const el = it.el.say;
+  it.el.card.classList.add("working");
+  el.textContent = text;
+  el.classList.remove("rise"); void el.offsetWidth; el.classList.add("rise");
 }
 
 function show() { document.body.classList.add("has-work"); }
@@ -1108,7 +1116,8 @@ async function retry(it) {
   it.first = { mask: it.mask, rect: it.maskRect };
   retrying++; working("retry", it);
   const { busy, up, down, dl } = it.el;
-  busy.textContent = QUIPS[Math.floor(Math.random() * QUIPS.length)]; busy.hidden = false; dl.disabled = true;
+  busy.textContent = ""; busy.hidden = false; dl.disabled = true;
+  say(it, QUIPS[Math.floor(Math.random() * QUIPS.length)]);
   let changed = false;
   // Never next to a PNG being built (a full photo each): wait for those, and hold back the ones not started.
   clearTimeout(pngTimer);
@@ -1124,7 +1133,7 @@ async function retry(it) {
     if (m.box) { changed = true; it.mask = mergeRetry(it.first, m, { x: sx / it.w, y: sy / it.h, w: sw / it.w, h: sh / it.h }); it.maskRect = null; it.ms = lastMs; it.png = null; }
   } catch (e) { console.warn("Retry failed", e); }
   retrying--;
-  busy.hidden = true; dl.disabled = false;
+  busy.hidden = true; dl.disabled = false; it.el.card.classList.remove("working");
   if (!items.includes(it)) { rested(); return; }
   if (changed) reveal(it); else it.first = null;
   rested();

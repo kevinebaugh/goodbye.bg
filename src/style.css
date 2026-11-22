@@ -98,11 +98,20 @@ body.has-work .hero h1, body.has-work .sub { display: none; }
 .pic canvas { width: 100%; height: 100%; object-fit: contain; display: block; } /* small crops scale up to fill */
 .busy { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 10px; padding: 16px; text-align: center;
   background: color-mix(in srgb, var(--card) 70%, transparent); font-weight: 700; }
-.busy::before { content: "👋"; font-size: 30px; animation: wave 1.2s ease-in-out infinite; transform-origin: 70% 80%; }
+.busy::before { content: none; } /* no wave on the photo: the subject is what stays, so the wave lives in the bar (.say) */
 .failed .busy { color: var(--danger); font-weight: 600; }
+/* The quip lives in the bar while a photo is worked on (Download takes its place when done): text never lands on the photo. */
+.say { display: none; flex: 1; min-width: 0; min-height: var(--h-md); margin: 0; align-items: center; justify-content: center; text-align: center;
+  font-size: 14px; font-weight: 700; line-height: 1.2; color: var(--ink); overflow: hidden; }
+.working .say { display: flex; }
+.working .bar > :not(.say, .x) { display: none; }
+.say::before { content: "👋"; flex: none; margin-right: var(--s2); font-size: 1.3em; animation: wave 1.2s ease-in-out infinite; transform-origin: 70% 80%; }
+.say.rise { animation: rise .35s cubic-bezier(.2,1.2,.4,1); }
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+@media (prefers-reduced-motion: reduce) { .say.rise, .say::before { animation: none; } }
 .queued .busy { background: color-mix(in srgb, var(--card) 45%, transparent); }
 .queued .busy::before { content: none; } /* waiting cards stay still */
-.failed .busy::before { content: "🙈"; animation: none; }
+.failed .busy::before { content: "🙈"; font-size: 30px; }
 .failed .dl { visibility: hidden; } /* nothing to save; keeps its place so the bar stays the same height */
 /* Pinned inside the padding: as a grid item Safari sizes the image by its own height and clips the bottom. */
 .pic img, .pic canvas { position: absolute; inset: 12px; width: calc(100% - 24px); height: calc(100% - 24px); object-fit: contain; }
@@ -268,7 +277,9 @@ body.app:not(.has-work) main { flex: none; margin-top: auto; }
   .x { font-size: 17px; margin-left: 4px; }
   .crop svg { width: 14px; height: 14px; }
   .busy { font-size: 12px; gap: 6px; padding: 8px; }
-  .busy::before { font-size: 22px; }
+  .say { min-height: var(--h-sm); font-size: 11.5px; line-height: 1.1; }
+  .say::before { margin-right: var(--s1); font-size: 15px; }
+  .failed .busy::before { font-size: 22px; }
 }
 /* Download keeps at least ~40 px. What the bar has no room for moves into the background picker (crop first, then
    remove); 👍 👎 stay longest (phone cards, 1 to 3 photos in portrait, are 165 px). Bar by card width:
@@ -280,6 +291,10 @@ body.app:not(.has-work) main { flex: none; margin-top: auto; }
 @container (min-width: 148px) and (max-width: 183px) { .bar > .x { display: none; } .bgs .px { display: grid; } }
 @container (max-width: 147px) { .rates { display: none; } }
 @container (max-width: 119px) { .bar > .x { display: none; } .bgs .px { display: grid; } .bgs .pcrop, .bgs .sw2 { display: none; } .bgs { padding: 0 4px; } }
+/* The quip stays two lines at the bar's height: phone cards hide remove while their photo is worked on;
+   the smallest (a dozen photos) show only the wave. */
+@container (max-width: 183px) { .working .bar > .x { display: none; } }
+@container (max-width: 147px) { .say { font-size: 0; } .say::before { margin: 0; } }
 /* Short screens (a phone on its side): the wordmark moves beside the buttons and the spacing tightens, so the
    cards get the height. */
 @media (max-height: 520px) {

@@ -155,7 +155,9 @@ Tested: headless Chrome (reload in a restarted browser, Back still from bfcache)
 
 - One screen, no scrolling. No double-tap zoom; pinch-zoom is allowed for accessibility (Kevin, 2026-11-20). Cards are square and sized to fit; a batch appears at
   once, in the order picked, and processing goes top-left first.
-- Only the photo being worked on waves and shows a quip; waiting cards stay still. Quips are the one place
+- Only the photo being worked on waves and shows a quip; waiting cards stay still. The wave and quip live in the card's bar (where
+  Download appears when done), never on the photo: the subject is what stays (Kevin, 2026-11-21). Phone cards hide remove while working
+  so the quip fits two lines; the smallest cards show only the wave. Footer: "Goodbye to N backgrounds since 2026." Quips are the one place
   for playful text; everything else is plain and only what people need.
 - Results are cropped to the subject by default (crop icon switches to the whole frame). 👎 retries zoomed in (merged into the first result outside the zoomed part, feathered where they meet; mergeRetry)
   on the subject, a second 👎 restores the first result. One vote per result: the chosen emoji stays lit and the
