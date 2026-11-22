@@ -25,6 +25,7 @@ const CAP = {
   async delete(k) { for (const x of [].concat(k)) capStore.delete(x); },
   async list({ prefix = "" } = {}) { return { objects: [...capStore.keys()].filter((k) => k.startsWith(prefix)).map(capObj) }; },
 };
+const waitUntil = (p) => { p.catch(() => {}); }; // like Pages: work that goes on after the response (the 20 s delete after Zazzle's fetch)
 const readBody = (req) => new Promise((ok) => { const d = []; req.on("data", (c) => d.push(c)); req.on("end", () => ok(Buffer.concat(d))); });
 const LIVE = process.env.LIVE || "https://goodbye-bg-git.pages.dev";
 
@@ -55,12 +56,12 @@ createServer(async (req, res) => {
   const capUp = path.match(/^\/api\/cap\/([^/]+)$/);
   if (capUp && req.method === "PUT") {
     const body = await readBody(req);
-    const r = await capPut({ params: { key: capUp[1] }, env: { CAP }, request: new Request(`http://localhost:${port}${path}`, { method: "PUT", headers: req.headers, body }) });
+    const r = await capPut({ params: { key: capUp[1] }, env: { CAP }, waitUntil, request: new Request(`http://localhost:${port}${path}`, { method: "PUT", headers: req.headers, body }) });
     res.writeHead(r.status, Object.fromEntries(r.headers)).end(await r.text()); return;
   }
   const capDown = path.match(/^\/cap\/([^/]+)$/);
   if (capDown) {
-    const r = await (req.method === "HEAD" ? capHead : capGet)({ params: { file: capDown[1] }, env: { CAP }, request: new Request(new URL(req.url, `http://localhost:${port}`)) });
+    const r = await (req.method === "HEAD" ? capHead : capGet)({ params: { file: capDown[1] }, env: { CAP }, waitUntil, request: new Request(new URL(req.url, `http://localhost:${port}`)) });
     res.writeHead(r.status, Object.fromEntries(r.headers)).end(r.body ? Buffer.from(await r.arrayBuffer()) : undefined); return;
   }
   const fns = { "/api/rate": rateFn, "/api/crash": crashFn, "/api/diag": diagFn };
