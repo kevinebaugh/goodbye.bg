@@ -1,5 +1,7 @@
 # Launch drafts
 
+Superseded by `docs/launch/README.md` (2026-11-22): tighter copy, checked against the code, plus images and a demo.
+
 Drafts for Kevin to post himself. Nothing here has been posted. Written 2026-11-21.
 
 Before posting:
