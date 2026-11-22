@@ -476,6 +476,8 @@ body.app:not(.has-work) main { flex: none; margin-top: auto; }
   body.app.has-work .hero .allrow .btn { --h: 44px; --px: 24px; white-space: nowrap; }
   body.app.has-work .foot { display: none; }
 }
+/* Too many photos to fit with the footer: it steps aside so the cards get its room (app.js layout, "packed"). */
+body.app.has-work.packed .foot { display: none; }
 /* "Download all" spans the row under the cards, edge to edge with them. */
 .allrow { grid-column: 1 / -1; display: flex; }
 .allrow .btn { flex: 1; --fs: 16px; }

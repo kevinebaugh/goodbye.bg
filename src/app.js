@@ -1967,6 +1967,7 @@ COARSE.addEventListener?.("change", () => requestAnimationFrame(layout));
 // A phone on its side (short and wide): "Download all" moves up beside Choose photos and Paste, where the width is
 // spare, and the footer steps aside (style.css), so the cards get the height and keep 👍 👎 (Kevin, 2026-11-22:
 // on its side the bars were cut off under Download all and 👎 was gone). Otherwise it is the row under the cards.
+let footH = 0; // the footer's height when last shown (layout: "packed")
 const SIDEWAYS = matchMedia("(max-height: 520px) and (min-width: 660px)");
 function seatTools() {
   const t = $("tools"), row = $("hero").querySelector(".row"), g = $("grid");
@@ -1977,7 +1978,7 @@ const gridEnd = () => ($("tools").parentNode === $("grid") ? $("tools") : null);
 SIDEWAYS.addEventListener("change", () => layout());
 function layout() {
   const g = $("grid"), n = g.querySelectorAll(".card").length, all = $("tools");
-  if (!n) { placeAds(0, 0); hugFooter(0); return; } // the last photo was removed: the ads go with it
+  if (!n) { document.body.classList.remove("packed"); placeAds(0, 0); hugFooter(0); return; } // the last photo was removed: the ads go with it
   try { if (adsOn()) load3d(); } catch {} // fetch the 3D code while the first photo is still being worked on, so ads draw at once
   // "Download all" sits under the cards. Its padding (only while the grid scrolls, where it sticks to the bottom) is left
   // out: counted, a grid that had scrolled stayed scrolling once a card went (13 to 12 photos on a phone).
@@ -1985,10 +1986,10 @@ function layout() {
   const allH = all.hidden || all.parentNode !== g ? 0 : all.offsetHeight - (parseFloat(getComputedStyle(all).paddingTop) || 0) + GAP;
   const W = g.clientWidth, H = g.clientHeight - (parseFloat(getComputedStyle(g).paddingTop) || 0) - allH;
   // The bar's height depends on the card's width, so it is worked out for each candidate, not measured from the cards.
-  const fit = (k, from = 1) => {
+  const fit = (k, from = 1, h = H) => {
     let b = { p: 0, c: 1 };
     for (let c = from; c <= k; c++) {
-      const r = Math.ceil(k / c), pw = (W - GAP * (c - 1)) / c, row = (H - GAP * (r - 1)) / r;
+      const r = Math.ceil(k / c), pw = (W - GAP * (c - 1)) / c, row = (h - GAP * (r - 1)) / r;
       let p = Math.min(pw, row - barFor(pw));
       if (barFor(p) !== barFor(pw)) p = Math.min(pw, FULL_BAR, row - barFor(p)); // height-bound: smaller cards, smaller bar
       p = Math.floor(p);
@@ -1999,6 +2000,13 @@ function layout() {
   // Ads fill the grid (Kevin, 2026-11-20): up to 3 photos are laid out as 4 cells, more photos fill out their
   // last row. The cells are reserved from the start, so the photos never resize when the ads arrive.
   let slots = adsOn() && n < 4 ? 4 : n, best = fit(slots);
+  // When the photos would scroll with the footer in place, the footer steps aside and the grid gets its room (Kevin,
+  // 2026-11-22: on a phone with 10 photos the footer sat under Download all while the cards scrolled). Decided as if the
+  // footer were there, so taking it away never brings it back in a loop.
+  const foot = document.querySelector(".foot"), packed = document.body.classList.contains("packed");
+  if (foot && !packed) footH = foot.offsetHeight;
+  const crowded = fit(slots, 1, packed ? H - footH : H).p < MIN_PIC;
+  if (crowded !== packed && !SIDEWAYS.matches) { document.body.classList.toggle("packed", crowded); requestAnimationFrame(layout); return; } // again, with the grid's new height
   // A phone in portrait (Kevin's iPhone: 402 x 654): 1 or 2 photos in the 4 kept cells came out 136 px, too small for
   // 👍 👎. Then they keep 2 cells (1 photo + 1 ad, or 2 photos side by side), which leaves room for the bar's second row.
   // Also when the bar would hide remove (under 204 px, Kevin 2026-11-22: "I can't remove the last one"): 2 cells leave

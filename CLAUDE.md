@@ -216,6 +216,8 @@ without a visit; private windows refuse Blobs, so nothing is kept there.
   Also 660 px wide or more (a phone on its side): Download all joins Choose photos / Paste up top and the footer is hidden
   while photos are on screen, so the cards get the height and keep 👍 👎; when it scrolls, one row is as tall as the
   screen allows (Kevin, 2026-11-22: on his iPhone on its side the bars were cut off under Download all and 👎 was gone).
+- When the photos would scroll with the footer in place, the footer steps aside (`packed`; decided as if it were shown, so
+  no loop). Kevin, 2026-11-22: on a phone with 10 photos it sat under Download all while the cards scrolled.
 - Drags that start on the page (a cut-out dragged out) are ignored if dropped back on it.
 - Haptics: a light tick on result, crop, 👍/👎 and Download (Android vibrate; iOS 18+ hidden switch control).
 - Buttons follow one small system in style.css (Kevin, 2026-11-21: "a mature design system"): spacing tokens
