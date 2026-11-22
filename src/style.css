@@ -164,7 +164,7 @@ body.moving main, body.moving main *, body.moving .foot, body.moving .foot * { v
 .sw { width: 18px; height: 18px; border-radius: 50%; display: block; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 30%, transparent); }
 .sw.none, .swb.sw0 .sw { background: repeating-conic-gradient(var(--check-a) 0 25%, var(--check-b) 0 50%) 0 0 / 8px 8px; }
 .bgb { opacity: .9; }
-.bar.picking > :not(.bgs) { visibility: hidden; }
+.bar.picking > :not(.bgs, .opts) { visibility: hidden; }
 .bgs { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: var(--s2); padding: 0 var(--s3);
   background: var(--card); overflow-x: auto; scrollbar-width: none; }
 .swb { --d: 30px; flex: none; position: relative; width: var(--d); height: var(--d); border-radius: 50%; border: 0; padding: 0; display: grid; place-items: center;
@@ -181,6 +181,34 @@ body.moving main, body.moving main *, body.moving .foot, body.moving .foot * { v
 .custom:not(.set) .sw::after { content: "+"; font-size: 15px; font-weight: 800; color: var(--muted); }
 .custom input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; border: 0; padding: 0; cursor: pointer; }
 .pcrop, .px { display: none; }
+/* Size, margin, shadow: the picker's second row, same place and height. Native selects (a phone shows its own wheel).
+   Narrow cards scroll it sideways. */
+.opts { position: absolute; inset: 0; display: flex; align-items: center; gap: var(--s2); padding: 0 var(--s3);
+  background: var(--card); overflow-x: auto; scrollbar-width: none; }
+.opts::-webkit-scrollbar, .bgs::-webkit-scrollbar { display: none; }
+.opts > * { flex: none; animation: swin .28s cubic-bezier(.2,1.5,.4,1) backwards; animation-delay: calc(var(--i, 0) * 25ms); }
+.opts > [hidden] { display: none; }
+.selw { position: relative; display: inline-flex; }
+.selw::after { content: ""; position: absolute; right: 9px; top: 50%; width: 6px; height: 6px; margin-top: -5px; pointer-events: none;
+  border: solid currentColor; border-width: 0 2px 2px 0; transform: rotate(45deg); opacity: .6; }
+.osel, .onum { height: var(--h-sm); border-radius: 999px; border: 1.5px solid var(--line); background: var(--card); color: var(--ink);
+  font-size: 13px; font-weight: 700; line-height: 1; cursor: pointer; }
+.osel { appearance: none; -webkit-appearance: none; padding: 0 22px 0 10px; field-sizing: content; } /* as wide as the choice shown (Chrome) */
+.omargin .osel { padding-left: 25px; }
+.omargin::before { content: ""; position: absolute; left: 10px; top: 50%; width: 9px; height: 9px; margin-top: -6px; pointer-events: none;
+  border: 1.5px dashed currentColor; border-radius: 2px; opacity: .7; } /* room around the subject */
+.opts.fade { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
+.osel:disabled { opacity: .4; cursor: default; }
+.onum { width: 58px; padding: 0 6px; text-align: center; cursor: text; appearance: textfield; -moz-appearance: textfield; }
+.onum::-webkit-inner-spin-button, .onum::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.oby { color: var(--muted); font-weight: 700; margin: 0 -4px; }
+.ochip { --h: var(--h-sm); --px: var(--s3); --fs: 13px; }
+.ochip[aria-pressed="true"], .oshadow[aria-pressed="true"] { opacity: 1; border-color: var(--brand); background: color-mix(in srgb, var(--accent) 28%, var(--card)); }
+.oshadow { box-shadow: inset 0 0 0 1.5px var(--line); }
+@media (hover: hover) { .osel:hover:not(:disabled), .onum:hover { border-color: var(--accent); } }
+.osel:focus-visible, .onum:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+@container (max-width: 300px) { .opts { gap: var(--s1); } }
+@container (max-width: 240px) { .opts { padding: 0 6px; } .osel, .onum { font-size: 12px; } .osel { padding: 0 18px 0 var(--s2); } .omargin .osel { padding-left: 22px; } .omargin::before { left: 8px; } .selw::after { right: 7px; } .ochip { --px: var(--s2); } }
 .pcrop svg { width: 15px; height: 15px; }
 .rate.chosen { opacity: 1; filter: none; transform: scale(1.1); }
 
@@ -345,12 +373,13 @@ body.app:not(.has-work) main { flex: none; margin-top: auto; }
    remove); 👍 👎 stay longest (phone cards, 1 to 3 photos in portrait, are 165 px). Bar by card width:
    218+ crop, background, Download, 👍 👎, remove | 186-217 no crop | 150-185 no crop, no remove |
    122-149 background, Download, remove | under 122 background, Download (card widths; the queries see 2 px less). */
+@container (max-width: 300px) { .swb { --d: 26px; } .bgs { gap: var(--s1); } }
 @container (max-width: 240px) { .sw { width: 16px; height: 16px; } .swb { --d: 24px; font-size: 15px; } .bgs { gap: var(--s1); padding: 0 6px; } }
-@container (max-width: 215px) { .bar > .crop { display: none; } .bgs .pcrop { display: grid; } .bgs .sw4 { display: none; } }
-@container (max-width: 183px) { .bgs .sw3 { display: none; } .swb { --d: 20px; font-size: 13px; } .bgs { gap: 2px; } .pcrop svg { width: 12px; height: 12px; } }
+@container (max-width: 215px) { .bar > .crop { display: none; } .bgs .pcrop { display: grid; } .bgs .sw4, .bgs .sw3 { display: none; } }
+@container (max-width: 183px) { .swb { --d: 20px; font-size: 13px; } .bgs { gap: 0; padding: 0 4px; } .pcrop svg, .more svg { width: 12px; height: 12px; } }
 @container (min-width: 148px) and (max-width: 183px) { .picky .bar > .x { display: none; } .bgs .px { display: grid; } }
-@container (max-width: 147px) { .rates { display: none; } }
-@container (max-width: 119px) { .picky .bar > .x { display: none; } .bgs .px { display: grid; } .bgs .pcrop, .bgs .sw2 { display: none; } .bgs { padding: 0 4px; } }
+@container (max-width: 147px) { .rates { display: none; } .bgs .sw2 { display: none; } }
+@container (max-width: 119px) { .picky .bar > .x { display: none; } .bgs .px { display: grid; } .bgs .pcrop, .bgs .sw2, .bgs .custom { display: none; } .bgs { padding: 0 4px; } }
 /* The quip stays two lines at the bar's height: phone cards hide remove while their photo is worked on;
    the smallest (a dozen photos) show only the wave. */
 @container (max-width: 183px) { .working .bar > .x { display: none; } }

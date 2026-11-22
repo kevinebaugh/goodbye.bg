@@ -585,6 +585,7 @@ function drawCard(it) {
   const x = c.getContext("2d");
   x.clearRect(0, 0, W, H);
   if (!it.mask) return x.drawImage(it.bmp, 0, 0, W, H);
+  if (!plainOut(it)) return drawPlanned(it);
   if (it.bg && !it.anim) { x.fillStyle = it.bg; x.fillRect(0, 0, W, H); }
   const full = render(it, Math.max(1, Math.round(it.w * k)), Math.max(1, Math.round(it.h * k)));
   x.drawImage(full, f.x * k, f.y * k, f.w * k, f.h * k, 0, 0, W, H);
@@ -631,7 +632,7 @@ function reveal(it) {
   const K = Math.min(1, PREVIEW_SIDE / Math.max(it.w, it.h)), W = Math.round(it.w * K), H = Math.round(it.h * K);
   c.width = W; c.height = H;
   const cut = render(it, W, H), slant = H * 0.4, D = 450, Z = 420, f = frame(it);
-  const zoom = f.w !== it.w || f.h !== it.h;
+  const zoom = plainOut(it) && (f.w !== it.w || f.h !== it.h); // with a size, margin or shadow set, drawCard draws that at the end
   let t0 = performance.now();
   const wipe = (now) => {
     if (!items.includes(it)) return; // removed mid-wipe (its bitmap is closed)
@@ -670,7 +671,9 @@ function reveal(it) {
 // each) were enough, next to the engine, to crash an iPhone.
 const fullBitmap = (it) => decode(it.blob);
 
-async function fullBlob(it, bg = it.bg) {
+// raw: the plain see-through PNG of the crop, whatever the card's options (the cut-out sent to Zazzle).
+async function fullBlob(it, raw = false) {
+  const bg = raw ? null : it.bg, webp = !raw && outOf(it).fmt === "webp" && WEBP;
   dbg("png", { w: it.w, h: it.h });
   working("png", it); pngBusy++;
   // One canvas at the saved size: the photo is drawn shifted so the crop lands at 0,0 (the canvas clips the
@@ -679,19 +682,24 @@ async function fullBlob(it, bg = it.bg) {
   // iPhone: a 16 MP PNG built next to a live engine (about 1.8 GB) crashed Safari (crash step "png"). When no photo
   // is waiting for it, the engine goes first; the next photo starts a new one from the cached model.
   if (IOS && worker?.up && !running && !retrying && !jobs.size) { stopEngine("png"); dbg("engine-png"); await nextFrame(); }
-  const f = frame(it), out = new OffscreenCanvas(f.w, f.h), x = out.getContext("2d");
+  // With a size, margin or shadow (outPlan) the photo is scaled by k and placed at tx, ty, clipped to the subject's box.
+  const f = frame(it), p = raw || plainOut(it) ? null : outPlan(it);
+  const k = p ? p.k : 1, tx = p ? p.tx : -f.x, ty = p ? p.ty : -f.y;
+  const out = new OffscreenCanvas(p ? p.W : f.w, p ? p.H : f.h), x = out.getContext("2d");
   try {
+    if (p) { x.save(); x.beginPath(); x.rect(...p.clip); x.clip(); }
     const big = await fullBitmap(it);
-    try { x.imageSmoothingQuality = "high"; x.drawImage(big, -f.x, -f.y, it.w, it.h); }
+    try { x.imageSmoothingQuality = "high"; x.drawImage(big, tx, ty, it.w * k, it.h * k); }
     finally { big.close(); }
-    const r = it.maskRect || FULL;
+    const r = it.maskRect || FULL, mx = r.x * it.w * k + tx, my = r.y * it.h * k + ty, mw = r.w * it.w * k, mh = r.h * it.h * k;
     x.globalCompositeOperation = "source-atop"; // see-through edges, only where the photo has pixels
-    if (it.mask.fix) x.drawImage(it.mask.fix, r.x * it.w - f.x, r.y * it.h - f.y, r.w * it.w, r.h * it.h);
+    if (it.mask.fix) x.drawImage(it.mask.fix, mx, my, mw, mh);
     x.globalCompositeOperation = "destination-in"; // keep the photo only where the mask is opaque
-    x.drawImage(it.mask, r.x * it.w - f.x, r.y * it.h - f.y, r.w * it.w, r.h * it.h);
+    x.drawImage(it.mask, mx, my, mw, mh);
+    if (p) x.restore();
+    underlay(x, p, 1, bg); // the shadow and the chosen background go behind the cut-out
+    if (webp) return await out.convertToBlob({ type: "image/webp", quality: 0.9 });
     if (!bg) return await out.convertToBlob({ type: "image/png" });
-    x.globalCompositeOperation = "destination-over"; // the chosen background goes behind the cut-out
-    x.fillStyle = bg; x.fillRect(0, 0, f.w, f.h);
     return await out.convertToBlob({ type: "image/jpeg", quality: 0.92 });
   } finally { pngBusy--; rested(); }
 }
@@ -709,8 +717,74 @@ function png(it) {
   }
   return it.png;
 }
-const ext = (it) => (it.anim ? "gif" : it.bg ? "jpg" : "png");
+const ext = (it) => (it.anim ? "gif" : outOf(it).fmt === "webp" && WEBP ? "webp" : it.bg ? "jpg" : "png");
 const outName = (it) => `${it.name}-goodbye-bg.${ext(it)}`;
+
+/* ---------- output: size, margin, shadow, format ----------
+   For sellers and product shots, set per photo in the bar's second row (see optsRow), or for all at once. All off by
+   default: Original keeps today's crop (the subject with 4% room, never past the photo's edges) and saves PNG, or JPG on
+   a colour. A ratio (1:1, 4:5, 16:9) grows the canvas around the subject at the photo's own resolution; Custom scales it
+   into exactly W x H. Margin is a share of the subject's longer side. The shadow is a soft ellipse under the subject. */
+const OUT0 = { size: "orig", cw: 2000, ch: 2000, margin: 0.04, shadow: false, fmt: null };
+const RATIOS = { "1:1": 1, "4:5": 0.8, "16:9": 16 / 9 };
+const OUT_MAX = IOS ? 4096 : 5000; // a custom side; and no output over 16 MP on iPhones (Safari's canvas limit), 36 elsewhere
+const OUT_PX = IOS ? 16e6 : 36e6;
+const outOf = (it) => ({ ...OUT0, ...it.out });
+const plainOut = (it) => { if (it.anim) return true; const o = outOf(it); return o.size === "orig" && o.margin === OUT0.margin && !o.shadow; };
+let WEBP = false; // browsers that can't encode WebP hand back a PNG instead (Safari): then the option isn't offered
+(() => { const c = new OffscreenCanvas(1, 1); c.getContext("2d"); return c.convertToBlob({ type: "image/webp" }); })().then((b) => { WEBP = b.type === "image/webp"; }, () => {});
+let outAll = null; // after "All": photos added later in this visit get the same background and options
+
+// Where things go on the output canvas, in its pixels: a photo pixel p lands at p * k + (tx, ty); clip is the subject's
+// box with its margin (outside it the canvas stays empty); sh is the shadow ellipse in photo pixels.
+function outPlan(it) {
+  const o = outOf(it), s = subject(it);
+  const b = it.crop && s ? s : { x0: 0, y0: 0, x1: 1, y1: 1 };
+  let x0 = b.x0 * it.w, y0 = b.y0 * it.h, x1 = b.x1 * it.w, y1 = b.y1 * it.h;
+  const pad = o.margin * Math.max(x1 - x0, y1 - y0);
+  x0 -= pad; y0 -= pad; x1 += pad; y1 += pad;
+  let sh = null;
+  if (o.shadow && s) {
+    const rx = 0.45 * (s.x1 - s.x0) * it.w, ry = Math.max(3, rx * 0.12);
+    sh = { cx: ((s.x0 + s.x1) / 2) * it.w, cy: s.y1 * it.h - ry * 0.35, rx, ry };
+    y1 = Math.max(y1, sh.cy + sh.ry * 1.1); // room for it under the subject
+  }
+  if (o.size === "orig") { x0 = Math.max(0, x0); y0 = Math.max(0, y0); x1 = Math.min(it.w, x1); y1 = Math.min(it.h, y1); } // never past the photo
+  const bw = Math.max(1, x1 - x0), bh = Math.max(1, y1 - y0);
+  let W = bw, H = bh, k = 1;
+  if (o.size === "custom") { W = o.cw; H = o.ch; k = Math.min(W / bw, H / bh); }
+  else if (RATIOS[o.size]) { const r = RATIOS[o.size]; if (bw / bh > r) H = bw / r; else W = bh * r; }
+  const c = Math.min(1, MAX_SIDE / Math.max(W, H), Math.sqrt(OUT_PX / (W * H)));
+  W = Math.max(1, Math.round(W * c)); H = Math.max(1, Math.round(H * c)); k *= c;
+  const tx = W / 2 - ((x0 + x1) / 2) * k, ty = H / 2 - ((y0 + y1) / 2) * k;
+  return { W, H, k, tx, ty, clip: [x0 * k + tx, y0 * k + ty, bw * k, bh * k], sh };
+}
+// The shadow, then the background, behind what the canvas holds; q scales the plan (previews).
+function underlay(x, p, q, bg) {
+  x.globalCompositeOperation = "destination-over";
+  if (p?.sh) {
+    const { cx, cy, rx, ry } = p.sh, R = rx * p.k * q;
+    x.save(); x.translate((cx * p.k + p.tx) * q, (cy * p.k + p.ty) * q); x.scale(1, ry / rx);
+    const g = x.createRadialGradient(0, 0, 0, 0, 0, R); // a gradient, not a canvas filter (Safari)
+    g.addColorStop(0, "rgba(0,0,0,.34)"); g.addColorStop(0.5, "rgba(0,0,0,.16)"); g.addColorStop(1, "rgba(0,0,0,0)");
+    x.fillStyle = g; x.beginPath(); x.arc(0, 0, R, 0, 2 * Math.PI); x.fill(); x.restore();
+  }
+  if (bg) { x.fillStyle = bg; x.fillRect(0, 0, x.canvas.width, x.canvas.height); }
+  x.globalCompositeOperation = "source-over";
+}
+// The card with options set: the plan at preview size, never sharper than the preview bitmap.
+function drawPlanned(it) {
+  const p = outPlan(it), c = it.el.canvas, x = c.getContext("2d");
+  const q = Math.min(1, PREVIEW_SIDE / Math.max(p.W, p.H), it.bmp.width / it.w / p.k);
+  c.width = Math.max(1, Math.round(p.W * q)); c.height = Math.max(1, Math.round(p.H * q));
+  x.clearRect(0, 0, c.width, c.height);
+  const s = p.k * q, full = render(it, Math.max(1, Math.round(it.w * s)), Math.max(1, Math.round(it.h * s)));
+  x.save(); x.beginPath(); x.rect(...p.clip.map((v) => v * q)); x.clip();
+  x.drawImage(full, p.tx * q, p.ty * q);
+  x.restore();
+  underlay(x, p, q, it.bg);
+  still(it);
+}
 
 /* ---------- animated GIFs ----------
    Each frame goes through the model (the first one already has), is cut out at the GIF's size, and the frames
@@ -781,7 +855,7 @@ async function addSources(list, origin = "") {
   // All cards appear at once, so the layout settles once instead of jumping with every photo.
   const cards = document.createDocumentFragment(); // the batch goes on top, in the order it was picked
   const batch = list.map((src, i) => {
-    const it = { id: ++uid, key: top + i, name: "image", bmp: null, blob: null, w: 0, h: 0, mask: null, crop: true };
+    const it = { id: ++uid, key: top + i, name: "image", bmp: null, blob: null, w: 0, h: 0, mask: null, crop: true, bg: outAll?.bg || null, out: outAll?.out ? { ...outAll.out } : null };
     items.push(it);
     cards.append(makeCard(it));
     named(it, baseName(src instanceof Blob ? src.name : String(src).startsWith("data:") ? "pasted" : String(src)));
@@ -794,7 +868,7 @@ async function addSources(list, origin = "") {
       const { blob, name } = await toBlob(src);
       named(it, baseName(name));
       if (/gif/i.test(blob.type) || /\.gif$/i.test(name || "")) { // animated: every frame gets cut out
-        try { const g = (await loadGif()).readGif(await blob.arrayBuffer(), MAX_FRAMES); if (g) { it.anim = g; it.crop = false; dbg("gif", { frames: g.frames.length, total: g.total }); } }
+        try { const g = (await loadGif()).readGif(await blob.arrayBuffer(), MAX_FRAMES); if (g) { it.anim = g; it.crop = false; it.bg = null; it.out = null; dbg("gif", { frames: g.frames.length, total: g.total }); } }
         catch (e) { console.warn("GIF frames skipped", e); }
       }
       dbg("decode", { bytes: blob.size, type: blob.type });
@@ -938,16 +1012,16 @@ function makeCard(it) {
   const bgb = document.createElement("button"); bgb.type = "button"; bgb.className = "ico bgb"; bgb.style.visibility = "hidden";
   bgb.setAttribute("aria-label", "Background"); bgb.title = "Background"; bgb.setAttribute("aria-expanded", "false");
   bgb.innerHTML = '<span class="sw"></span>';
-  const pick = bgPicker(it, crop, x);
+  const pick = bgPicker(it, crop, x), opts = optsRow(it);
   const say = document.createElement("p"); say.className = "say"; // the quip while this photo is worked on: in the bar, never on the photo
-  bar.append(crop, bgb, dl, rates, say, x, pick);
+  bar.append(crop, bgb, dl, rates, say, x, pick, opts);
   card.append(pic, bar);
   bgb.addEventListener("click", () => { tick(); if (bar.classList.contains("picking")) closePick(); else openPick(it); });
 
   crop.addEventListener("click", () => {
     it.crop = !it.crop; tick();
     for (const b of card.querySelectorAll(".crop")) b.setAttribute("aria-pressed", String(it.crop));
-    it.png = null; drawCard(it); if (PHONE && !running && !retrying) png(it); keep(it);
+    it.png = null; drawCard(it); if (PHONE && !running && !retrying) png(it); keep(it); paintOpts(it);
   });
   x.addEventListener("click", () => { dbg("removed"); clearInterval(it.quip);
     const at = items.indexOf(it); if (at < 0) return;
@@ -967,7 +1041,7 @@ function makeCard(it) {
     finally { clearTimeout(slow); dl.removeAttribute("aria-busy"); it.saving = false; }
   });
 
-  it.el = { card, pic, canvas, img, busy, dl, crop, up, down, bar, bgb, pick, say };
+  it.el = { card, pic, canvas, img, busy, dl, crop, up, down, bar, bgb, pick, opts, say };
   return card;
 }
 
@@ -1003,6 +1077,11 @@ function bgPicker(it, crop, x) {
   });
   input.addEventListener("change", () => { cancelAnimationFrame(raf); setBg(it, input.value, true); closePick(); });
   pick.append(own);
+  const more = document.createElement("button"); more.type = "button"; more.className = "swb more";
+  more.setAttribute("aria-label", "Size, margin, shadow"); more.title = "Size, margin, shadow";
+  more.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>';
+  more.addEventListener("click", () => { tick(); openOpts(it); });
+  pick.append(more);
   const px = x.cloneNode(true); px.className = "swb px"; px.addEventListener("click", () => x.click());
   pick.append(px);
   [...pick.children].forEach((c, i) => c.style.setProperty("--i", i));
@@ -1021,8 +1100,9 @@ function closePick(refocus = false) {
   const it = picking; picking = null;
   if (!it) return;
   const { bar, bgb, pick } = it.el;
-  bar.classList.remove("picking"); pick.hidden = true; bgb.setAttribute("aria-expanded", "false");
-  if (refocus || pick.contains(document.activeElement)) bgb.focus({ preventScroll: true });
+  const { opts } = it.el, inside = pick.contains(document.activeElement) || opts.contains(document.activeElement);
+  bar.classList.remove("picking"); pick.hidden = true; opts.hidden = true; bgb.setAttribute("aria-expanded", "false");
+  if (refocus || inside) bgb.focus({ preventScroll: true });
 }
 // A tap anywhere else puts the bar back.
 document.addEventListener("pointerdown", (e) => { if (picking && !picking.el.bar.contains(e.target)) closePick(); }, true);
@@ -1045,6 +1125,82 @@ function paintBg(it) {
   c.firstChild.style.background = own ? v : "";
   if (own) c.querySelector("input").value = v;
   bgb.setAttribute("aria-label", `Background: ${own ? v : BGS.find(([c]) => c === v)[1]}`);
+}
+
+/* The second row: size, margin, shadow, WebP, and "All", which gives every photo this one's background and options.
+   Like the swatches it takes the bar's place at the bar's height (narrow cards scroll it sideways). */
+const SIZES = [["orig", "Original"], ["1:1", "Square"], ["4:5", "4:5"], ["16:9", "16:9"], ["custom", "Custom"]];
+const MARGINS = [[0, "0%"], [0.04, "4%"], [0.1, "10%"], [0.2, "20%"]];
+function optsRow(it) {
+  const o = document.createElement("div"); o.className = "opts"; o.hidden = true;
+  o.setAttribute("role", "group"); o.setAttribute("aria-label", "Size, margin, shadow");
+  const sel = (cls, label, list) => {
+    const w = document.createElement("span"); w.className = "selw " + cls;
+    const s = document.createElement("select"); s.className = "osel"; s.setAttribute("aria-label", label);
+    for (const [v, t] of list) { const op = document.createElement("option"); op.value = String(v); op.textContent = t; s.append(op); }
+    w.title = label; w.append(s); return w;
+  };
+  const size = sel("osize", "Size", SIZES), margin = sel("omargin", "Margin around the subject", MARGINS);
+  size.firstChild.addEventListener("change", (e) => setOut(it, { size: e.target.value }));
+  margin.firstChild.addEventListener("change", (e) => setOut(it, { margin: +e.target.value }));
+  const num = (cls, label, key) => {
+    const n = document.createElement("input"); n.type = "number"; n.inputMode = "numeric"; n.min = "16"; n.max = String(OUT_MAX); n.step = "1";
+    n.className = "onum " + cls; n.setAttribute("aria-label", label); n.title = label;
+    n.addEventListener("change", () => { const v = Math.round(Math.min(OUT_MAX, Math.max(16, +n.value || OUT0[key]))); n.value = v; setOut(it, { [key]: v }); });
+    return n;
+  };
+  const cw = num("ocw", "Width in pixels", "cw"), ch = num("och", "Height in pixels", "ch");
+  const by = document.createElement("span"); by.className = "oby"; by.textContent = "×"; by.setAttribute("aria-hidden", "true");
+  const shadow = document.createElement("button"); shadow.type = "button"; shadow.className = "ico oshadow";
+  shadow.setAttribute("aria-label", "Shadow under the subject"); shadow.title = "Shadow under the subject";
+  shadow.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><ellipse cx="12" cy="19" rx="8" ry="2.2" fill="currentColor" opacity=".35"/><rect x="8" y="5" width="8" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
+  shadow.addEventListener("click", () => { tick(); setOut(it, { shadow: !outOf(it).shadow }); });
+  const webp = document.createElement("button"); webp.type = "button"; webp.className = "btn ochip owebp"; webp.textContent = "WebP";
+  webp.title = "Save as WebP (smaller files)";
+  webp.addEventListener("click", () => { tick(); setOut(it, { fmt: outOf(it).fmt ? null : "webp" }); });
+  const all = document.createElement("button"); all.type = "button"; all.className = "btn ochip oall"; all.textContent = "All";
+  all.setAttribute("aria-label", "Use for all photos"); all.title = "Use this background and these options for all photos";
+  all.addEventListener("click", () => { tick(); useForAll(it); all.textContent = "✓"; setTimeout(() => (all.textContent = "All"), 1200); });
+  o.append(size, cw, by, ch, margin, shadow, all, webp); // most used first: narrow cards scroll to the rest
+  o.addEventListener("scroll", () => fadeOpts(o), { passive: true });
+  [...o.children].forEach((c, i) => c.style.setProperty("--i", i));
+  o.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); closePick(true); } });
+  return o;
+}
+function openOpts(it) {
+  const { pick, opts } = it.el;
+  paintOpts(it);
+  pick.hidden = true; opts.hidden = false; opts.scrollLeft = 0; fadeOpts(opts);
+  opts.querySelector(".osel")?.focus({ preventScroll: true });
+}
+// More to the right: the row fades out at its end.
+const fadeOpts = (o) => o.classList.toggle("fade", o.scrollLeft + o.clientWidth < o.scrollWidth - 2);
+function paintOpts(it) {
+  const o = outOf(it), el = it.el.opts; if (!el) return;
+  const q = (s) => el.querySelector(s), custom = o.size === "custom";
+  q(".osize select").value = o.size;
+  q(".omargin select").value = String(MARGINS.some(([v]) => v === o.margin) ? o.margin : OUT0.margin);
+  q(".omargin select").disabled = o.size === "orig" && !it.crop; // the whole photo: nothing to add room around
+  q(".ocw").value = o.cw; q(".och").value = o.ch;
+  for (const s of [".ocw", ".och", ".oby"]) q(s).hidden = !custom;
+  q(".oshadow").setAttribute("aria-pressed", String(!!o.shadow));
+  q(".owebp").setAttribute("aria-pressed", String(o.fmt === "webp")); q(".owebp").hidden = !WEBP;
+  if (it.mask) { const p = plainOut(it) ? frame(it) : outPlan(it), w = p.W || p.w, h = p.H || p.h; q(".osize select").title = `${w} × ${h} px`; }
+}
+function setOut(it, patch) {
+  it.out = { ...outOf(it), ...patch };
+  it.png = null; paintOpts(it); fadeOpts(it.el.opts);
+  if (it.mask) { drawCard(it); if (PHONE && !running && !retrying) png(it); keep(it); } // not next to a busy engine (iPhone memory)
+}
+// This photo's background and options for every photo, and for photos added later in this visit.
+function useForAll(from) {
+  outAll = { bg: from.bg || null, out: from.out ? { ...from.out } : null };
+  for (const it of items) {
+    if (it === from || it.anim || it.failed) continue;
+    it.bg = outAll.bg; it.out = outAll.out && { ...outAll.out }; it.png = null;
+    if (it.mask && it.el) { paintBg(it); drawCard(it); keep(it); }
+  }
+  preparePngs(); // phones: one at a time, after a pause, never next to a busy engine
 }
 
 // The file name tells screen readers which photo a card (and its Download, Remove…) belongs to.
@@ -1499,7 +1655,7 @@ async function capSend(a, it) {
 }
 // The cut-out as Download gives it, but always see-through (cropped to the subject unless the card shows the whole frame), at most CAP_MAX px.
 async function capBlob(it) {
-  const full = it.bg ? await (pngChain = pngChain.then(() => fullBlob(it, null), () => fullBlob(it, null))) : await png(it);
+  const full = it.bg || !plainOut(it) || outOf(it).fmt ? await (pngChain = pngChain.then(() => fullBlob(it, true), () => fullBlob(it, true))) : await png(it);
   const bm = await createImageBitmap(full);
   try {
     const k = Math.min(1, CAP_MAX / Math.max(bm.width, bm.height));
@@ -1869,7 +2025,7 @@ async function writeKept(it) {
   const gif = it.anim && it.gifUrl ? await it.png : null;
   const size = (r) => (r ? r.png.size + (r.fix?.size || 0) : 0);
   const state = { id: it.key, name: it.name, w: it.w, h: it.h, crop: it.crop, rect: it.maskRect || null, mask, first, retried: !!it.retried,
-    vote: it.vote || null, bg: it.bg || null, anim: !!it.anim, gif, ms: it.ms || 0,
+    vote: it.vote || null, bg: it.bg || null, out: it.out || null, anim: !!it.anim, gif, ms: it.ms || 0,
     bytes: it.blob.size + it.prev.size + size(mask) + size(first?.mask) + (gif?.size || 0) };
   if (state.bytes > KEEP_BYTES) return; // never fits (see trim)
   const db = await kdb();
@@ -1920,7 +2076,7 @@ async function restore() {
     const f = byId.get(st.id); byId.delete(st.id);
     if (!f?.blob || !f.prev) { orphans.push(st.id); continue; }
     const it = { id: ++uid, key: st.id, name: st.name, bmp: null, blob: f.blob, prev: f.prev, w: st.w, h: st.h, mask: null, crop: st.crop,
-      maskRect: st.rect, retried: st.retried, vote: st.vote, bg: st.bg || null, ms: st.ms, filed: true, st };
+      maskRect: st.rect, retried: st.retried, vote: st.vote, bg: st.bg || null, out: st.out || null, ms: st.ms, filed: true, st };
     items.push(it); list.push(it);
   }
   orphans.push(...byId.keys());
