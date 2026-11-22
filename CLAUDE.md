@@ -12,6 +12,7 @@ zero friction: fun copy and small animations are fine, delays and popups are not
     npm run build        # build only
     npm run deploy       # manual fallback: wrangler pages deploy to project goodbye-bg-git
     npm run test         # smoke tests (about 40 s): build, serve, headless Chrome; run before pushing
+    node scripts/test/offline.mjs   # offline/install test (about 1.5 min); its upgrade step edits dist/: rebuild after
 
 `npm run test` (`scripts/test/smoke.mjs`, no dependencies beyond Chrome; `--no-build` reuses dist/, `CHROME=` picks
 another Chrome) drives headless Chrome over the DevTools protocol, each check in a fresh profile, and prints PASS/FAIL/SKIP;
@@ -30,7 +31,7 @@ Actions. The old upload-only project `goodbye-bg` can be deleted.
 
 ## Layout
 
-- `src/` static site: `index.html`, `style.css`, `app.js` (everything), `sw.js` (Android share target),
+- `src/` static site: `index.html`, `style.css`, `app.js` (everything), `sw.js` (Android share target, offline caches),
   `manifest.webmanifest`, `_headers` (security headers, also used by local dev), `ad.html` (sandboxed ad slot, ads off),
   `404.html` (real 404 for unknown paths; no scripts), `_redirects` (`/share` to `/` when the service worker missed it),
   `remove-bg-alternative/` and `how-to-remove-background/` (SEO pages, see `docs/seo.md`; launch drafts in `docs/launch-drafts.md`)
@@ -169,6 +170,38 @@ starts later is about a second later for the first photo. So the trade-off is da
   wordmark glide, the cards fade in. For the one frame where the layout changes, `main` and the footer are hidden
   (`body.moving`), which keeps that step out of CLS (it was 0.20 on a computer, 0.37 on a phone; now 0, with and without
   the API). Reduced motion or no API: instant (one blank frame).
+
+## Offline and install (2026-11-22)
+
+Before: offline after a visit, nothing loaded (the page revalidates, `max-age=0`); the runtime and models sat in the
+HTTP cache only (`immutable`, never in the Cache API). Now `src/sw.js` keeps the app on the device; online it behaves as
+before. `scripts/build.mjs` writes its version list into sw.js (`"%SW%"`): every shell file with a hash, and the
+runtime/model folders with their files.
+- Shell (index, app.js, style.css, engine.js, workers, lazy modules, icons): network first, so deploys are live at once
+  and freshen() can't loop; a per-build copy (`gb-shell-<build>`) answers when the network fails. An update copies
+  unchanged files from the old copy by hash and refetches changed ones only if they were used. Install keeps only what
+  the page loads anyway (index, app.js, style.css, early.js, font, favicon, manifest); the lazy modules (GIF, HEIC/TIFF/RAW,
+  3D, zip, confetti, ~2.5 MB) are kept once the engine loads. Other pages go to `gb-pages` as visited.
+- `rt/<version>/` and `m/<name>/`: cache first, one cache each (`gb-rt-1.31.1`, `gb-m-isnet-<sha8>`,
+  `gb-m-birefnet-<hash>`), kept on use; activate deletes `gb-*` caches not in the list (never `share-inbox`). Downloads
+  use `cache: "no-store"`, so the 116 MB (210 MB with both models) are stored once. Chrome's `only-if-cached` from the
+  worker never hit what the page had put in the HTTP cache (tested), so it isn't used. Parts the engine fetched before the
+  worker took over (a first visit where the model starts at once) are fetched again 5 s after the engine's last request
+  (`whole()`), so the set is whole offline: up to one model's worth of extra download, once.
+- Never cached: `/api/`, `/go/`, `/cap/`, `/version.txt`, `/ad.html`, `/sw.js`, non-GET. The share POST is handled as before.
+- Stored responses keep the server's COOP/COEP/CSP, so offline the page is `crossOriginIsolated` and the CPU engine runs
+  with its 3 thread workers (same speed as online).
+- Manifest: `id`, icons with `purpose`, `icon-maskable-512.png` (favicon glyph full-bleed, inside the safe zone), two wide
+  screenshots (launch kit) and one narrow (local build, three CC0 launch-kit photos + the Zazzle card), `categories`.
+  No install prompt UI; browsers show their own. Chrome reports no installability errors.
+Tested (`scripts/test/offline.mjs`, headless Chrome, server stopped and tab offline): reload, kept photos, a GPU photo
+(BiRefNet), a CPU photo (worker isolated, threads), GIF, TIFF (formats worker), 3D ad previews, the share-target POST,
+no requests leave; an existing visitor (old worker) works offline after one more online visit; an upgrade to a new
+runtime folder deletes the old shell and runtime caches, keeps share-inbox, and the next load keeps the new runtime.
+Not true offline: a computer that only ever ran the GPU engine has no CPU model, so a GPU failure offline fails the photo;
+after a runtime or model upgrade, one online run first (the first page after an update may still use the old worker);
+link fetching and ads clicks need the network. Not tested: Safari (iPhone or Mac), Firefox, Android install/share.
+Safari also deletes site storage after 7 days without a visit. The Cache API shares quota with kept photos.
 
 ## Animated GIFs (2026-11-21)
 
