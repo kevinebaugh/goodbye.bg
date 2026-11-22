@@ -316,7 +316,8 @@ Tested: headless Chrome (reload in a restarted browser, Back still from bfcache)
   the placeholder crossfades into the product. early.js modulepreloads render3d.mjs. The footer has a fixed width (the
   count text arriving moved its box). While photos are added, the footer used to land 34 px off and then move: hugFooter
   measured a card mid pop-in (scaled .92); it reads offsetHeight now. After: CLS 0 in every case (1 to 4 photos, desktop and phone, light and dark).
-- Remove can be undone for 5 s (Kevin, 2026-11-21): a pill at the bottom, "Removed." + Undo, with a ring on the button that
+- Remove can be undone for 5 s (Kevin, 2026-11-21): a pill at the bottom, "Removed." + Undo (the file name only for
+  screen readers: camera names were noise), with a ring on the button that
   runs down (hover or focus pauses it; Cmd/Ctrl+Z works). The deadline is a JS timer (`UNDO_MS`), not the ring's animation
   (reduced motion turned that off and the pill stayed). Undo also finishes a photo removed while the model was on it, and
   opens one removed before its turn. The stored copy is deleted at once and rewritten on Undo; memory
@@ -325,7 +326,12 @@ Tested: headless Chrome (reload in a restarted browser, Back still from bfcache)
   bubble pointing at the button (adding photos: Choose photos/Paste; a failed save: that Download; a failed zip: Download all),
   below it or above when there's no room. Trouble with one photo stays on its card. No bottom toast; zip progress is on the
   Download all button. Undo is the only thing at the bottom. With photos on screen, a message about adding photos sits
-  above Choose photos/Paste (below, it covered the photos; 2026-11-22). Quips are the one place
+  above Choose photos/Paste (below, it covered the photos; 2026-11-22). A bubble about adding photos ("Paste was
+  blocked") closes as soon as photos arrive (second review: it stayed over the wordmark on phones). A file that can't
+  be opened never gets a card (a card for notes.txt reflowed a batch that fitted, opened two ad cells and made a phone's
+  grid scroll): obvious non-images (a type that isn't image/ and no picture extension) are skipped before any card
+  exists, a picture that fails to decode loses its card when it fails, and one bubble at Choose photos names them
+  (8 s, also read out). A photo the model fails on keeps its card (it was already laid out). Quips are the one place
   for playful text; everything else is plain and only what people need.
 - Results are cropped to the subject by default (crop icon switches to the whole frame). 👎 retries zoomed in (merged into the first result outside the zoomed part, feathered where they meet; mergeRetry)
   on the subject, a second 👎 restores the first result. One vote per result (on phones, which never hover, 👍 👎 rest at full strength on a soft chip instead of grey at 70%, which read as disabled; still grey, for the palette): the chosen emoji stays lit and the
@@ -339,15 +345,23 @@ Tested: headless Chrome (reload in a restarted browser, Back still from bfcache)
   - 👎 zooms in only when the subject's padded box is under 80% of the photo; otherwise it is a vote only and its
     label says "Bad result" instead of "Bad result, try again" (most phone photos fill the frame).
   - The card bar drops controls so Download stays at least ~40 px wide (measured 39 to 43 px at the tightest widths).
-    Every bar control is 32 px (`--h-sm`, 2026-11-22 visitor review: they were 28 px on narrow cards). Bar order:
+    Every bar control is 32 px (`--h-sm`, 2026-11-22 visitor review: they were 28 px on narrow cards). The icons
+    (background, crop, 👍 👎, remove) share one resting look on every device: full strength on a faint ink chip (grey
+    thumbs at 70% read as disabled on computers); crop when on has a teal ring on an aqua tint. Bar order:
     crop, background, Download, 👍 👎, remove. What the bar has no room for rides along in the background picker
     (`wantcrop`/`wantx` classes, set from what the bar actually hides), so crop and remove are never lost (card widths):
     242+ px everything; 206 to 241 no crop; 162 to 205 no crop and no remove, 👍 👎 stay (Kevin, 2026-11-21: voting
     beats crop); 130 to 161 background, Download, remove; under 130 background and Download.
-    **Roomy bars** (2026-11-22, visitor review: "no visible way to remove a photo on a phone"): when the cards fill the
-    width first and there is height to spare (a phone in portrait with 1 to 4 photos, 165 px cards), layout() sets
-    `.grid.roomy` and the bar takes a second row: background + Download, then crop, 👍 👎, remove. Every bar (ads too)
-    gets `min-height: var(--bar)` so a row's cards line up. Height-bound grids (a laptop with 12 photos) keep one row.
+    **Roomy bars** (2026-11-22, visitor review: "no visible way to remove a photo on a phone"): on touch screens only
+    (`pointer: coarse`), when the cards fill the width first and there is height to spare (a phone in portrait with 1 to
+    4 photos, 165 px cards), layout() sets `.grid.roomy` and the bar takes a second row: background + Download, then
+    crop, 👍 👎, remove. Photo bars get `min-height: var(--bar)` so a row's cards line up; ad cards keep a one-row bar
+    (`--bar1`) and the second row's height goes to the product art. A working card's quip fills both rows (wave on top).
+    With a mouse the bar is always one row and the picker carries crop and remove (second review: a laptop with 12
+    photos had two-row bars, 35% of every card, and 165 px photos).
+    **The grid uses the window's width** (`body.app.has-work main` up to 1800 px; it was capped at 1100 px, which made
+    a laptop width-bound): cards are sized from both axes. 1440x900: 1 photo 339 px (was 277), 12 photos 6 x 2 at
+    222 px with one-row bars (was 165 px with two rows; still slightly width-bound, 5 columns would be smaller).
     Cards without a picker (waiting, failed, animated GIFs) keep remove in the bar, in the background button's place, so
     Download doesn't move when a card finishes. A background or crop change on a phone builds the PNG ahead only when no
     batch or retry is running.
@@ -388,7 +402,8 @@ Tested: headless Chrome (reload in a restarted browser, Back still from bfcache)
     review it was one swatch that toggled in place). It is made per photo and strength from the preview bitmap at 480 px (never full size), with the subject
     taken out first (blur of colour x background weight / blur of the weight, so no halo of the subject's colours), box
     blur two passes, no canvas filter; scaled up wherever drawn. Picking blur switches the card to the whole frame (the
-    portrait-mode look; the crop button puts the crop back; Kevin may want this off). Your photo: the picture swatch opens
+    portrait-mode look; the crop button puts the crop back; Kevin may want this off). Leaving blur for any other
+    background puts back the crop blur took away (`cropBack`, kept in IndexedDB; cleared when crop is toggled). Your photo: the picture swatch opens
     a file picker, or drop a picture on the open row or the background button (the full-window drop target steps aside
     there); decoded once, scaled to 2048 px on iPhones (4096 elsewhere), on iPhones only while no photo is being worked on,
     cover-fit behind the subject, shared by every photo that uses it (All), never uploaded. Both download as JPG and follow
@@ -397,13 +412,20 @@ Tested: headless Chrome (reload in a restarted browser, Back still from bfcache)
     **Pages and the dock** (2026-11-22, visitor review: 19 px swatches on phones, colours dropped, WebP cut off): the
     swatch row and the options row never scroll and never drop or cut a control. `pageRow` measures what fits; the rest
     goes on the next page, and › at the end turns the page (on the last page it points back). Swatches are 32 px on touch,
-    28 px with a mouse. A row that fits on two pages opens in the bar's place (two rows of swatches on a roomy bar). A
-    narrower card would need many pages, so the row opens in the **dock** instead (`seat()`): a pill in the footer's place
-    (the footer fades out), the card ringed in teal, nothing over any photo, no card moves. A phone with 12 photos and
-    a laptop with 12 docks both rows; a 277 px desktop card shows the swatches in its bar and docks the options.
-  - Output options (2026-11-22, sellers, parity items 5 and 7): the picker's last button (sliders) swaps the swatches
+    28 px with a mouse. Pages break between groups (`data-g`; second review: Soft and Strong blur landed on different
+    pages): the colours (see-through, white, black, aqua, sage, any colour), then blur soft + strong (`data-u`, never
+    split) and your photo, then crop and remove when the bar has no room for them; a group is split only when it can't
+    fit on a page of its own. Size, margin, shadow (sliders) is pinned next to › on every page, so it is two taps from
+    the bar (it was background, ›, sliders). With a mouse the rows always open in the card's bar, however many pages
+    (the dock at the bottom of a big window was far from the card): 1440x900 with 1 photo shows every swatch on one page;
+    12 photos (222 px) page the colours 4 + 2, then blur, photo and crop. On touch a row that fits on two pages opens in
+    the bar's place (two rows of swatches on a roomy bar); a narrower card (12 on a phone) opens it in the **dock**
+    (`seat()`): a pill in the footer's place (the footer fades out), the card ringed in teal, nothing over any photo,
+    no card moves.
+  - Output options (2026-11-22, sellers, parity items 5 and 7): the picker's sliders button (pinned next to ›) swaps the swatches
     for a second row at the bar's height: Size (native select: Original, Square, 4:5, 16:9, Custom W x H up to 5000 px,
-    4096 on iPhones), Margin (0, 4%, 10%, 20% of the subject's longer side; 4% is the old crop), a ground shadow toggle,
+    4096 on iPhones), Margin (0, 4%, 10%, 20% of the subject's longer side; 4% is the old crop; on the whole frame at Original it shows 0%
+    and picking a margin turns the crop on: it used to grey out with no reason given), a ground shadow toggle,
     Apply to all, WebP, after a Done button (✓, first, so there is always a way back). Shadow and WebP are chips that
     fill and show a check when on; Apply to all is an action (dashed, a copy icon, "Applied" with a check for a moment;
     it was an outlined "All" that read as a toggle). Custom's width and height go together and come up on their own page
@@ -460,7 +482,7 @@ Ads fill the grid (Kevin, 2026-11-20: "always fill the grid"): up to 3 photos ar
 2 + 2, 3 + 1); more photos fill out their last row. The cells are reserved from the start so photos don't resize when
 the ads arrive after the batch. Each card is a different variant (product), using a different cut-out when there are
 several, and with 2+ cut-outs one card at a time changes cut-out every 4 s, round-robin (the old one dips out, the
-next rises in), starting a full beat after ads come on screen; off when hidden or with reduced motion. Ads appear once the first cut-out is done; they wait 1.1 s after it (the cut-out gets the stage), come in one after another with a shimmering placeholder, and each product rises in once drawn (at least 0.45 s after its card), and the 3D code is fetched while the first photo is still being worked on. The label is centered. Products follow light/dark (black mug/shirt/tote in dark mode). Button names the product ("Put it on a mug", "Put it on a sticker", ...; it was "Make a mug" until the click took the cut-out along), outlined so Download stays the loud button. Ad cards are quieter than a photo card (2026-11-22, visitor review: same surface as the result): no card surface, a dashed edge, a faint panel.
+next rises in), starting a full beat after ads come on screen; off when hidden or with reduced motion. Ads appear once the first cut-out is done; they wait 1.1 s after it (the cut-out gets the stage), come in one after another with a shimmering placeholder, and each product rises in once drawn (at least 0.45 s after its card), and the 3D code is fetched while the first photo is still being worked on. The label is centered. Products follow light/dark (black mug/shirt/tote in dark mode). Button names the product ("Put it on a mug", "Put it on a sticker", ...; it was "Make a mug" until the click took the cut-out along), outlined so Download stays the loud button. Ad cards are quieter than a photo card (2026-11-22, visitor review: same surface as the result): no card surface, no fill, a solid hairline (dashes read as empty slots or drop targets and vanished in dark mode, second review).
 Zazzle cards take the cut-out along (Create-a-Product, Kevin 2026-11-21: the click implies it, no interstitial;
 the button says "Put it on a mug"; no footer line (Kevin: the hero says "cut out right on your device" where people decide); the remove.bg page's FAQ has the details). The click PUTs the cut-out shown on the card (at most 2400 px) to `/api/cap/<random key>` (R2
 bucket goodbye-bg-cap, binding CAP) and opens `/go/zazzle?...&k=<key>`, which waits up to 10 s for it and redirects to
