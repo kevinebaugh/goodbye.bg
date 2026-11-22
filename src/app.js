@@ -709,16 +709,17 @@ const mimeOf = (n) => ({ jpg: "image/jpeg", jpeg: "image/jpeg", jfif: "image/jpe
 
 async function addSources(list, origin = "") {
   list = list.filter(Boolean);
+  let zipFailed = false;
   if (list.some(isZip)) {
     const out = [];
     for (const src of list) {
       if (!isZip(src)) { out.push(src); continue; }
-      try { out.push(...await unzipImages(src)); } catch (e) { console.warn(e); tell("Could not open that ZIP."); }
+      try { out.push(...await unzipImages(src)); } catch (e) { console.warn(e); tell("Could not open that ZIP."); zipFailed = true; }
     }
     list = out;
   }
   list = list.slice(0, MAX_BATCH);
-  if (!list.length) { tell("No image found there. Try a photo file, a copied image, or an image link."); return; }
+  if (!list.length) { if (!zipFailed) tell("No image found there. Try a photo file, a copied image, or an image link."); return; } // a broken ZIP already said so
   await restoring; // kept photos go in first, so this batch lands on top of them
   show();
   const top = keyBase();
@@ -810,7 +811,7 @@ async function decodeElsewhere(blob) {
       w.postMessage({ buf, name: blob.name || "", type: blob.type || "" }, [buf]);
     });
     if (r.bitmap) return r.bitmap;
-    throw new Error(r.raw ? "This RAW file has no full-size preview inside. Export it as JPG first." : "This file isn't an image goodbye.bg can open.");
+    throw new Error(r.say ? r.error : r.raw ? "This RAW file has no full-size preview inside. Export it as JPG first." : "This file isn't an image goodbye.bg can open.");
   } finally { w.terminate(); }
 }
 
@@ -1071,6 +1072,7 @@ function fail(it, msg) {
   it.el.card.classList.remove("working");
   it.el.card.classList.add("failed");
   it.el.busy.textContent = msg;
+  if (it.name && it.name !== "image") { const n = document.createElement("span"); n.className = "fname"; n.textContent = it.name; it.el.busy.append(n); } // in a batch: which one
 }
 
 async function run() {

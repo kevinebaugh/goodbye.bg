@@ -13,7 +13,7 @@ onmessage = async ({ data: { buf, name, type } }) => {
     const bitmap = await decode(buf, name || "", type || "");
     postMessage({ bitmap }, [bitmap]);
   } catch (e) {
-    postMessage({ error: e.message || String(e), raw: RAW.test(name || "") });
+    postMessage({ error: e.message || String(e), say: !!e.say, raw: RAW.test(name || "") }); // say: a message written for people
   }
 };
 
@@ -40,10 +40,10 @@ async function heif(bytes) {
     lib = await factory({ wasmBinary });
   }
   const images = new lib.HeifDecoder().decode(bytes);
-  if (!images?.length) throw new Error("This HEIC file has no picture in it.");
+  if (!images?.length) throw Object.assign(new Error("This HEIC file has no picture in it."), { say: true });
   const img = images[0], w = img.get_width(), h = img.get_height();
   const id = new ImageData(w, h);
-  await new Promise((res, rej) => img.display(id, (d) => (d ? res() : rej(new Error("Could not read this HEIC photo.")))));
+  await new Promise((res, rej) => img.display(id, (d) => (d ? res() : rej(Object.assign(new Error("Could not read this HEIC photo."), { say: true })))));
   for (const i of images) i.free?.();
   return createImageBitmap(id);
 }
