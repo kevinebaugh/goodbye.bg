@@ -1813,7 +1813,7 @@ async function fillRestored(list) {
       if (st.first) it.first = { rect: st.first.rect, mask: await maskFrom(st.first.mask) };
       if (!items.includes(it)) { bmp.close(); continue; }
       it.bmp = bmp; // only now: a running batch picks up photos that have a bitmap and no mask
-      if (it.mask) { ready(it); if (it.vote) showVote(it, it.vote); }
+      if (it.mask) { ready(it); if (it.vote) showVote(it, it.vote); if (!adsAt) adsAt = performance.now(); } // no reveal to wait for: ads come straight in
       drawCard(it);
     } catch (e) { console.warn("Could not bring back a kept photo", e); fail(it, "Could not open this image."); }
   }
