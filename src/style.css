@@ -272,6 +272,3 @@ body.app:not(.has-work) main { flex: none; margin-top: auto; }
 .allrow .btn { flex: 1; --fs: 16px; }
 /* With photos on screen the add buttons step down a size, so the cards get the room. */
 body.app.has-work .big { --h: 44px; --px: 24px; --fs: 16px; }
-/* Prototype (?zazzlecap=1): the ad card's bar asks "Send it" / "Without it" before anything is sent. */
-.adcard .capbar { gap: var(--s2); }
-.adcard .capbar .btn { --h: var(--h-sm); --px: 14px; --fs: 13px; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

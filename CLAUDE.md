@@ -1,7 +1,8 @@
 # goodbye.bg
 
 Background remover that runs in the browser. Replacement for remove.bg, which shuts down
-1 December 2026. Photos from the device never leave it. Kevin uses it often, so it must be
+1 December 2026. Photos are cut out on the device, never uploaded for it (a click on a Zazzle product ad takes
+that one cut-out along, see below). Kevin uses it often, so it must be
 zero friction: fun copy and small animations are fine, delays and popups are not.
 
 ## Commands
@@ -30,7 +31,8 @@ Actions. The old upload-only project `goodbye-bg` can be deleted.
 
 - Content-Security-Policy on the app page allows network only to its own origin. Keep it that way.
 - No cookies, no third-party scripts or fonts on the app page. Only anonymous counts the page sends to its own
-  server (votes, crashes, cut-outs, page views): no IP addresses, no identifiers.
+  server (votes, crashes, cut-outs, page views): no IP addresses, no identifiers. The one image the page uploads is
+  the cut-out on a clicked Zazzle ad (functions/api/cap): R2, random one-time key, deleted once Zazzle has it.
 - Dark/light follows the system. No toggle.
 - Copy: plain, short, active voice.
 
@@ -201,9 +203,16 @@ Ads fill the grid (Kevin, 2026-11-20: "always fill the grid"): up to 3 photos ar
 2 + 2, 3 + 1); more photos fill out their last row. The cells are reserved from the start so photos don't resize when
 the ads arrive after the batch. Each card is a different variant (product), using a different cut-out when there are
 several, and with 2+ cut-outs one card at a time changes cut-out every 4 s, round-robin (the old one dips out, the
-next rises in), starting a full beat after ads come on screen; off when hidden or with reduced motion. Ads appear once the first cut-out is done; they wait 1.1 s after it (the cut-out gets the stage), come in one after another with a shimmering placeholder, and each product rises in once drawn (at least 0.45 s after its card), and the 3D code is fetched while the first photo is still being worked on. The label is centered. Products follow light/dark (black mug/shirt/tote in dark mode). Button names the product ("Make a mug", "Make a sticker", ...), outlined so Download stays the loud button.
-Zazzle's Create-a-Product API could pre-print the cut-out on the product, but it needs the image at a public URL, so
-only as an explicit per-photo opt-in that updates the "never uploaded" copy.. Prototype behind `?zazzlecap=1` (branch `kevin-claude/zazzle-context-bf01ce`, not on main): findings, design, copy changes and Kevin's steps in `docs/zazzle-cap.md`.
+next rises in), starting a full beat after ads come on screen; off when hidden or with reduced motion. Ads appear once the first cut-out is done; they wait 1.1 s after it (the cut-out gets the stage), come in one after another with a shimmering placeholder, and each product rises in once drawn (at least 0.45 s after its card), and the 3D code is fetched while the first photo is still being worked on. The label is centered. Products follow light/dark (black mug/shirt/tote in dark mode). Button names the product ("Put it on a mug", "Put it on a sticker", ...; it was "Make a mug" until the click took the cut-out along), outlined so Download stays the loud button.
+Zazzle cards take the cut-out along (Create-a-Product, Kevin 2026-11-21: the click implies it, no interstitial;
+the footer says so). The click PUTs the cut-out shown on the card (at most 2400 px) to `/api/cap/<random key>` (R2
+bucket goodbye-bg-cap, binding CAP) and opens `/go/zazzle?...&k=<key>`, which waits up to 10 s for it and redirects to
+that product's template in Kevin's store goodbyebg with the image on it. Zazzle copies the image on the first fetch;
+`/cap/<key>.png` deletes ours 20 s later (never fetched: gone after an hour; a lifecycle rule clears `cap/` after a
+day). Upload fails or times out: the usual link, and computers still get the cut-out saved. GIFs and
+`?zazzlecap=0` keep the old behaviour. Clicks that sent one count as 'adcap' next to 'adclick'. Templates, findings and
+the open commission question (Ambassador agreement §2.1.3, asked of api.help@zazzle.com 2026-11-21) in
+`docs/zazzle-cap.md`.
 
 Products render in real 3D (src/render3d.js + Three.js 0.187.0, MIT, bundled by esbuild into dist/render3d.mjs,
 ~150 KB gzipped, loaded only when ads show): lathe-turned glazed mug with a real handle, die-cut vinyl sticker with a
@@ -213,11 +222,11 @@ environment (RoomEnvironment, no download), a soft blob shadow (not a shadow map
 whole floor turned into a dark slab); each product sways slowly and leans toward a moving mouse, a few degrees at most; one shared WebGL context, ~20 ms a render. The 2D canvas
 drawings in app.js are the fallback (crash step '3d-failed'). The mug camera centres on the body, not the handle.
 
-Clicking an ad card also saves the cut-out shown on it (the card keeps that photo as `artIt`), ready to upload on the partner's site: a normal download on computers; on phones the share sheet comes first (Safari won't save from a tab that went to the background), then the partner opens (tested in the iOS Simulator 2026-11-21).
+Clicking a non-Zazzle ad card (or any card with `?zazzlecap=0`) saves the cut-out shown on it (the card keeps that photo as `artIt`), ready to upload on the partner's site: a normal download on computers; on phones the share sheet comes first (Safari won't save from a tab that went to the background), then the partner opens (tested in the iOS Simulator 2026-11-21).
 
 Zazzle variant "mug" (the A): the visitor's first finished cut-out drawn on a mug in a canvas on the device
-(drawMug in app.js: cylinder wrap column by column, shading, rim, shadow); nothing is uploaded, and Zazzle doesn't
-receive the image. Variant "b": "Put your cut-out on anything." Both go to zazzle.com/custom. `?adv=<v>` forces a
+(drawMug in app.js: cylinder wrap column by column, shading, rim, shadow); drawing it uploads nothing; Zazzle gets
+the image only when the card is clicked. Variant "b": "Put your cut-out on anything." Both go to zazzle.com/custom. `?adv=<v>` forces a
 variant, `?adtest=1` shows partners without links.
 
 Ad blockers hide the card (class names like `adcard`) and block `/go/` beacons; that is the visitor's choice, so we

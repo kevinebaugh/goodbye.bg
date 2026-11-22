@@ -1,8 +1,8 @@
 # goodbye.bg
 
-Remove image backgrounds in the browser. Photos never leave the device.
+Remove image backgrounds in the browser. Photos are cut out on the device.
 
-- No uploads. The model runs locally, on the GPU (WebGPU) or the CPU (WebAssembly).
+- No uploads to cut out a photo. The model runs locally, on the GPU (WebGPU) or the CPU (WebAssembly).
 - Full size output. No account. No watermark.
 - Batch: drop many photos, download all as a zip.
 
@@ -24,7 +24,9 @@ Bookmarklet (sends the current page or image to goodbye.bg):
 
 ## Links and privacy
 
-Photos from the device never leave it. A pasted link is different: the image lives on another
+Photos from the device are never uploaded to be cut out. Two things reach the server:
+clicking a product ad sends that one cut-out to `functions/api/cap/[key].js`, kept in R2 only until Zazzle
+fetches it (an hour at most; see `docs/zazzle-cap.md`); and a pasted link: the image lives on another
 site, and browsers block reading most of those directly. `functions/api/fetch.js` (a Cloudflare
 Pages Function) fetches it and streams it back. It stores and logs nothing, only answers the
 site itself, caps size at 30 MB, and marks responses so they can never run as a page.

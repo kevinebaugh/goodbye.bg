@@ -1,7 +1,7 @@
 // goodbye.bg — background removal that runs entirely in the browser.
-// Photos from the device never leave it. The page's Content-Security-Policy (see _headers)
-// only allows requests back to this site. The one server call is /api/fetch, used only
-// when the visitor gives us a link to an image that lives on another site.
+// Photos are cut out on the device and never uploaded for it. The page's Content-Security-Policy (see _headers)
+// only allows requests back to this site. Server calls that carry images: /api/fetch, when the visitor gives us
+// a link to an image on another site, and /api/cap, the one cut-out a click on a Zazzle product ad takes along.
 
 import { zipSync, unzipSync } from "./vendor/fflate.mjs";
 
@@ -1136,7 +1136,7 @@ function buildAd(i) {
   const cuts = finishedCuts();
   a.artIt = cuts.length ? cuts[i % cuts.length] : null; // the cut-out it shows (changes, see nextArt); a click saves this one
   try { src = draw && a.artIt && artOf(a.artIt); } catch (e) { report("mug-failed", e); }
-  if (src) { // the visitor's own cut-out on the product, drawn here (nothing is uploaded)
+  if (src) { // the visitor's own cut-out on the product, drawn here (sent nowhere until the card is clicked)
     const c = document.createElement("canvas"); c.className = "adart"; c.setAttribute("aria-hidden", "true");
     a.querySelector(".adicon").replaceWith(c);
     a.classList.add("artcard"); // the picture says it; the line stays in the label for screen readers
@@ -1144,7 +1144,7 @@ function buildAd(i) {
   a.querySelector(".adline").textContent = x.line;
   a.querySelector(".adcta").textContent = cta;
   a.querySelector(".adtag").textContent = adLabel;
-  a.setAttribute("aria-label", `${adLabel}: ${x.line} ${cta}`);
+  a.setAttribute("aria-label", `${adLabel}: ${x.line} ${cta}${CAP && p.id === "zazzle" ? `. Takes this cut-out to ${p.name}.` : ""}`);
   $("grid").insertBefore(a, $("tools"));
   adWatch.observe(a); // the cut-out beat starts once ads are on screen
   a.tilt = { phase: i * 2.1, mix: 0, x: 0, y: 0, t: 0 }; // each card sways out of step with the others
@@ -1155,17 +1155,15 @@ function buildAd(i) {
     a.tilt.t = performance.now(); tiltGo();
   });
   a.addEventListener("pointerleave", () => { a.tilt.t = 0; });
-  // The partner opens in a new tab as usual, and this tab saves the cut-out shown on the product, ready to
-  // upload there (Kevin, 2026-11-21). Saved on the device like Download; nothing is sent to the partner.
-  // Phones: Safari won't save from a tab that went to the background, so the share sheet comes first (Save Image),
-  // then the partner opens.
+  // Zazzle: the click takes the cut-out shown on the card along and opens that product with it on (capSend; the
+  // footer says so). Other partners, an animated GIF, or ?zazzlecap=0: the partner opens in a new tab and this tab
+  // saves the cut-out, ready to upload there (Kevin, 2026-11-21). Phones: Safari won't save from a tab that went to
+  // the background, so the share sheet comes first (Save Image), then the partner opens.
   a.addEventListener("click", async (e) => {
     if (!a.art) return;
     const it = a.artIt;
     if (!it?.mask) return;
-    // Prototype (?zazzlecap=1): ask first, then send this one cut-out to Zazzle only if the visitor says so.
-    if (CAP && p.id === "zazzle" && !it.anim && !e.target.closest('[data-cap="skip"]')) { e.preventDefault(); return capClick(a, it, e); }
-    if (CAP) capReset(a);
+    if (CAP && p.id === "zazzle" && !it.anim) { e.preventDefault(); return capSend(a, it); }
     if (!PHONE) { try { save(outName(it), await png(it)); } catch (err) { report("ad-failed", err); } return; }
     e.preventDefault();
     try { await share([{ name: outName(it), blob: await png(it) }]); } catch (err) { report("ad-failed", err); }
@@ -1191,34 +1189,17 @@ function buildAd(i) {
   return a;
 }
 
-/* ---------- send the cut-out to Zazzle (prototype, ?zazzlecap=1, off by default) ----------
-   A click on a Zazzle card swaps its bar for two choices: "Send to Zazzle" or "Don’t send". Only "Send to Zazzle" uploads,
-   and only that one cut-out: the page PUTs it to /api/cap/<random key> (unreachable after an hour, deleted soon after) and opens
-   /go/zazzle?...&k=<key>, which waits for it and sends the visitor to a Zazzle product with the cut-out on it.
-   "Don’t send" is today's behaviour (save the cut-out here, open Zazzle). See docs/zazzle-cap.md. */
-const CAP = params.has("zazzlecap");
+/* ---------- the cut-out goes along to Zazzle ----------
+   Clicking a Zazzle card takes the cut-out it shows to Zazzle (Kevin, 2026-11-21: the click implies it; the footer
+   says so). Only that one cut-out: the page PUTs it to /api/cap/<random key> and opens /go/zazzle?...&k=<key>, which
+   waits for it and sends the visitor to the Zazzle product with the cut-out on it. Zazzle copies it; our copy is
+   deleted 20 s after Zazzle fetches it, or after an hour if it never does. ?zazzlecap=0 turns it off (the card then
+   saves the cut-out here and opens Zazzle, as before). See docs/zazzle-cap.md. */
+const CAP = params.get("zazzlecap") !== "0";
 const CAP_MAX = 2400; // px on the long side: about 300 dpi across a mug's or shirt's print area, and a quick upload
-function capReset(a) {
-  if (!a.capBar) return;
-  a.querySelector(".bar").replaceWith(a.capBar); a.capBar = null; a.classList.remove("capask");
-}
-async function capClick(a, it, e) {
-  const act = e.target.closest("[data-cap]")?.dataset.cap;
-  if (!act) { // first click: ask
-    if (a.capBar) return;
-    const bar = a.querySelector(".bar"), ask = document.createElement("div");
-    ask.className = "bar capbar";
-    ask.innerHTML = '<span class="btn sm adcta capsend" data-cap="send" role="button" tabindex="0">Send to Zazzle</span><span class="btn sm ghost" data-cap="skip" role="button" tabindex="0">Don’t send</span>';
-    ask.querySelector(".capsend").title = "Sends this cut-out to Zazzle. Our link to it stops working after an hour.";
-    a.capBar = bar; bar.replaceWith(ask); a.classList.add("capask");
-    for (const el of ask.children) el.addEventListener("keydown", (k) => { if (k.key === "Enter" || k.key === " ") { k.preventDefault(); el.click(); } });
-    ask.querySelector(".capsend").focus();
-    tick();
-    return;
-  }
-  if (act !== "send" || a.capBusy) return;
-  a.capBusy = true;
-  const send = a.querySelector(".capsend"); send.setAttribute("aria-busy", "true");
+async function capSend(a, it) {
+  if (a.capBusy) return; // a double click sends once
+  a.capBusy = true; tick();
   const b = new Uint8Array(16); crypto.getRandomValues(b);
   const key = btoa(String.fromCharCode(...b)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   const href = `${a.href}&k=${key}`;
@@ -1234,7 +1215,6 @@ async function capClick(a, it, e) {
     if (!PHONE) try { save(outName(it), await png(it)); } catch {}
   }
   a.capBusy = false;
-  capReset(a);
   if (!w) location.href = href; // pop-up blocked: go in this tab
 }
 // The cut-out as Download gives it (cropped to the subject unless the card shows the whole frame), at most CAP_MAX px.

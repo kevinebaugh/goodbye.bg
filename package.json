@@ -2,7 +2,7 @@
   "name": "goodbye.bg",
   "version": "0.1.0",
   "private": true,
-  "description": "Background removal that runs in your browser. Your photos never upload.",
+  "description": "Background removal that runs in your browser. Photos are cut out on the device.",
   "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {

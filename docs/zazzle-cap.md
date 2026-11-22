@@ -1,7 +1,8 @@
 # Sending the cut-out to Zazzle (Create-a-Product) — findings, design, prototype
 
-Status 2026-11-21: prototype behind `?zazzlecap=1` on branch `kevin-claude/zazzle-context-bf01ce`.
-Not on main: it changes the privacy story, so Kevin decides. Off by default; with the flag off, nothing changes.
+Status 2026-11-21: on by default on branch `kevin-claude/zazzle-context-bf01ce` (`?zazzlecap=0` turns it off).
+Kevin dropped the "Send to Zazzle / Don't send" question: clicking a Zazzle card implies it, and the footer says so.
+The site copy is updated to match (section 3).
 
 ## 1. Findings
 
@@ -64,11 +65,10 @@ exist but aren't published. Content guidelines apply, and products can be reject
 
 ## 2. Design (what the prototype does)
 
-1. A Zazzle ad card, clicked, swaps its bar for two buttons: **Send to Zazzle** and **Don’t send**.
-   - Nothing is sent until "Send to Zazzle" is pressed, and only that one cut-out is sent.
-   - "Don’t send" is today's behaviour: save the cut-out here, open Zazzle.
-   - This is the per-click opt-in. The button names where the photo goes, so no extra text or popup is needed.
-2. "Send to Zazzle" makes a random 128-bit key in the page and does two things at once:
+1. Clicking a Zazzle ad card sends the cut-out it shows, and only that one. No question in between (Kevin: the
+   click implies it). The footer and the remove.bg page's FAQ say what a click does; the card's accessible name ends
+   "Takes this cut-out to Zazzle."
+2. The click makes a random 128-bit key in the page and does two things at once:
    - It opens `/go/zazzle?v=<product>&...&k=<key>` in a new tab straight from the tap, so pop-up blockers allow it.
    - It PUTs the cut-out (PNG, as Download gives it, at most 2400 px) to `/api/cap/<key>`.
 3. `PUT /api/cap/<key>` (`functions/api/cap/[key].js`):
@@ -107,8 +107,6 @@ a PNG for an hour. Mitigations:
 **Unverified:**
 - On iPhone, `window.open` puts goodbye.bg in the background while the upload runs. The upload may stall; then
   `/go` falls back after 10 s to the usual page. Not tested on a device.
-- The buttons are `role=button` spans inside the card's `<a>`, with Enter/Space wired up: fine for a prototype,
-  not great for accessibility. If this ships, the card should become a `<div>` with a real link and real buttons.
 - Tested on the preview with the R2 bucket (2026-11-21):
   - PUT returned 201, a repeat PUT 409, and a cross-site PUT 403. R2 honours `onlyIf: { etagDoesNotMatch: "*" }`.
   - `/go` redirected to the mug link with `/cap/<key>.png`.
@@ -118,31 +116,16 @@ a PNG for an hour. Mitigations:
 - The mug's slot is centred on the wrap, so the cut-out faces away from the handle: half visible in the "Left" view,
   whole in the Center view. Moving it to the front for right-handed drinkers is a Zazzle-side tweak.
 
-## 3. Copy that would change if this ships
+## 3. Copy (changed 2026-11-21)
 
-Today the claim everywhere is "photos never leave your device". With this feature, a cut-out leaves when the visitor
-presses "Send to Zazzle". Every line below must change in the same commit that turns it on. Kevin's suggested line
-was "If you click on a link, we may send your image with you". "May" is vaguer than what happens: we send it only
-when they press Send. The proposed wording:
-
-| Where | Today | Proposed |
-|---|---|---|
-| `src/index.html` footer | "Photos from your device are processed in this tab and never uploaded. If you paste a link, our server fetches that public image for you and keeps nothing." | "Photos from your device are processed in this tab. A cut-out leaves it only if you press Send to Zazzle: we hold it until Zazzle has fetched it, an hour at most. If you paste a link, our server fetches that public image for you and keeps nothing." |
-| `src/index.html` hero `.sub` | "Your photos stay on your device." | unchanged (still true by default); or "Your photos stay on your device unless you send one." |
-| `src/index.html` meta description, JSON-LD description, og:description | "Your photos stay on your device." | "Your photos stay on your device unless you choose to send one." |
-| `src/remove-bg-alternative/index.html` meta description | "Your photos stay on your device." | as above |
-| same page, FAQ JSON-LD and the visible "Are my photos uploaded?" answer | "No. … Photos from your device never leave it. …" | "No. The background removal runs in your browser. Photos from your device stay there, unless you press Send to Zazzle on a product: then that one cut-out goes to our server until Zazzle has fetched it (an hour at most), so Zazzle can put it on the product. If you paste a link, …" |
-| same page, lede | "your photos never leave your device." | "your photos stay on your device." |
-| same page, table "Where photos go" | "Stay on your device" | "Stay on your device (unless you send one to Zazzle)" |
-| `src/how-to-remove-background/index.html` meta description | "without uploading it" | unchanged (removing the background never uploads); the lede "the photo stays on your device" is still true |
-| `README.md` lines 3, 5, 26 | "Photos never leave the device." / "No uploads." | "Photos stay on the device; one leaves only if you send it to Zazzle." / "No uploads for background removal." |
-| `package.json` description | "Your photos never upload." | "Your photos stay in your browser." |
-| `src/_headers` comment on `/` | "Photos have nowhere to go." | "Photos go nowhere but this site (and only on Send to Zazzle)." |
-| `src/app.js` comments in `buildAd` | "nothing is uploaded", "nothing is sent to the partner" | describe both paths |
-| `CLAUDE.md` | first paragraph "Photos from the device never leave it", the Rules section, the Zazzle "Not built" paragraph, the ad-click paragraph | update to the opt-in and point here |
-
-Exact-duration claims ("an hour at most") must match `TTL_MS`. Keep "until Zazzle has fetched it" true: the GET
-deletes our copy 20 s after the first fetch.
+The promise is now "photos are cut out on your device" (always true), and the footer says what a product click does:
+"Photos are cut out in this tab and never uploaded. Clicking a product takes that cut-out to Zazzle: our server holds
+it until Zazzle has it, an hour at most. If you paste a link, …". Changed: `src/index.html` (meta, og, JSON-LD, hero,
+footer), `src/remove-bg-alternative/index.html` (meta, lede, table, FAQ in JSON-LD and on the page), `README.md`,
+`package.json`, `src/_headers` and `src/app.js` comments, `CLAUDE.md`. The how-to page is unchanged ("without
+uploading it" and "the photo stays on your device" describe removing the background, which stays true).
+"An hour at most" must match `TTL_MS`; "until Zazzle has it" holds because the GET deletes our copy 20 s after the
+first fetch.
 
 ## 4. Zazzle setup (done 2026-11-21, in Kevin's account, with his OK)
 
