@@ -146,6 +146,7 @@ const TEST = !!navigator.webdriver || TEST_SWITCHES.some((k) => params.has(k));
 // ?debug=1: report each step to /api/diag (server log only) to find where a phone crashes.
 // Step names and numbers only, never photo data. Off for everyone else.
 const DEBUG = params.has("debug"), dbgId = Math.random().toString(36).slice(2, 7);
+const PP = params.get("pp") === "1"; // experiment: refineEdge (the guided filter on hair and fur) after the model
 let dbgN = 0;
 // Every page keeps its last 20 steps (names and numbers only, never photo data). They leave the device only
 // inside a crash or error report (see working() and report()); with ?debug=1 each step is also sent live.
@@ -489,6 +490,7 @@ async function segment(bitmap) {
   if (!birefnet && params.get("haze") !== "0") hardenHaze(id); // ISNet only; ?haze=0 shows it without
   const box = subjectBox(id);
   for (let i = 3; i < id.data.length; i += 4) id.data[i] = LUT[id.data[i]]; // soften the edge once, here
+  if (PP) { const t = performance.now(), px1 = refineEdge(px, id); dbg("edge", { ms: Math.round(performance.now() - t), px: px1 }); }
   const mask = new OffscreenCanvas(RES, RES);
   mask.getContext("2d").putImageData(id, 0, 0);
   mask.box = box;
@@ -589,45 +591,87 @@ function frame(it) {
 function hardenHaze(img) {
   const n = RES * RES, d = img.data, a = new Uint8Array(n), unsure = new Uint8Array(n);
   for (let i = 0; i < n; i++) { a[i] = d[i * 4 + 3]; unsure[i] = a[i] > 51 && a[i] < 204 ? 1 : 0; } // the range the edge curve leaves soft
-  // Square erosion or growth by r: a pixel takes `hit` if any pixel within r has it. Outside the frame counts as 0.
-  const morph = (src, r, grow) => {
-    const t = new Uint8Array(n), out = new Uint8Array(n), hit = grow ? 1 : 0;
-    for (let y = 0; y < RES; y++) {
-      const o = y * RES; let last = grow ? -1e9 : -1;
-      for (let x = 0; x < RES; x++) { if (src[o + x] === hit) last = x; t[o + x] = x - last <= r ? hit : 1 - hit; }
-      last = grow ? 1e9 : RES;
-      for (let x = RES - 1; x >= 0; x--) { if (src[o + x] === hit) last = x; if (last - x <= r) t[o + x] = hit; }
-    }
-    for (let x = 0; x < RES; x++) {
-      let last = grow ? -1e9 : -1;
-      for (let y = 0; y < RES; y++) { if (t[y * RES + x] === hit) last = y; out[y * RES + x] = y - last <= r ? hit : 1 - hit; }
-      last = grow ? 1e9 : RES;
-      for (let y = RES - 1; y >= 0; y--) { if (t[y * RES + x] === hit) last = y; if (last - y <= r) out[y * RES + x] = hit; }
-    }
-    return out;
-  };
   const wide = morph(morph(unsure, 6, false), 6, true);
   let any = false;
   for (let i = 0; i < n; i++) if ((wide[i] &= unsure[i])) any = true;
   if (!any) return;
-  const blur = (src, r) => { // box blur, edges clamped
-    const t = new Float32Array(n), out = new Float32Array(n), k = 1 / (2 * r + 1), c = (v) => Math.min(RES - 1, Math.max(0, v));
-    for (let y = 0; y < RES; y++) {
-      const o = y * RES; let s = 0;
-      for (let x = -r; x <= r; x++) s += src[o + c(x)];
-      for (let x = 0; x < RES; x++) { t[o + x] = s * k; s += src[o + c(x + r + 1)] - src[o + c(x - r)]; }
-    }
-    for (let x = 0; x < RES; x++) {
-      let s = 0;
-      for (let y = -r; y <= r; y++) s += t[c(y) * RES + x];
-      for (let y = 0; y < RES; y++) { out[y * RES + x] = s * k; s += t[c(y + r + 1) * RES + x] - t[c(y - r) * RES + x]; }
-    }
-    return out;
-  };
-  const sm = blur(a, 8);
+  const sm = boxBlur(a, 8);
   for (let i = 0; i < n; i++) if (wide[i]) a[i] = sm[i] >= 0.3 * 255 ? 255 : 0;
-  const soft = blur(a, 2); // soften the new outline a little
+  const soft = boxBlur(a, 2); // soften the new outline a little
   for (let i = 0; i < n; i++) d[i * 4 + 3] = wide[i] ? soft[i] : a[i];
+}
+
+// Square erosion or growth by r of a 0/1 map at RES x RES: a pixel takes `hit` if any pixel within r has it. Outside the
+// frame counts as 0.
+function morph(src, r, grow) {
+  const n = RES * RES, t = new Uint8Array(n), out = new Uint8Array(n), hit = grow ? 1 : 0;
+  for (let y = 0; y < RES; y++) {
+    const o = y * RES; let last = grow ? -1e9 : -1;
+    for (let x = 0; x < RES; x++) { if (src[o + x] === hit) last = x; t[o + x] = x - last <= r ? hit : 1 - hit; }
+    last = grow ? 1e9 : RES;
+    for (let x = RES - 1; x >= 0; x--) { if (src[o + x] === hit) last = x; if (last - x <= r) t[o + x] = hit; }
+  }
+  for (let x = 0; x < RES; x++) {
+    let last = grow ? -1e9 : -1;
+    for (let y = 0; y < RES; y++) { if (t[y * RES + x] === hit) last = y; out[y * RES + x] = y - last <= r ? hit : 1 - hit; }
+    last = grow ? 1e9 : RES;
+    for (let y = RES - 1; y >= 0; y--) { if (t[y * RES + x] === hit) last = y; if (last - y <= r) out[y * RES + x] = hit; }
+  }
+  return out;
+}
+
+// Box blur at RES x RES, separable running sums, edges clamped.
+function boxBlur(src, r) {
+  const n = RES * RES, t = new Float32Array(n), out = new Float32Array(n), k = 1 / (2 * r + 1), c = (v) => Math.min(RES - 1, Math.max(0, v));
+  for (let y = 0; y < RES; y++) {
+    const o = y * RES; let s = 0;
+    for (let x = -r; x <= r; x++) s += src[o + c(x)];
+    for (let x = 0; x < RES; x++) { t[o + x] = s * k; s += src[o + c(x + r + 1)] - src[o + c(x - r)]; }
+  }
+  for (let x = 0; x < RES; x++) {
+    let s = 0;
+    for (let y = -r; y <= r; y++) s += t[c(y) * RES + x];
+    for (let y = 0; y < RES; y++) { out[y * RES + x] = s * k; s += t[c(y + r + 1) * RES + x] - t[c(y - r) * RES + x]; }
+  }
+  return out;
+}
+
+// Hair, fur and fluff: the model draws them as a soft blur; the photo knows where each strand is. A guided filter
+// (He et al. 2010, the photo's colour as the guide, radius 4, eps 0.001) redraws the mask there from the photo. Only
+// where the soft zone is wider than 3 px, so a crisp edge (a white sofa on a white wall, a wire) stays as the model drew
+// it. Measured on the 923 test photos with real masks (docs/mask-postprocess.md). Experiment: ?pp=1.
+// px: the photo at RES x RES (RGBA), img: the mask after the edge curve. Returns how many pixels it changed.
+function refineEdge(px, img) {
+  const n = RES * RES, d = img.data, r = 4, eps = 1e-3;
+  let soft = new Uint8Array(n);
+  for (let i = 0; i < n; i++) soft[i] = d[i * 4 + 3] > 0 && d[i * 4 + 3] < 255 ? 1 : 0;
+  soft = morph(morph(soft, 1, false), 1, true); // only wide soft zones
+  if (!soft.includes(1)) return 0;
+  const band = morph(soft, r, true), wide = morph(soft, 2 * r, true);
+  const prod = (a, b) => { const o = new Float32Array(n); for (let i = 0; i < n; i++) o[i] = a[i] * b[i]; return o; };
+  const ch = [0, 1, 2].map((c) => { const a = new Float32Array(n); for (let i = 0; i < n; i++) a[i] = px[i * 4 + c] / 255; return a; });
+  const p = new Float32Array(n); for (let i = 0; i < n; i++) p[i] = d[i * 4 + 3] / 255;
+  const m = ch.map((a) => boxBlur(a, r)), mp = boxBlur(p, r), mIp = ch.map((a) => boxBlur(prod(a, p), r));
+  const [rr, rg, rb, gg, gb, bb] = [[0, 0], [0, 1], [0, 2], [1, 1], [1, 2], [2, 2]].map(([a, b]) => boxBlur(prod(ch[a], ch[b]), r));
+  const A = [new Float32Array(n), new Float32Array(n), new Float32Array(n)], B = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    if (!wide[i]) { B[i] = p[i]; continue; } // far from the edge: a = 0, b = the mask
+    // Per window: a = (cov(I) + eps)^-1 cov(I, p), b = mean(p) - a . mean(I); the 3x3 inverse by cofactors.
+    const m0 = m[0][i], m1 = m[1][i], m2 = m[2][i];
+    const a = rr[i] - m0 * m0 + eps, b = rg[i] - m0 * m1, c = rb[i] - m0 * m2, e = gg[i] - m1 * m1 + eps, f = gb[i] - m1 * m2, g = bb[i] - m2 * m2 + eps;
+    const c0 = mIp[0][i] - m0 * mp[i], c1 = mIp[1][i] - m1 * mp[i], c2 = mIp[2][i] - m2 * mp[i];
+    const i00 = e * g - f * f, i01 = c * f - b * g, i02 = b * f - c * e, i11 = a * g - c * c, i12 = b * c - a * f, i22 = a * e - b * b, det = a * i00 + b * i01 + c * i02;
+    const a0 = (i00 * c0 + i01 * c1 + i02 * c2) / det, a1 = (i01 * c0 + i11 * c1 + i12 * c2) / det, a2 = (i02 * c0 + i12 * c1 + i22 * c2) / det;
+    A[0][i] = a0; A[1][i] = a1; A[2][i] = a2; B[i] = mp[i] - a0 * m0 - a1 * m1 - a2 * m2;
+  }
+  const mA = A.map((x) => boxBlur(x, r)), mB = boxBlur(B, r);
+  let changed = 0;
+  for (let i = 0; i < n; i++) {
+    if (!band[i]) continue;
+    const v = Math.round(Math.max(0, Math.min(1, mA[0][i] * ch[0][i] + mA[1][i] * ch[1][i] + mA[2][i] * ch[2][i] + mB[i])) * 255);
+    if (v !== d[i * 4 + 3]) { d[i * 4 + 3] = v; changed++; }
+  }
+  return changed;
 }
 
 // Remove small islands that are not part of the main subject.
