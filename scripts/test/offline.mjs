@@ -300,7 +300,7 @@ await check("online: first visit, GPU photo, GIF, TIFF, ad previews, CPU photo",
 await check("online: what the worker kept", async () => {
   await sleep(6500); // the completion pass after the engine's last request
   const c = await cachesNow(p);
-  for (const [n, want] of [["gb-rt-", 5], ["gb-m-birefnet", 6], ["gb-m-isnet", 6]]) { const k = Object.keys(c).find((x) => x.startsWith(n)); assert(k && c[k].length === want, `${n}: ${k ? c[k].length : "none"} of ${want}`); }
+  for (const [n, want] of [["gb-rt-", 5], ["gb-m-birefnet-", 6], ["gb-m-birefnet640-", 6]]) { const k = Object.keys(c).find((x) => x.startsWith(n)); assert(k && c[k].length === want, `${n}: ${k ? c[k].length : "none"} of ${want}`); }
   const est = await p.ev("navigator.storage.estimate().then((e) => Math.round(e.usage / 1e6))");
   const sw = await p.ev("navigator.serviceWorker.controller?.scriptURL || 'none'");
   return `controller ${sw}; storage ${est} MB; ` + Object.entries(c).map(([n, k]) => `${n}: ${k.length}`).join(", ");
@@ -335,7 +335,7 @@ if (up) {
     const ew = engineWorker(p); assert(ew, "no engine worker seen");
     const iso = await p.ev("self.crossOriginIsolated", ew[0]); assert(iso, "engine worker not cross-origin isolated");
     const th = threadCount(p, ew[0]); assert(th >= 1, "no ORT thread workers");
-    const e = await engineOf(p, "cpu-off"); assert(e === "cpu", "engine " + e);
+    const e = await engineOf(p, "cpu-off"); assert(e === "cpu-birefnet640", "engine " + e);
     return `CPU photo ${(ms / 1000).toFixed(1)} s (online ${(msOnline.cpu / 1000).toFixed(1)} s), ${th} thread workers (online ${msOnline.threads})`;
   });
   await check("offline: share-target POST", async () => {

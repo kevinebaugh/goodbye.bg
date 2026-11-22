@@ -179,7 +179,7 @@ async function target(name, t, base) {
     const n = votes.length; await p.click("#grid > .card .rate");
     for (let i = 0; i < 40 && votes.length === n; i++) await sleep(50);
     const engine = votes.at(-1)?.engine;
-    if (t.phone) assert(engine === "cpu", "iPhone should use the CPU engine, got " + engine);
+    if (t.phone) assert(engine === "cpu-birefnet640", "iPhone should use the CPU engine (BiRefNet 640), got " + engine);
     assert(!vtWarn.length, "View Transition failed: " + vtWarn[0]);
     const vt = await p.evaluate("window.__vt || 'not used'");
     assert(!/^failed/.test(vt), "View Transition " + vt);
@@ -324,7 +324,7 @@ async function target(name, t, base) {
     await allDone(q, 6, 180000); // 5 kept + 1 new
     const n = votes.length; await q.click("#grid > .card .rate");
     for (let i = 0; i < 40 && votes.length === n; i++) await sleep(50);
-    assert(votes.at(-1)?.engine === "cpu", "engine " + votes.at(-1)?.engine);
+    assert(votes.at(-1)?.engine === "cpu-birefnet640", "engine " + votes.at(-1)?.engine);
     await q.close();
   });
 
