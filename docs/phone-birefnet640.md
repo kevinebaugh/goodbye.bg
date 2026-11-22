@@ -29,15 +29,23 @@ ISNet / 640. Five photos (portrait, two cats, flower, person from AIM/AM-2k/P3M/
 | | ISNet 1024 | BiRefNet lite 640 |
 |---|---|---|
 | Time per photo, 2 threads (browser, includes the resize) | 4.7 to 5.7 s, mean 5.0 s (10 photos) | 4.5 to 5.4 s, mean 4.85 s (15 photos) |
-| 18.75 MP photo (5000x3750) | 6.2 s | 5.5 s |
+| 18.75 MP photo (5000x3750), one run each | 6.2 s | 5.5 s |
 | Chrome renderer RSS peak (page + engine worker), 5 photos | 1934, 1985 MB | 2017, 2067, 2016 MB (about +60 MB, +3%) |
 | Renderer RSS peak, the 18.75 MP photo | 1826 MB | 1894 MB |
 | Wasm heap peak (Node, ORT Web 1.31.1, 2 threads, one run) | 918 to 920 MB, steady | 908 to 1048 MB, usually about 1040 (+13%) |
+| iPhone path (iPhone user agent), 5 photos + one 👎, quieter Mac (load 4 to 9): time per photo | 3.03 to 3.10 s | 2.91 to 3.01 s |
+| Same runs: renderer RSS peak (includes the idle shutdown and a fresh engine for the 👎) | 2742, 2516 MB | 2820, 2719 MB |
 
+- **Time is level.** The research doc measured 640 about 10% slower in Node; in the browser, on a loaded Mac, the two
+  are within noise of each other. Treat it as "about the same"; the iPhone's `inferred` ms decides.
 - **Memory is close but not equal.** The research doc's "913 MB, 1.0x" was a low reading: repeated runs of both the
   research file and this export land at 1031 to 1048 MB most of the time. The renderer RSS (what Safari's limit is
   about) is about 3% higher. So the iPhone test below decides it, not this table.
   (`performance.measureUserAgentSpecificMemory` never returned in headless Chrome within 45 s, so RSS is from `ps`.)
+- **The 👎 after the idle shutdown peaks high for both models** (about 2.5 to 2.8 GB renderer RSS, against about 2 GB
+  without it): the old engine's memory isn't back yet when the new one starts. That comes from the restart, not the
+  model (640 is 80 to 200 MB above ISNet there, within run-to-run spread), but it is the pattern that crashed iPhones
+  before, so step 4 of the test below is required.
 - **Masks:** all five photos cut out cleanly (hair, whiskers, the flower's stem); the 18.75 MP cat too.
 - **👎 zoomed retry:** works on both models (one extra run, merged result shown).
 - **GIF:** 8 frames, 4.6 to 5.1 s each, comes back animated (`gif-done`, 8 frames).
@@ -57,14 +65,17 @@ Use Safari, a fresh tab. Each step's URL carries `?debug=1` so every step lands 
    crash, each photo about 6 s or less. An empty card ("no subject") on a busy scene is a known weak spot; note how many.
 3. **Compare with ISNet.** Open `.../?debug=1&model=isnet` in a new tab and pick the same 8 photos. Which cut-outs look
    better? (Research: 640 wins on people, pets, products; ISNet wins on thin wire frames like a bike stand.)
-4. Optional: a GIF (16 frames on iPhone) and one 👎 on a photo that doesn't fill the frame.
+4. **Required: a 👎 a few seconds after the batch finished** (the engine has shut down; the 👎 starts a new one) on a
+   photo whose subject doesn't fill the frame. Pass: the zoomed retry comes back, no crash. Then a GIF (16 frames on iPhone).
 
 ### Reading the diag log
 
-    npx wrangler pages deployment list --project-name goodbye-bg-git | grep phone-birefnet640   # newest ID on the branch
-    npx wrangler pages deployment tail <id> --project-name goodbye-bg-git --format json | grep diag
+    ID=$(npx wrangler pages deployment list --project-name goodbye-bg-git --environment preview --json \
+      | node -e 'console.log(JSON.parse(require("fs").readFileSync(0,"utf8")).find((d) => d.Branch === "phone-birefnet640").Id)')
+    npx wrangler pages deployment tail $ID --project-name goodbye-bg-git --format json | grep diag
 
-Start the tail before testing. Look for, per tab (`id` is the same within a tab):
+The first line finds the branch's newest deployment (every push makes a new one; the branch URL always serves the
+newest). Start the tail before testing. Look for, per tab (`id` is the same within a tab):
 - `worker:init` with `"model":"birefnet640"` (or `"isnet"` with `?model=isnet`), then `worker:session`, `ready` with engine `cpu`.
 - `inferred` with `ms` for each photo: the model's time on the phone.
 - `engine-idle` after a batch (the engine let go of its memory), `engine-start` when the next photo arrives.
@@ -74,7 +85,8 @@ Start the tail before testing. Look for, per tab (`id` is the same within a tab)
 ## What decides merging
 
 Merge when, on Kevin's iPhone:
-1. **No crash** on the 18.75 MP photo and on 8 + 2 photos in one tab (ISNet passes both today);
+1. **No crash** on the 18.75 MP photo, on 8 + 2 photos in one tab, and on the 👎 after the idle shutdown (ISNet passes
+   the first two today);
 2. **6 s or less a photo** (ISNet: 5.0 s on 2 threads);
 3. the cut-outs look **at least as good as ISNet** on his own photos, with empty masks on busy scenes rare.
 
