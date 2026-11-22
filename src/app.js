@@ -1028,35 +1028,39 @@ async function addSources(list, origin = "") {
   });
   await landing(() => { show(); $("grid").prepend(cards); sync(); });
   for (const [it, src] of batch) { // one decode at a time: a full-size decode is big
-    if (!items.includes(it)) continue;
-    try {
-      const { blob, name } = await toBlob(src);
-      named(it, baseName(name));
-      if (/gif/i.test(blob.type) || /\.gif$/i.test(name || "")) { // animated: every frame gets cut out
-        try { const g = (await loadGif()).readGif(await blob.arrayBuffer(), await maxFrames()); if (g) { it.anim = g; it.crop = false; it.bg = null; it.out = null; dbg("gif", { frames: g.frames.length, total: g.total }); } }
-        catch (e) { console.warn("GIF frames skipped", e); }
-      }
-      dbg("decode", { bytes: blob.size, type: blob.type });
-      const full = await decode(blob);
-      let { width: w, height: h } = full;
-      dbg("decoded", { w, h });
-      if (Math.max(w, h) > MAX_SIDE || w * h > MAX_PIXELS) {
-        const k = Math.min(MAX_SIDE / Math.max(w, h), Math.sqrt(MAX_PIXELS / (w * h)));
-        w = Math.floor(w * k); h = Math.floor(h * k);
-      }
-      const k = Math.min(1, PREVIEW_MAX / Math.max(w, h));
-      const bmp = k < 1 ? await createImageBitmap(full, { resizeWidth: Math.round(w * k), resizeHeight: Math.round(h * k), resizeQuality: "high" }) : full;
-      if (bmp !== full) full.close();
-      Object.assign(it, { bmp, blob, w, h });
-      drawCard(it);
-      keep(it);
-    } catch (e) {
-      console.warn(e);
-      fail(it, e.message || "Could not open this image.");
-    }
-    run();
+    if (!items.includes(it)) { it.src = src; continue; } // removed before its turn: Undo opens it (undoRemove)
+    await openOne(it, src);
   }
   sync();
+}
+
+async function openOne(it, src) {
+  try {
+    const { blob, name } = await toBlob(src);
+    named(it, baseName(name));
+    if (/gif/i.test(blob.type) || /\.gif$/i.test(name || "")) { // animated: every frame gets cut out
+      try { const g = (await loadGif()).readGif(await blob.arrayBuffer(), await maxFrames()); if (g) { it.anim = g; it.crop = false; it.bg = null; it.out = null; dbg("gif", { frames: g.frames.length, total: g.total }); } }
+      catch (e) { console.warn("GIF frames skipped", e); }
+    }
+    dbg("decode", { bytes: blob.size, type: blob.type });
+    const full = await decode(blob);
+    let { width: w, height: h } = full;
+    dbg("decoded", { w, h });
+    if (Math.max(w, h) > MAX_SIDE || w * h > MAX_PIXELS) {
+      const k = Math.min(MAX_SIDE / Math.max(w, h), Math.sqrt(MAX_PIXELS / (w * h)));
+      w = Math.floor(w * k); h = Math.floor(h * k);
+    }
+    const k = Math.min(1, PREVIEW_MAX / Math.max(w, h));
+    const bmp = k < 1 ? await createImageBitmap(full, { resizeWidth: Math.round(w * k), resizeHeight: Math.round(h * k), resizeQuality: "high" }) : full;
+    if (bmp !== full) full.close();
+    Object.assign(it, { bmp, blob, w, h });
+    drawCard(it);
+    keep(it);
+  } catch (e) {
+    console.warn(e);
+    fail(it, e.message || "Could not open this image.");
+  }
+  run();
 }
 
 async function toBlob(src) {
@@ -1429,7 +1433,14 @@ function undoRemove() {
   items.splice(Math.min(at, items.length), 0, it);
   it.filed = false; // its stored file was deleted on Remove: write it again, not only its state
   show(); keep(it); sync(); dbg("undo");
-  if (it.mask) drawCard(it); else if (!it.failed) run();
+  clearInterval(it.quip);
+  if (it.src && !it.bmp && !it.failed) { const src = it.src; it.src = null; openOne(it, src); } // removed before it was opened
+  else if (it.unfinished && it.mask) { it.unfinished = false; ready(it); keep(it); drawCard(it); } // removed while the model was on it
+  else if (it.unfinished) { // a GIF cut short: read its frames again, then it goes back in the queue
+    it.unfinished = false; it.hold = true; it.el.card.classList.remove("working"); it.el.card.classList.add("queued");
+    (async () => { try { it.anim = (await loadGif()).readGif(await it.blob.arrayBuffer(), await maxFrames()) || null; } catch { it.anim = null; } it.hold = false; run(); })();
+  }
+  else if (it.mask) drawCard(it); else if (!it.failed) run();
   it.el.card.querySelector(".x")?.focus({ preventScroll: true });
 }
 $("undobtn").addEventListener("click", () => { tick(); undoRemove(); });
@@ -1482,7 +1493,7 @@ async function run() {
   try {
     // Next waiting photo in reading order (top-left first), so the work starts where people look.
     const next = () => [...$("grid").children].map((card) => items.find((i) => i.el.card === card))
-      .find((i) => i && !i.mask && !i.failed && i.bmp);
+      .find((i) => i && !i.mask && !i.failed && i.bmp && !i.hold);
     for (let it; (it = next()); ) {
       startQuips(it);
       await nextFrame();
@@ -1490,10 +1501,11 @@ async function run() {
       try { it.mask = await segment(it.bmp); finished++; }
       catch (e) { if (!items.includes(it)) continue; console.error(e); report("run-failed", e, it); fail(it, "Could not process this image."); continue; } // removed meanwhile: not a failure
       if (!it.mask.box) { it.mask = null; fail(it, "No clear subject in this photo."); continue; }
-      if (!items.includes(it)) continue;
-      if (it.anim) try { await animate(it); } catch (e) { console.error(e); report("gif-failed", e, it); it.anim = null; it.png = null; }
-      if (!items.includes(it)) continue;
       it.ms = lastMs; it.engine = lastEngine;
+      // Removed meanwhile: Undo finishes it (undoRemove). A GIF cut short starts over (its frames were let go).
+      if (!items.includes(it)) { it.unfinished = true; if (it.anim) it.mask = null; continue; }
+      if (it.anim) try { await animate(it); } catch (e) { console.error(e); report("gif-failed", e, it); it.anim = null; it.png = null; }
+      if (!items.includes(it)) { it.unfinished = true; if (it.anim && !it.gifUrl) it.mask = null; continue; }
       ready(it); dbg("shown"); keep(it);
       dbg("reveal"); reveal(it); sync(); tick(); milestone(it);
       it.el.card.dataset.ms = lastMs;
