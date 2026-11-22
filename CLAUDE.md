@@ -88,6 +88,9 @@ scales the mask back up).
   18.75 MP photo half the time on Kevin's iPhone; 2 threads peak about 300 MB lower; 5.0 s a photo). WebGPU crashed
   the tab there one try in two (2026-11-20). Safari needs `Cross-Origin-Embedder-Policy: require-corp` (it ignores
   `credentialless`) to be cross-origin isolated, which threads need.
+- One photo on the engine at a time (`infer` queues in the page): a 👎 retry during a batch used to send a second run
+  to the same worker; on the GPU one never came back, which read as a GPU failure (BiRefNet off for 30 days) and left
+  the batch waiting forever. A job whose engine was stopped under it (`stopped`) runs on the next engine, no step-down.
 - Votes and crash reports call the engines `gpu-birefnet`, `gpu` (ISNet), `cpu-birefnet640` and `cpu` (ISNet: a 👎
   retry on a 640 result, or `?model=isnet`). A vote names the engine
   that made that photo's mask, even after a fallback.
@@ -178,6 +181,7 @@ Anything the browser opens goes straight in. HEIC and TIFF on Chrome/Edge/Firefo
   On/off transparency (soft edges become hard). The card plays it; Download and long-press save the GIF. No crop, no
   zoomed retry (👎 is a vote only). 10 frames at 360x540 in 5.7 s on the GPU.
 - See-through inputs reach the model on white, or on black when the subject is light. SVGs are drawn at 2048 px+.
+- Names: a file keeps "#" and "?" in its name (only a link loses its query), cut at 80 whole characters (`baseName`).
 - A file that can't be opened never gets a card; one bubble at Choose photos names them. A photo the model fails on
   keeps its card.
 
@@ -208,8 +212,9 @@ without a visit; private windows refuse Blobs, so nothing is kept there.
   Download all sticks to its bottom edge. The grid uses the window's width (up to 1800 px).
 - Only the photo being worked on waves and shows a quip; waiting cards stay still. It is the lightest photo on screen,
   with a soft light sweeping across it. The wave and quip live in the card's bar (where
-  Download appears when done), never on the photo: the subject is what stays (Kevin, 2026-11-21). Phone cards hide
-  remove while working so the quip fits two lines; the smallest cards show only the wave. A failed card says which
+  Download appears when done), never on the photo: the subject is what stays (Kevin, 2026-11-21). Phone cards (165 px
+  and under) hide remove while working so the quip gets the room; the smallest cards show only the wave. A quip can
+  never make the bar taller (a third line borrows the bar's padding; `.say` has a `max-height`). A failed card says which
   file it was, on an opaque panel, and hides Download.
 - Results are always cropped to the subject (no crop toggle; GIFs keep the whole frame). 👎 retries zoomed in on the
   subject (merged into the first result outside the zoomed part, feathered where they meet; `mergeRetry`), only when
@@ -222,7 +227,9 @@ without a visit; private windows refuse Blobs, so nothing is kept there.
 - Hover effects only on devices with a real pointer (phones keep :hover after a tap).
 - Remove can be undone for 5 s (Kevin, 2026-11-21): a pill at the bottom, "Removed." + Undo, in the footer's place
   (the footer fades out), with a ring that runs down (hover or focus pauses it; Cmd/Ctrl+Z works). The deadline is a
-  JS timer (`UNDO_MS`). Undo also finishes a photo removed mid-run. One at a time. Removing frees the bitmap, moves any
+  JS timer (`UNDO_MS`). `placeUndo` puts it where the footer will be once the cards left are laid out again, and again
+  on every layout (a turned phone, a resized window); with no footer on screen (a phone on its side, a packed grid) it
+  sits at the bottom edge, over whatever is there. Undo also finishes a photo removed mid-run. One at a time. Removing frees the bitmap, moves any
   ad card showing it to another cut-out, and focuses the next card.
 - Messages sit next to what they're about (Kevin, 2026-11-21), one look everywhere: `tell(msg, button)` in app.js shows one
   bubble pointing at the button (adding photos: Choose photos/Paste, above them once photos are up; a failed save:
@@ -253,7 +260,7 @@ see-through PNG of the crop (or the GIF). Removed that day, on purpose: backgrou
 size/margin/shadow/WebP/Apply to all, the crop toggle, and the mask editor (#2, "Tap a piece? To do what?"); the
 history is in git (before f4612b5) and `docs/history.md`. Don't bring them back without Kevin asking.
 - Narrow cards shrink the buttons instead of dropping them (style.css container queries): 32 px down to 160 px cards,
-  26 px to 130, 24 px to 116, 22 px below (a phone with 12 photos has 110 px cards); under 100 px 👍 steps out (👎 stays:
+  26 px to 130, 24 px to 116, 22 px to 110, 20 px below (12 photos on a phone on its side: 103 px cards); under 100 px 👍 steps out (👎 stays:
   it retries). Download is an icon under 240 px. Every bar control is a faint ink chip; Download is the loud button.
 - Kept photos from before keep their masks; their old background and options are ignored, the `backs` store is
   emptied on load.
@@ -296,7 +303,8 @@ and redirects; a POST there counts the card being shown ('adseen').
   place with the next product no other card shows, same cut-out), with 2+ photos the cut-out and the product take turns.
   Tapping a finished photo puts it on every product card and keeps it there (`showArt`); the products keep changing.
   All motion stops after about 24 s and never runs with reduced motion.
-  The button names the product ("Put it on a mug"), outlined so Download stays the loud button. Ad cards have no
+  The button names the product ("Put it on a mug"), outlined so Download stays the loud button; on cards of 160 px and
+  under the label takes two lines. Ad cards have no
   surface, a solid hairline. Products follow light/dark.
 - Products render in 3D (`src/render3d.js` + Three.js 0.187.0, MIT, ~150 KB gzipped, loaded only when ads show): a
   blob shadow (a shadow map turned the floor into a dark slab on iPhones), slow sway, a lean toward the mouse; one
@@ -370,6 +378,11 @@ a difference.
   WebKit iPhone (share sheet stubbed), Firefox. Persistent profiles (ephemeral WebKit acts like Private Browsing).
 - What each covers and the 2026-11-22 results: `docs/history.md`. In short, WebKit runs BiRefNet on WebGPU on the Mac,
   2 CPU threads on the iPhone profile, HEIC natively, no WebP encoding (button hidden).
+- Real-world situations (2026-11-22; the list tried and what each found is in `docs/history.md`): the smoke suite
+  turns a phone on its side and back (mid-batch, done, with Undo up; 3 and 12 photos), drags a window through split-view
+  and zoom sizes, puts every quip and every ad label of every language in cards of every width, and 👎s during a GPU
+  batch. Its `LAYOUT` audit lists what must hold at any size (nothing outside the window, nothing over a card, bars
+  keep their controls, a row's cards the same height): run it after layout changes.
 - Not covered anywhere: real iOS memory limits, the real share sheet, touch gestures, real Safari, a real weak GPU.
 
 ## Next steps

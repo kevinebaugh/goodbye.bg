@@ -30,7 +30,7 @@ const results = [];
 async function check(name, fn, needs = []) {
   const failed = needs.find((n) => results.find((r) => r.name === n && r.status !== "PASS"));
   if (failed) { report(name, "FAIL", 0, `skipped: "${failed}" did not pass`); return false; }
-  if (process.env.ONLY && !name.includes(process.env.ONLY)) return false; // ONLY=<part of a name> runs just those checks
+  if (process.env.ONLY && !process.env.ONLY.split(",").some((o) => name.includes(o))) return false; // ONLY=<part of a name>[,<another>] runs just those checks ("basics" first when a check needs the GPU engine)
   const s = Date.now();
   try {
     const note = await fn();
@@ -653,6 +653,256 @@ try {
     await r.close();
     return `${waiting} photo(s) still waiting when the retry came back`;
   });
+
+  /* ---------- real-world situations (2026-11-22): a turned phone, a resized window, Undo, odd file names ---------- */
+  // What must hold at any window size: the page doesn't spill out of the window, cells don't overlap or leave it,
+  // nothing sits on a card (the Undo pill, the bubble, the footer, the buttons), a bar keeps its controls inside, and
+  // the cards of a row are the same height. Returns the problems found.
+  const LAYOUT = `(() => {
+    const bad = [], vw = innerWidth, vh = innerHeight, de = document.documentElement, g = document.getElementById("grid"), scroll = g.classList.contains("scroll");
+    const R = (e) => e.getBoundingClientRect(), f = (r) => [r.left, r.top, r.right, r.bottom].map((v) => Math.round(v)).join(",");
+    const vis = (e) => { if (!e || !e.getClientRects().length) return false; const s = getComputedStyle(e); return s.visibility !== "hidden" && +s.opacity > 0.05; };
+    const hit = (a, b) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1.5 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1.5;
+    if (de.scrollWidth > vw + 1) bad.push("page wider than the window (" + de.scrollWidth + " > " + vw + ")");
+    if (de.scrollHeight > vh + 1) bad.push("page taller than the window (" + de.scrollHeight + " > " + vh + ")");
+    const fixed = {};
+    for (const [k, sel] of Object.entries({ wordmark: ".mark", choose: "#pick", paste: "#paste", "Download all": "#all", footer: ".foot", undo: "#undo", bubble: "#tell" })) {
+      const e = document.querySelector(sel); if (!vis(e)) continue;
+      const r = (fixed[k] = R(e));
+      if (r.left < -1 || r.top < -1 || r.right > vw + 1 || r.bottom > vh + 1) bad.push(k + " outside the window (" + f(r) + ")");
+    }
+    for (const [a, b] of [["wordmark", "choose"], ["wordmark", "paste"], ["wordmark", "Download all"], ["choose", "paste"], ["paste", "Download all"], ["footer", "Download all"], ["bubble", "undo"]])
+      if (fixed[a] && fixed[b] && hit(fixed[a], fixed[b])) bad.push(a + " overlaps " + b);
+    const cells = [...g.children].filter((e) => e.matches(".card, .adcard")), cr = cells.map(R);
+    const tall = new Set(cr.map((r) => Math.round(r.height)));
+    if (tall.size > 1) bad.push("cards of different heights (" + [...tall].join(", ") + ")");
+    cells.forEach((e, i) => {
+      const r = cr[i];
+      if (r.left < -1 || r.right > vw + 1) bad.push("card " + i + " off the side (" + f(r) + ")");
+      if (!scroll && (r.top < -1 || r.bottom > vh + 1)) bad.push("card " + i + " outside the window (" + f(r) + ")");
+      for (let j = i + 1; j < cells.length; j++) if (hit(r, cr[j])) bad.push("cards " + i + " and " + j + " overlap");
+      // On its side or packed there is no footer to stand in for: the pill is at the bottom edge, over whatever is there.
+      for (const k of Object.keys(fixed)) if (k !== "Download all" && !(k === "undo" && !document.querySelector(".foot").getClientRects().length) && !(scroll && k === "footer") && hit(r, fixed[k])) bad.push(k + " over card " + i);
+      if (!scroll && fixed["Download all"] && document.getElementById("tools").parentNode === g && hit(r, fixed["Download all"])) bad.push("Download all over card " + i);
+      const bar = e.querySelector(".bar"); if (!bar || !e.matches(".card")) return;
+      const br = R(bar);
+      if (br.bottom > r.bottom + 1) bad.push("card " + i + ": bar cut off");
+      for (const k of [...bar.children].filter(vis)) { const kr = R(k); if (kr.left < br.left - 1 || kr.right > br.right + 1 || kr.top < br.top - 1 || kr.bottom > br.bottom + 1) bad.push("card " + i + ": " + k.className + " sticks out of the bar"); }
+    });
+    return [...new Set(bad)];
+  })()`;
+  // Waits for the layout to settle (a resize is laid out over a few frames, cards glide), then fails with what is wrong.
+  const laidOut = async (p, what) => {
+    let bad = [];
+    for (let i = 0; i < 30; i++) { await sleep(150); bad = await p.ev(LAYOUT); if (!bad.length && i >= 3) return; }
+    throw new Error(`${what}: ${bad.slice(0, 4).join("; ")}`);
+  };
+  const turn = (p, w, h) => p.s("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceScaleFactor: 3, mobile: true });
+
+  // Kevin's example (2026-11-22): turning the phone. Upright, on its side and back without a reload: while the batch
+  // runs, once it is done (ads in), and with the Undo pill up. On its side the footer is gone and the pill goes to the
+  // bottom edge; upright it stands in the footer's place, clear of the cards (it used to stay where the footer had
+  // been before the remaining cards grew: on a card's Download). 3 photos fit; 12 pack the grid (no footer).
+  await check("rotation: a phone turned on its side and back, mid-batch, done and with Undo up", async () => {
+    const out = [];
+    for (const n of [3, 12]) {
+      const cx = await context(), m = await page(cx, { w: 390, h: 844, mobile: true });
+      await m.s("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
+      await m.go(app());
+      assert(await m.ev(`matchMedia("(pointer: coarse)").matches`), "the page doesn't see a touch screen");
+      await addPhotos(m, Array.from({ length: n }, (_, i) => `r${i + 1}`));
+      await m.until(`document.querySelectorAll("#grid > .card").length === ${n}`, 10000, `${n} cards`);
+      for (const [w, h] of [[390, 844], [844, 390], [390, 844]]) { await turn(m, w, h); await laidOut(m, `${n} photos, batch running, ${w}x${h}`); }
+      await allDone(m, n, 120000);
+      await m.until(`!document.querySelector("#grid > .spare")`, 15000, "the ads in their cells");
+      for (const [w, h] of [[844, 390], [390, 844]]) { await turn(m, w, h); await laidOut(m, `${n} photos, done, ${w}x${h}`); }
+      // Remove one upright: the pill is clear of the cards that are left, also after a turn and back.
+      await click(m, "#grid > .card:nth-of-type(2) .x");
+      await m.until(`!document.getElementById("undo").hidden && getComputedStyle(document.getElementById("undo")).opacity === "1"`, 3000, "the Undo pill");
+      await m.ev(`document.getElementById("undobtn").focus()`); // focus holds its countdown
+      for (const [w, h] of [[390, 844], [844, 390], [390, 844]]) { await turn(m, w, h); await laidOut(m, `${n - 1} photos, Undo up, ${w}x${h}`); }
+      await click(m, "#undobtn");
+      await m.until(`document.querySelectorAll("#grid > .card").length === ${n} && document.getElementById("undo").hidden`, 3000, "the photo back");
+      // Remove one on its side (no footer there): the pill is on screen, and upright again it is in the footer's place.
+      await turn(m, 844, 390); await laidOut(m, `${n} photos, on its side`);
+      await click(m, "#grid > .card:nth-of-type(1) .x");
+      await m.until(`!document.getElementById("undo").hidden && getComputedStyle(document.getElementById("undo")).opacity === "1"`, 3000, "the Undo pill, on its side");
+      await m.ev(`document.getElementById("undobtn").focus()`);
+      await laidOut(m, `${n - 1} photos, removed on its side`);
+      await turn(m, 390, 844); await laidOut(m, `${n - 1} photos, upright again, Undo up`);
+      const cols = await m.ev(`document.getElementById("main").style.getPropertyValue("--cols") + " x " + document.getElementById("main").style.getPropertyValue("--p")`);
+      noErrors(m); await cspClean(m);
+      await m.close();
+      out.push(`${n}: ${cols}`);
+    }
+    return out.join("; ");
+  });
+
+  // A window dragged narrow and wide, iPad split-view widths, a computer zoomed to 200% and 400% (a smaller window in
+  // CSS pixels), with a batch running and then done.
+  await check("resize: a window dragged narrow and wide, split view, browser zoom", async () => {
+    const cx = await context(), w = await page(cx);
+    await w.go(app());
+    await addPhotos(w, ["w1", "w2", "w3", "w4", "w5", "w6"]);
+    await w.until(`document.querySelectorAll("#grid > .card").length === 6`, 10000, "6 cards");
+    const sizes = [[320, 700], [1600, 900], [507, 800], [678, 1024], [640, 400], [1280, 800]];
+    const size = (x, y) => w.s("Emulation.setDeviceMetricsOverride", { width: x, height: y, deviceScaleFactor: 1, mobile: false });
+    for (const [x, y] of sizes) { await size(x, y); await laidOut(w, `batch running, ${x}x${y}`); }
+    await allDone(w, 6, 120000);
+    await w.until(`!document.querySelector("#grid > .spare")`, 15000, "the ads in their cells");
+    for (const [x, y] of sizes) { await size(x, y); await laidOut(w, `done, ${x}x${y}`); }
+    // 400%: the cards can't fit a 320x200 window. The page may scroll there (computers only), never sideways.
+    await size(320, 200); await sleep(800);
+    const z = await w.ev(`({ wide: document.documentElement.scrollWidth - innerWidth, p: document.getElementById("main").style.getPropertyValue("--p") })`);
+    assert(z.wide <= 1, `at 400% the page scrolls sideways by ${z.wide} px`);
+    noErrors(w); await cspClean(w);
+    await w.close();
+  });
+
+  // No quip may make the card being worked on taller than its neighbours (83 did at a phone's 165 px cards, by 6 px,
+  // after the bar lost its second row): every quip of every language, at every card width.
+  await check("quips: none makes the working card's bar taller, at any card width", async () => {
+    const { LANGS } = await import(join(root, "src/i18n.js"));
+    const src = readFileSync(join(root, "src/app.js"), "utf8");
+    const list = (name) => [...src.split(`const ${name} = [`)[1].split("];")[0].matchAll(/^\s*"((?:[^"\\]|\\.)+)",?\s*$/gm)].map((m) => m[1]);
+    const all = { en: [...list("QUIPS_EN"), ...list("RETRY_QUIPS_EN")] };
+    for (const [k, l] of Object.entries(LANGS)) all[k] = [...l.quips, ...l.retryQuips];
+    assert(all.en.length > 30, `only ${all.en.length} English quips found in src/app.js`);
+    const cx = await context(), q = await page(cx, { w: 1280, h: 900 });
+    await q.go(`${base}/?ads=0`);
+    await q.ev(`(() => { const c = document.createElement("canvas"); c.width = c.height = 64; c.toBlob((b) => { const dt = new DataTransfer(); dt.items.add(new File([b], "q.png", { type: "image/png" }));
+      const i = document.getElementById("file"); i.files = dt.files; i.dispatchEvent(new Event("change", { bubbles: true })); }); return true; })()`);
+    await q.until(`document.querySelector("#grid > .card")`, 10000, "a card");
+    const bad = await q.ev(`(() => { const c = document.querySelector("#grid > .card"), say = c.querySelector(".say"), bar = c.querySelector(".bar"), main = document.getElementById("main"), out = [];
+      c.classList.remove("queued", "failed");
+      for (let w = 84; w <= 420; w += 2) {
+        main.style.setProperty("--p", w + "px"); main.style.setProperty("--bar", (w <= 242 ? 49 : 57) + "px"); c.style.width = w + "px";
+        c.classList.remove("working"); const h0 = bar.offsetHeight; c.classList.add("working");
+        for (const [lang, qs] of Object.entries(${JSON.stringify(all)})) for (const t of qs) { say.textContent = t; const grow = bar.offsetHeight - h0, cut = say.scrollHeight - say.clientHeight;
+          if (grow > 0 || cut > 1) out.push(w + " px, " + lang + ": " + t + " (bar +" + grow + " px, " + cut + " px cut)"); }
+      }
+      return out; })()`);
+    await q.close();
+    assert(!bad.length, `${bad.length} quip(s) don't fit, e.g. ${bad.slice(0, 3).join(" | ")}`);
+    return `${Object.values(all).flat().length} quips, cards 84 to 420 px`;
+  });
+
+  // The ad card's button names the product; on narrow cards it was cut off at both ends ("ut it on an ornamer" at 103 px,
+  // Portuguese and Spanish from 160 px down). Every label of every language, at every card width.
+  await check("ads: no button label is cut off, at any card width", async () => {
+    const { LANGS } = await import(join(root, "src/i18n.js"));
+    const { PARTNERS } = await import(join(root, "lib/partners.mjs"));
+    const en = [...new Set(PARTNERS.flatMap((x) => [x, ...(x.variants || [])]).flatMap((x) => [x.cta, ...(x.ctas || [])]).filter(Boolean))];
+    const all = { en }; for (const [k, l] of Object.entries(LANGS)) all[k] = en.map((e) => l.t[e]).filter(Boolean);
+    const cx = await context(), q = await page(cx, { w: 1280, h: 900 });
+    await q.go(app());
+    await addPhotos(q, ["label"]);
+    await allDone(q, 1, 90000);
+    await q.until(`document.querySelector("#grid > .adcard .adcta")`, 15000, "the ad card");
+    const bad = await q.ev(`(() => { const a = document.querySelector("#grid > .adcard"), b = a.querySelector(".adcta"), main = document.getElementById("main"), out = [];
+      for (let w = 84; w <= 300; w += 2) { main.style.setProperty("--p", w + "px"); a.style.width = w + "px";
+        for (const [lang, ls] of Object.entries(${JSON.stringify(all)})) for (const t of ls) { b.textContent = t; const cut = Math.max(b.scrollWidth - b.clientWidth, b.scrollHeight - b.clientHeight); if (cut > 0) out.push(w + " px, " + lang + ": " + t + " (" + cut + " px)"); } }
+      return out; })()`);
+    await q.close();
+    assert(!bad.length, `${bad.length} label(s) cut, e.g. ${bad.slice(0, 3).join(" | ")}`);
+    return `${Object.values(all).flat().length} labels, cards 84 to 300 px`;
+  });
+
+  // File names: "#" and "?" belong to a file's name (only a link loses its query: "Logo #2 (final?).jpg" was ")"),
+  // and a long name is cut between characters, never through an emoji.
+  await check("file names: # and ? stay, a long emoji name is cut between emoji", async () => {
+    const cx = await context(), q = await page(cx);
+    await q.go(`${base}/?ads=0`);
+    const given = ["Logo #2 (final?).jpg", "🐶".repeat(90) + "x.jpg", "a/b\\c.d.png", "صورة العائلة.jpg"];
+    await q.ev(`(() => { const c = document.createElement("canvas"); c.width = c.height = 64; c.toBlob((b) => { const dt = new DataTransfer();
+      for (const n of ${JSON.stringify(given)}) dt.items.add(new File([b], n, { type: "image/png" }));
+      const i = document.getElementById("file"); i.files = dt.files; i.dispatchEvent(new Event("change", { bubbles: true })); }); return true; })()`);
+    await q.until(`document.querySelectorAll("#grid > .card").length === 4`, 10000, "4 cards");
+    const got = await names(q);
+    await q.close();
+    assert(got[0] === "Logo #2 (final?)", `"${given[0]}" became "${got[0]}"`);
+    assert(got[1] === "🐶".repeat(80), `90 emoji became ${[...got[1]].length} characters, ${got[1].length} units`);
+    assert(got[2] === "c.d" && got[3] === "صورة العائلة", `got ${JSON.stringify(got.slice(2))}`);
+  });
+
+  // A first visit, photos picked, and the connection drops before the model is in: the photos wait (they used to fail
+  // one by one with "Could not process this image", be forgotten, and send crash reports) and finish once it is back.
+  // A server of its own, stopped and started again: the page is a phone's, so the model isn't asked for on load.
+  await check("connection lost before the model is in: photos wait, then finish", async () => {
+    const port2 = await freePort(), base2 = `http://localhost:${port2}`;
+    const serve = async () => { const s = run(process.execPath, ["scripts/serve.mjs"], { env: { PORT: String(port2) } });
+      for (let i = 0; i < 100; i++) { try { await fetch(base2 + "/version.txt"); break; } catch { await sleep(100); } } return s; };
+    let srv = await serve();
+    const cx = await context(), o = await page(cx, { w: 390, h: 844, mobile: true });
+    try {
+      await o.s("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
+      await o.go(`${base2}/?ads=0`);
+      srv.kill("SIGKILL"); await sleep(300);
+      await addPhotos(o, ["o1", "o2", "o3"]);
+      await o.until(`!document.getElementById("tell").hidden && /connection/.test(document.getElementById("tell").textContent)`, 30000, "the bubble that says it could not load");
+      await sleep(1000);
+      const waiting = await o.ev(`${CARDS}.map((c) => c.className).join(" | ")`);
+      assert(!/failed/.test(waiting) && (await o.ev(`${CARDS}.length`)) === 3, "photos while the server is away: " + waiting);
+      assert((await kept(o)).length === 3, "the waiting photos are not kept");
+      srv = await serve();
+      await o.ev(`dispatchEvent(new Event("online"))`);
+      await allDone(o, 3, 120000);
+      const reports = o.errors.filter((e) => /crash report/.test(e));
+      assert(!reports.length, "crash reports for a lost connection: " + reports[0]);
+    } finally { try { srv.kill("SIGKILL"); } catch {} await o.close(); }
+  });
+
+  // A subject small enough for 👎 to retry zoomed in (the GPU engine's retry; the usual test figure fills its photo).
+  const addSmall = (p, names) => p.ev(`(async () => {
+    const dt = new DataTransfer();
+    for (const [k, name] of ${JSON.stringify(names)}.entries()) {
+      const c = document.createElement("canvas"); c.width = 1600; c.height = 1200; const x = c.getContext("2d");
+      const g = x.createLinearGradient(0, 0, 1600, 1200); g.addColorStop(0, "#d8e8f0"); g.addColorStop(1, "#8aa"); x.fillStyle = g; x.fillRect(0, 0, 1600, 1200);
+      x.fillStyle = ["#c0302a", "#2050c0", "#20a040", "#e0b020"][k % 4]; x.beginPath(); x.ellipse(800, 700, 130, 190, 0, 0, 7); x.fill();
+      x.fillStyle = "#f0c8a0"; x.beginPath(); x.arc(800, 500, 75, 0, 7); x.fill();
+      const b = await new Promise((r) => c.toBlob(r, "image/jpeg", 0.9)); dt.items.add(new File([b], name + ".jpg", { type: "image/jpeg" }));
+    }
+    const i = document.getElementById("file"); i.files = dt.files; i.dispatchEvent(new Event("change", { bubbles: true }));
+    return true;
+  })()`);
+  // 👎 while the batch is still running, on the GPU: the retry and the batch's next photo used to reach the engine
+  // together, one never came back, and that read as a GPU failure (BiRefNet off for 30 days, two crash reports, the
+  // batch waiting forever). No ?engine= here: the remembered tier (gb-gpu) is only written without test switches.
+  const c7 = await context(), d = await page(c7);
+  await check("gpu 👎 during a batch: the batch finishes, BiRefNet stays", async () => {
+    if (engine !== "gpu") return { skip: "no WebGPU with shader-f16 in this headless Chrome" };
+    await d.go(`${base}/?ads=0`);
+    await addSmall(d, ["d1", "d2", "d3", "d4", "d5", "d6"]);
+    const DONE = `${CARDS}.find((x) => !x.classList.contains("working") && !x.classList.contains("queued") && !x.querySelector(".dl").disabled)`;
+    await d.until(`!!${DONE}`, 90000, "a first finished photo");
+    const label = await d.ev(`${DONE}.querySelector(".rate:last-child").getAttribute("aria-label")`);
+    assert(/try again/.test(label), `👎 would not retry this photo (${label})`);
+    await d.ev(`${DONE}.querySelector(".rate:last-child").click()`);
+    await allDone(d, 6, 60000);
+    const tier = await d.ev(`JSON.parse(localStorage.getItem("gb-gpu") || "{}").tier || ""`);
+    assert(!/isnet|cpu/.test(tier), `the GPU was marked down to ${tier}`);
+    noErrors(d); // a step-down posts to /api/crash
+    const e = await engineOf(d, "#grid > .card:last-of-type");
+    assert(e === "gpu-birefnet", `the last photo ran on ${e}`);
+    return `6 done, last on ${e}`;
+  });
+  // 👎, Remove while the retry runs, Undo once it is back: the card shows the new result, so it gets that result's
+  // votes (it came back with the old 👎 lit and both off: no vote, and no second 👎 to restore the first result).
+  await check("👎, Remove, Undo after the retry: the new result can be rated", async () => {
+    if (engine !== "gpu") return { skip: "needs the GPU engine's zoomed retry (the CPU retry outlasts Undo)" };
+    await d.ev(`(() => { const c = document.querySelector("#grid > .card:nth-of-type(2)"); window.__c = c; c.querySelector(".rate:last-child").click(); c.querySelector(".x").click(); document.getElementById("undobtn").focus(); return true; })()`);
+    assert(await d.ev(`!__c.isConnected && __c.classList.contains("working")`), "the card was not removed mid-retry");
+    await d.until(`!__c.classList.contains("working")`, 30000, "the retry back");
+    await click(d, "#undobtn");
+    await d.until(`__c.isConnected`, 3000, "the card back");
+    const s = await d.ev(`(() => { const [up, down] = __c.querySelectorAll(".rate"); return { up: !up.disabled && up.style.visibility !== "hidden", down: !down.disabled && !down.classList.contains("chosen"), dl: !__c.querySelector(".dl").disabled }; })()`);
+    assert(s.up && s.down && s.dl, "after Undo: " + JSON.stringify(s));
+    await click(d, "#grid > .card:nth-of-type(2) .rate:last-child"); // 👎 on the retry: the first result comes back
+    await sleep(300);
+    noErrors(d);
+    await allDone(d, 6, 10000);
+  });
+  await d.close();
 
   // The GPU gate: BiRefNet fails to start (?gpufail=birefnet-init, after a 3 s delay), ISNet on the GPU takes over, and a
   // photo added while it starts still finishes there. Fallback reports are expected here (they go to /api/crash).

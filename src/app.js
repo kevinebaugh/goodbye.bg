@@ -129,7 +129,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const replay = (el, c) => { el.classList.remove(c); void el.offsetWidth; el.classList.add(c); };
 // Media queries read live (.matches) where they matter.
 const REDUCED = matchMedia("(prefers-reduced-motion: reduce)"), DARK = matchMedia("(prefers-color-scheme: dark)");
-const baseName = (s) => (s || "image").split(/[\\/?#]/).filter(Boolean).pop()?.replace(/\.[^.]+$/, "").slice(0, 80) || "image";
+// A name for the card and the saved file, without the folder or the extension, at most 80 characters (whole ones: half
+// an emoji is not a file name). A link also loses its query and fragment; a file keeps "#" and "?" ("Logo #2.jpg" was "2").
+const baseName = (s, link = false) => [...((s || "image").split(link ? /[\\/?#]/ : /[\\/]/).filter(Boolean).pop()?.replace(/\.[^.]+$/, "") || "")].slice(0, 80).join("").trim() || "image";
 
 /* ---------- model ----------
    The model runs in its own worker (engine.js). Computers whose GPU can run it use WebGPU with
@@ -389,7 +391,7 @@ async function pickEngine() {
 
 function killWorker(reason) {
   worker?.terminate(); worker = null;
-  for (const j of jobs.values()) j.reject(new Error(reason));
+  for (const j of jobs.values()) j.reject(Object.assign(new Error(reason), { stopped: true })); // not this job's failure (segment)
   jobs.clear();
 }
 function stopEngine(reason) { killWorker(reason); engineReady = null; }
@@ -474,13 +476,16 @@ function loadModel(want = "") {
         if (name !== "gpu") {
           // The CPU engine can fail to start when memory is short (a tab that just crashed, or an engine that
           // was just shut down and not yet freed). Report it, wait a moment, try once more.
-          report("start-failed", e); dbg("cpu-start-failed", { error: String(e?.message || e).slice(0, 200) });
+          if (!e?.pre) report("start-failed", e); // a download that failed is no crash
+          dbg("cpu-start-failed", { error: String(e?.message || e).slice(0, 200) });
           await sleep(3000);
           await startEngine("cpu", want);
           status(`Ready.`); dbg("ready", { engine: engineName });
           return;
         }
-        if (e.pre) throw e; // a download that failed says nothing about the GPU: not a step down, nothing remembered
+        // A download that failed says nothing about the GPU: not a step down, nothing remembered. The same while the
+        // browser is offline: the runtime fetches a file of its own after the model is in.
+        if (e.pre || navigator.onLine === false) throw Object.assign(e, { pre: true });
         if (!stepDown(e.slow ? "slow-start" : "start-failed", e)) throw e;
         name = await pickEngine();
       }
@@ -492,14 +497,25 @@ function loadModel(want = "") {
   return engineReady;
 }
 
+// One photo on the engine at a time. A 👎 retry while a batch runs used to send a second run to the same worker: on
+// the GPU one of the two never came back, which read as a GPU failure (BiRefNet switched off for 30 days, two crash
+// reports) and left the batch waiting forever. The hang limit counts from when a job is sent, not while it queues.
+let inferChain = Promise.resolve();
 function infer(input) {
-  const w = worker, id = ++jobId;
-  return new Promise((resolve, reject) => {
+  const go = async () => {
+    try { await engineReady; } catch {} // an engine starting up meanwhile (the job ahead stepped down a tier)
+    const w = worker, id = ++jobId;
+    if (!w?.up) throw Object.assign(new Error("Engine stopped"), { stopped: true }); // it went while this job queued
+    return new Promise((resolve, reject) => {
     const j = { resolve, reject, timer: 0 };
     if (engineName === "gpu") j.timer = setTimeout(() => { jobs.delete(id); reject(new Error("GPU run timed out")); }, GPU_RUN_TIMEOUT);
     jobs.set(id, j);
     w.postMessage({ type: "run", id, pixels: input });
-  });
+    });
+  };
+  const p = inferChain.then(go);
+  inferChain = p.catch(() => {});
+  return p;
 }
 
 async function segment(bitmap, edge = true, want = "") { // edge: false skips refineEdge (GIF frames); want: see loadModel
@@ -513,8 +529,11 @@ async function segment(bitmap, edge = true, want = "") { // edge: false skips re
   let res;
   dbg("infer");
   const h0 = hides;
-  for (;;) try { res = await infer(input); break; }
+  for (let again = 0; ; ) try { res = await infer(input); break; }
   catch (e) {
+    // The engine was stopped under this job (another photo's GPU failure, a model switch): no failure of its own, so
+    // it runs on whichever engine comes next. A few times at most.
+    if (e?.stopped && again++ < 3) { await loadModel(want); continue; }
     if (engineName !== "gpu" || !stepDown("run-failed", e)) throw e;
     stopEngine("GPU failed"); // the next tier redoes this photo
     await loadModel();
@@ -983,7 +1002,10 @@ function png(it) {
   return it.png;
 }
 const ext = (it) => (it.anim ? "gif" : "png");
-const outName = (it) => `${it.name}-goodbye-bg.${ext(it)}`;
+// The saved file's name. Characters Windows can't have in a file name become "_" (a browser does that to a single
+// download anyway; inside the zip nothing did, and Windows can't unpack "Logo #2 (final?).png").
+const fileBase = (it) => it.name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_");
+const outName = (it, k = 0) => `${fileBase(it)}-goodbye-bg${k ? "-" + k : ""}.${ext(it)}`;
 
 /* ---------- animated GIFs ----------
    Each frame goes through the model (the first one already has), is cut out at the GIF's size, and the frames
@@ -1084,7 +1106,7 @@ async function addSources(list, origin = "") {
     const it = { id: ++uid, key: top + i, name: "image", bmp: null, blob: null, w: 0, h: 0, mask: null };
     items.push(it);
     cards.append(makeCard(it));
-    named(it, baseName(src instanceof Blob ? src.name : String(src).startsWith("data:") ? "pasted" : String(src)));
+    named(it, src instanceof Blob ? baseName(src.name) : baseName(String(src).startsWith("data:") ? "pasted" : String(src), true));
     return [it, src];
   });
   await landing(() => { show(); $("grid").prepend(cards); sync(); });
@@ -1103,7 +1125,7 @@ async function addSources(list, origin = "") {
 async function openOne(it, src) {
   try {
     const { blob, name } = await toBlob(src);
-    named(it, baseName(name));
+    named(it, baseName(name, !(src instanceof Blob)));
     if (/gif/i.test(blob.type) || /\.gif$/i.test(name || "")) { // animated: every frame gets cut out
       try { const g = await readAnim(blob); if (g) { it.anim = g; dbg("gif", { frames: g.frames.length, total: g.total }); } }
       catch (e) { console.warn("GIF frames skipped", e); }
@@ -1300,13 +1322,31 @@ function offerUndo(u) {
   who.className = "sr-only"; who.textContent = ` ${u.it.name}`;
   said.replaceChildren(t("Removed"), who, ".");
   bar.hidden = false;
-  // In the footer's place (the footer fades out meanwhile), so it covers neither the count nor the cards.
-  const f = document.querySelector(".foot").getBoundingClientRect();
-  bar.style.bottom = `${Math.max(8, Math.round(innerHeight - f.bottom + (f.height - bar.offsetHeight) / 2))}px`;
+  // In the footer's place (the footer fades out meanwhile), so it covers neither the count nor the cards. The cards
+  // left are laid out again first (they grow, the footer moves), so it shows once that is done: placeUndo.
+  bar.style.opacity = "0";
+  setTimeout(placeUndo, 150); // whatever happens to the layout
   document.body.classList.add("undoing");
   ring.style.animation = "none"; void ring.getBoundingClientRect(); ring.style.animation = ""; // restart the countdown
   undoLeft = UNDO_MS; undoClock();
 }
+// Where the pill sits: over the footer, where the footer will be once it has moved (hugFooter), and again whenever the
+// layout changes (a photo fewer, a turned phone, a resized window). It used to be placed once, from where the footer
+// was before the remaining cards grew: on a phone it landed on a card's Download. With no footer on screen (a phone on
+// its side, a packed grid; its box is empty then, which sent the pill off the top), the bottom of the screen.
+function placeUndo() {
+  const bar = $("undo"), f = document.querySelector(".foot");
+  if (bar.hidden || !f) return;
+  let b = 8;
+  if (f.getClientRects().length) {
+    const r = f.getBoundingClientRect();
+    let moved = 0; try { moved = new DOMMatrixReadOnly(getComputedStyle(f).transform).m42; } catch {}
+    const bottom = r.bottom - moved - footSlack; // not where it is mid-glide
+    b = Math.max(8, Math.round(innerHeight - bottom + (r.height - bar.offsetHeight) / 2));
+  }
+  bar.style.bottom = `${b}px`; bar.style.opacity = "";
+}
+addEventListener("resize", () => requestAnimationFrame(placeUndo));
 // The deadline is a timer, not the ring's animation (reduced motion turns animations off, and the pill stayed forever).
 // Hover or focus on the pill pauses it, like the ring.
 const UNDO_MS = 5000;
@@ -1393,9 +1433,18 @@ function fail(it, msg) {
 }
 
 let cutIn = 0, inPhoto = false; // 👎 retries waiting to swap the model in; the batch's photo on the engine now
+// The model could not be downloaded and photos are waiting: try again when the browser says it is online, when the
+// page comes back into view, and every 20 s (some networks never say). The bubble at Choose photos says why they wait.
+let noModel = false, modelTimer = 0;
+function waitForModel() {
+  tell(t("Could not load. Check your connection and reload."), $("pick").parentElement, 10_000);
+  clearTimeout(modelTimer); modelTimer = setTimeout(run, 20_000);
+}
+addEventListener("online", () => { if (noModel) run(); });
+document.addEventListener("visibilitychange", () => { if (noModel && !document.hidden) run(); });
 async function run() {
   if (running) return;
-  running = true;
+  running = true; noModel = false; clearTimeout(modelTimer);
   try {
     // Next waiting photo in reading order (top-left first), so the work starts where people look.
     const next = () => [...$("grid").children].map((card) => items.find((i) => i.el.card === card))
@@ -1408,7 +1457,13 @@ async function run() {
       working(engineReady ? "model" : "load", it);
       inPhoto = true;
       try { it.mask = await segment(it.bmp, !it.anim); finished++; }
-      catch (e) { if (!items.includes(it)) continue; console.error(e); report("run-failed", e, it); fail(it, t("Could not process this image.")); continue; } // removed meanwhile: not a failure
+      catch (e) {
+        if (!items.includes(it)) continue; // removed meanwhile: not a failure
+        // The model didn't arrive (offline, a dropped connection): nothing wrong with the photos. They wait, still
+        // kept, and the batch starts again when the connection is back (they used to fail one by one and be forgotten).
+        if (e?.pre) { clearInterval(it.quip); it.el.card.classList.remove("working"); it.el.card.classList.add("queued"); noModel = true; break; }
+        console.error(e); report("run-failed", e, it); fail(it, t("Could not process this image.")); continue;
+      }
       finally { inPhoto = false; }
       if (!it.mask.box) { it.mask = null; fail(it, t("No clear subject in this photo.")); continue; }
       it.ms = lastMs; it.engine = lastEngine;
@@ -1421,6 +1476,7 @@ async function run() {
       dbg("reveal"); reveal(it); sync(); tick(); milestone(it);
     }
   } finally { running = false; rested(); }
+  if (noModel) return waitForModel();
   if (items.some((i) => i.bmp && !i.mask && !i.failed)) return run();
   idle();
   requestAnimationFrame(layout); // the batch is done: an empty grid cell may take the ad card now
@@ -1578,14 +1634,18 @@ async function retry(it) {
   if (want) cutIn--;
   retrying--; clearInterval(it.quip);
   busy.hidden = true; dl.disabled = false; it.el.card.classList.remove("working");
-  if (!items.includes(it)) { rested(); return; }
-  if (changed) reveal(it); else it.first = null;
+  // Removed while the retry ran: its card still gets the new result's state (Undo puts the card back: it used to
+  // come back showing the new result with the old 👎 lit and both votes off, so the first result couldn't be restored).
+  const here = items.includes(it);
+  if (!changed) it.first = null; else if (here) reveal(it);
   rested();
   idle();
   preparePngs();
   // A new result gets its own vote; if the retry found nothing better, the 👎 stands.
   if (changed) { it.vote = null; for (const b of [up, down]) { b.disabled = false; b.classList.remove("chosen"); b.style.visibility = ""; } }
-  downLabel(it); keep(it);
+  downLabel(it);
+  if (!here) return;
+  keep(it);
   if (document.activeElement === it.el.card) dl.focus({ preventScroll: true });
   announce(t(changed ? "{name}: tried again, new result" : "{name}: tried again, no better result", { name: it.name }));
 }
@@ -1601,6 +1661,7 @@ const barFor = (p) => (p <= FULL_BAR ? BAR_SM : BAR_MD);
 // spare, and the footer steps aside (style.css), so the cards get the height and keep 👍 👎 (Kevin, 2026-11-22:
 // on its side the bars were cut off under Download all and 👎 was gone). Otherwise it is the row under the cards.
 let footH = 0; // the footer's height when last shown (layout: "packed")
+let footSlack = 0; // how far up hugFooter moved the footer (placeUndo)
 const SIDEWAYS = matchMedia("(max-height: 520px) and (min-width: 660px)");
 function seatTools() {
   const t = $("tools"), row = $("hero").querySelector(".row"), g = $("grid");
@@ -1687,6 +1748,7 @@ function hugFooter(rows) {
     slack = Math.max(0, Math.floor(r.height - used));
   }
   f.style.transform = slack ? `translateY(${-slack}px)` : "";
+  footSlack = slack; placeUndo();
 }
 new ResizeObserver(layout).observe($("grid"));
 
@@ -2187,7 +2249,7 @@ async function saveAll() {
   const done = [...$("grid").children].map((card) => items.find((i) => i.el.card === card)).filter((i) => i?.mask), used = new Set();
   const names = done.map((it) => { // photos with the same name get -2, -3, ...
     let name = outName(it);
-    for (let k = 2; used.has(name); k++) name = `${it.name}-goodbye-bg-${k}.${ext(it)}`;
+    for (let k = 2; used.has(name); k++) name = outName(it, k);
     used.add(name); return name;
   });
   if (PHONE) {

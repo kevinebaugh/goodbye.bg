@@ -43,6 +43,48 @@ Tested 2026-11-22 (Playwright 1.65.0: WebKit 27.2 = Safari's engine on macOS, Fi
   mouse events), select wheels and focus zoom (only the 16 px font size is checked).
 
 
+## Real-world situations (2026-11-22)
+
+Headless Chrome, generated photos, the page audited at every step (nothing outside the window, nothing over a card, bars
+keep their controls, a row's cards the same height; `LAYOUT` in `scripts/test/smoke.mjs`). Each situation with 0, 1, 3, 6
+and 12 photos, a batch running, ads on (`?adtest=1&adpartner=zazzle`) and off, the Undo pill up, touch and mouse.
+
+Fixed:
+- **👎 while a batch runs, on the GPU engine.** The retry and the batch's next photo went to the engine worker together;
+  one never came back. After 15 s that read as a GPU failure: `birefnet-run-failed` twice, BiRefNet switched off for
+  30 days (`gb-gpu`), and the batch waited forever (two `segment` calls each restarted the engine and one waited on a
+  start that had been terminated). Now one run at a time (`infer` queues), and a job whose engine was stopped under it
+  runs on the next engine without a step-down of its own. 8 photos finish 3.7 s after the 👎.
+- **Undo pill.** Placed once, from where the footer was before the remaining cards grew: on a phone with 3 photos it
+  landed on a card's Download and 👍 👎. With no footer on screen (a phone on its side, a packed grid) the footer's
+  empty box put it half off the top of the screen. `placeUndo` now follows the footer's final place on every layout.
+- **A connection lost before the model is in** (first visit, photos picked). Every photo failed with "Could not process
+  this image", was deleted from the kept photos (so the bubble's "reload" lost them) and sent a `run-failed` crash
+  report. Now they wait, still kept; the batch starts again on `online`, when the page comes back into view, and every
+  20 s. A failed download is not reported as a crash, and the GPU is never stepped down while the browser is offline.
+- **Quips.** After the bar lost its second row, 83 quips wrapped to three lines at a phone's 165 px cards and made the
+  card being worked on 6 px taller than its row (also at 130 to 210 px). A third line now borrows the bar's padding,
+  the bar can't grow, and remove steps out on working cards up to 165 px.
+- **File names.** "#" and "?" cut a file's name like a link's: "Logo #2 (final?).jpg" was saved as ")-goodbye-bg.png".
+  A long name was cut through an emoji. In the zip, characters Windows can't have in a name are now "_".
+- **👎, Remove, Undo.** The card came back showing the retry's result with the old 👎 lit and both votes off.
+- **100 to 109 px cards** (12 photos on a phone on its side): remove was cut off at the card's edge. 20 px controls there.
+- **Ad button label** cut off at both ends on cards under about 140 px ("ut it on an ornamer"), Portuguese and Spanish
+  from 160 px: two lines there.
+
+Fine: rotation 390x844 to 844x390 and back (Kevin's example); a window dragged between 320 and 1600 px; split-view
+widths 320, 507, 678; zoom 200%; 400% (the page scrolls, never sideways); a 10000x800 panorama, a 600x6000 strip, a
+60 MP photo (3002x5082 cut-out, 4 s); 1x1 px, fully see-through and no-subject photos ("No clear subject in this
+photo."); 200-character, emoji, right-to-left and HTML-looking names; three files with one name (the zip numbers
+them); light to dark mid-session (ad products redraw); reduced motion; a reload mid-batch (finishes, CLS 0); back
+from a text page (bfcache: photos there, new ones work); two tabs (remove in one, vote in the other: a reload agrees);
+IndexedDB or all storage refused (works, nothing kept); offline mid-batch (finishes; votes and the count are dropped);
+the last photo removed, turned, Undo.
+
+Left as they are: with no footer on screen the Undo pill covers the bottom of the cards for its 5 s; text-only zoom at
+150% in a short window (the wordmark meets the buttons); at 300 to 400% zoom the pill covers Download all; a photo
+removed in the first moments of a reload and brought back with Undo stays waiting until the next reload.
+
 ## iPhone engine restart after the idle shutdown (2026-11-22)
 
 Restart after the iPhone idle shutdown (2026-11-22, headless Chrome and Playwright WebKit with the iPhone profile;

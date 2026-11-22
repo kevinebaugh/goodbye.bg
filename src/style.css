@@ -120,7 +120,9 @@ body.moving main, body.moving main *, body.moving .foot, body.moving .foot * { v
 .busy::before { content: none; } /* no wave on the photo: the subject is what stays, so the wave lives in the bar (.say) */
 .failed .busy { color: var(--danger); font-weight: 600; grid-template-columns: minmax(0, 1fr); background: var(--card); } /* opaque: red text over a photo fell to 2.5:1 */
 /* The quip lives in the bar while a photo is worked on (Download takes its place when done): text never lands on the photo. */
-.say { display: none; flex: 1; min-width: 0; min-height: var(--h-md); margin: 0; align-items: center; justify-content: center; text-align: center;
+/* A quip that wraps to a third line borrows the bar's padding (the negative margin) and can't make the bar taller
+   (max-height): the card being worked on was 6 px taller than its neighbours for 83 quips at phone size. */
+.say { display: none; flex: 1; min-width: 0; min-height: var(--h-md); max-height: calc(var(--bar, 57px) - 5px); margin: -6px 0; align-items: center; justify-content: center; text-align: center;
   font-size: 14px; font-weight: 700; line-height: 1.2; color: var(--ink); overflow: hidden; }
 .working .say { display: flex; }
 .working .bar > :not(.say, .x) { display: none; }
@@ -200,8 +202,12 @@ body.moving main, body.moving main *, body.moving .foot, body.moving .foot * { v
   background: transparent; border-color: color-mix(in srgb, var(--accent) 55%, transparent); font-weight: 600; }
 @media (hover: hover) { .adcard:hover .adcta { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); } }
 @container (max-width: 240px) { .adline { font-size: 12px; } .adcard .adcta { --h: var(--h-sm); --px: 14px; --fs: 13px; } .adpic { gap: 6px; padding: 8px; } }
-@container (max-width: 180px) { .adcard .adcta { --px: 8px; --fs: 12px; } }
+@container (max-width: 190px) { .adcard .adcta { --px: 8px; --fs: 12px; } }
 @container (max-width: 140px) { .adcard .adcta { --px: 6px; --fs: 11px; letter-spacing: -.02em; } .adcard .bar { padding-inline: 4px; } } /* "Put it on an ornament" fits a narrow card */
+/* Narrower still (a phone with 4 to 12 photos), the label takes two lines: on one it was cut off at both ends
+   ("ut it on an ornamer"; Portuguese and Spanish from 160 px down). */
+@container (max-width: 160px) { .adcard .adcta { white-space: normal; text-align: center; text-wrap: balance; line-height: 1; --px: 5px; border-radius: 12px; } }
+@container (max-width: 99px) { .adcard .adcta { --fs: 10px; --px: 3px; } }
 
 /* Full-window drop target with corner brackets. */
 .dropzone { position: fixed; inset: 0; z-index: 20; display: none; place-items: center; pointer-events: none;
@@ -327,10 +333,12 @@ body.app:not(.has-work) main { flex: none; margin-top: auto; }
   .failed .busy::before { font-size: 22px; }
 }
 @container (max-width: 183px) { .bar { padding-inline: 6px; } .rates { gap: 2px; } .x { margin-left: 0; } }
-@container (max-width: 159px) { .bar .ico { width: 26px; height: 26px; font-size: 13px; } .bar .dl { --h: 26px; --px: 6px; } .x { font-size: 17px; } .dl svg { width: 15px; height: 15px; }
-  .working .bar > .x { display: none; } }
+@container (max-width: 159px) { .bar .ico { width: 26px; height: 26px; font-size: 13px; } .bar .dl { --h: 26px; --px: 6px; } .x { font-size: 17px; } .dl svg { width: 15px; height: 15px; } }
+@container (max-width: 165px) { .working .bar > .x { display: none; } } /* a phone's two-column cards (165 px) included: the quip gets the room */
 @container (max-width: 129px) { .bar { padding-inline: 4px; gap: 2px; } .bar .ico { width: 24px; height: 24px; font-size: 12px; } .bar .dl { --h: 24px; --px: 4px; } .say { font-size: 0; } .say::before { margin: 0; } }
 @container (max-width: 115px) { .bar .ico { width: 22px; height: 22px; font-size: 11px; } .bar .dl { --h: 22px; min-width: 28px; } .x { font-size: 15px; } }
+/* 100 to 109 px (12 photos on a phone on its side): four 22 px controls are 9 px too wide and remove was cut off at the card's edge. */
+@container (max-width: 109px) { .bar { padding-inline: 3px; } .bar .ico { width: 20px; height: 20px; } .bar .dl { --h: 20px; min-width: 24px; } }
 @container (max-width: 99px) { .rates .rate:first-child { display: none; } }
 /* Short screens (a phone on its side): the wordmark moves beside the buttons and the spacing tightens, so the
    cards get the height. */
