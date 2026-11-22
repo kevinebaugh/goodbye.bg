@@ -657,11 +657,13 @@ async function addSources(list, origin = "") {
   }
   list = list.slice(0, MAX_BATCH);
   if (!list.length) { toast("No image found there. Try a photo file, a copied image, or an image link."); return; }
+  await restoring; // kept photos go in first, so this batch lands on top of them
   show();
+  const top = keyBase();
   // All cards appear at once, so the layout settles once instead of jumping with every photo.
   const cards = document.createDocumentFragment(); // the batch goes on top, in the order it was picked
-  const batch = list.map((src) => {
-    const it = { id: ++uid, name: "image", bmp: null, blob: null, w: 0, h: 0, mask: null, crop: true };
+  const batch = list.map((src, i) => {
+    const it = { id: ++uid, key: top + i, name: "image", bmp: null, blob: null, w: 0, h: 0, mask: null, crop: true };
     items.push(it);
     cards.append(makeCard(it));
     named(it, baseName(src instanceof Blob ? src.name : String(src).startsWith("data:") ? "pasted" : String(src)));
@@ -691,6 +693,7 @@ async function addSources(list, origin = "") {
       if (bmp !== full) full.close();
       Object.assign(it, { bmp, blob, w, h });
       drawCard(it);
+      keep(it);
     } catch (e) {
       console.warn(e);
       fail(it, e.message || "Could not open this image.");
@@ -820,13 +823,13 @@ function makeCard(it) {
 
   crop.addEventListener("click", () => {
     it.crop = !it.crop; crop.setAttribute("aria-pressed", String(it.crop)); tick();
-    it.png = null; drawCard(it); if (PHONE) png(it);
+    it.png = null; drawCard(it); if (PHONE) png(it); keep(it);
   });
   x.addEventListener("click", () => { dbg("removed"); clearInterval(it.quip); it.gen = -1;
     for (const u of [it.previewUrl, it.fullUrl, it.gifUrl]) if (u) URL.revokeObjectURL(u); items.splice(items.indexOf(it), 1);
     // Focus goes to the next card's Remove (or the one before), not back to the top of the page.
     const near = card.nextElementSibling?.querySelector?.(".x") || card.previousElementSibling?.querySelector?.(".x");
-    card.remove(); unshow(it); sync();
+    card.remove(); unshow(it); forget(it); sync();
     if (near) near.focus({ preventScroll: true }); else $("pick").focus({ preventScroll: true }); });
   dl.addEventListener("click", async () => {
     if (it.saving) return; // already on it
@@ -861,7 +864,17 @@ function unshow(it) {
   try { it.bmp?.close(); } catch {} // a run still on it stops quietly (see run)
 }
 
+// A finished card: its controls come on.
+function ready(it) {
+  clearInterval(it.quip); it.el.card.classList.remove("queued");
+  it.el.busy.hidden = true; it.el.dl.disabled = false;
+  for (const b of [it.anim ? null : it.el.crop, it.el.up, it.el.down]) if (b) b.style.visibility = "";
+  it.el.crop.setAttribute("aria-pressed", String(it.crop));
+  downLabel(it);
+}
+
 function fail(it, msg) {
+  forget(it);
   it.el.card.classList.remove("queued");
   clearInterval(it.quip);
   it.failed = true;
@@ -886,9 +899,8 @@ async function run() {
       if (!items.includes(it)) continue;
       if (it.anim) try { await animate(it); } catch (e) { console.error(e); report("gif-failed", e, it); it.anim = null; it.png = null; }
       if (!items.includes(it)) continue;
-      clearInterval(it.quip);
-      it.el.busy.hidden = true; it.el.dl.disabled = false; for (const b of [it.anim ? null : it.el.crop, it.el.up, it.el.down]) if (b) b.style.visibility = ""; it.ms = lastMs;
-      downLabel(it); dbg("shown");
+      it.ms = lastMs;
+      ready(it); dbg("shown"); keep(it);
       dbg("reveal"); reveal(it); sync(); tick(); milestone(it);
       it.el.card.dataset.ms = lastMs;
     }
@@ -918,18 +930,22 @@ function sendRating(it, vote) {
   fetch("/api/rate", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
 }
 
-async function rate(it, vote) {
+// One vote per result: the chosen one stays lit, the other steps aside (keeping its place in the bar).
+function showVote(it, vote) {
   const { up, down } = it.el;
-  // One vote per result: the chosen one stays lit, the other steps aside (keeping its place in the bar).
   up.disabled = down.disabled = true;
   (vote === "up" ? up : down).classList.add("chosen");
   (vote === "up" ? down : up).style.visibility = "hidden";
-  sendRating(it, vote);
+}
+
+async function rate(it, vote) {
+  showVote(it, (it.vote = vote));
+  sendRating(it, vote); keep(it);
   if (vote !== "down") return;
   if (!it.retried && !it.anim) return retry(it); // a GIF's 👎 is a vote only
   if (it.first) { // 👎 on the retry: put the first result back, so a retry never leaves things worse
     Object.assign(it, { mask: it.first.mask, maskRect: it.first.rect, png: null });
-    it.first = null; drawCard(it); if (PHONE) png(it);
+    it.first = null; drawCard(it); if (PHONE) png(it); keep(it);
   }
 }
 
@@ -1013,8 +1029,8 @@ async function retry(it) {
   idle();
   preparePngs();
   // A new result gets its own vote; if the retry found nothing better, the 👎 stands.
-  if (changed) for (const b of [up, down]) { b.disabled = false; b.classList.remove("chosen"); b.style.visibility = ""; }
-  downLabel(it);
+  if (changed) { it.vote = null; for (const b of [up, down]) { b.disabled = false; b.classList.remove("chosen"); b.style.visibility = ""; } }
+  downLabel(it); keep(it);
 }
 
 // Everything fits on one screen: cards are square and sized so they all fit the space left.
@@ -1473,6 +1489,145 @@ document.addEventListener("touchend", (e) => {
   lastTap = now;
 }, { passive: false });
 document.addEventListener("dblclick", (e) => e.preventDefault(), { passive: false });
+
+/* ---------- kept on this device ----------
+   Photos and their cut-outs stay in this browser (IndexedDB), so leaving (a partner's site, a reload, a closed tab,
+   an iPhone throwing away a background tab) and coming back finds them where they were, with the same crop and vote,
+   without running the model again. Nothing here is ever sent anywhere. The newest KEEP_MAX photos stay, within
+   KEEP_BYTES; past that the oldest go first (Kevin, 2026-11-21: "local cache into perpetuity, sane limit FIFO").
+   Removing a card deletes its copy. Where storage throws (some private windows, a full disk) nothing is kept.
+   Per photo: the original file (Download and 👎 need full size), a preview (JPEG, or PNG when the file can be
+   see-through) so cards come back without decoding the original, and each mask as a PNG. */
+const KEEP_MAX = MAX_BATCH, KEEP_BYTES = (DESKTOP && !IOS ? 1024 : 400) * 2 ** 20;
+// Keys sort in grid order: a newer batch gets smaller keys, and its photos count up in the order picked.
+let lastStamp = 0;
+const keyBase = () => -(lastStamp = Math.max(Date.now(), lastStamp + 1)) * 64; // MAX_BATCH < 64
+let keepDb = null, keepChain = Promise.resolve();
+function kdb() {
+  return (keepDb ||= new Promise((res, rej) => {
+    const r = indexedDB.open("goodbye-bg", 1);
+    r.onupgradeneeded = () => { r.result.createObjectStore("files", { keyPath: "id" }); r.result.createObjectStore("state", { keyPath: "id" }); };
+    r.onsuccess = () => { const db = r.result; db.onversionchange = () => { db.close(); keepDb = null; }; res(db); };
+    r.onerror = () => rej(r.error);
+    r.onblocked = () => rej(new Error("blocked"));
+  }).catch((e) => { keepDb = null; throw e; }));
+}
+function tx(db, mode, fn) {
+  return new Promise((res, rej) => {
+    const t = db.transaction(["files", "state"], mode), out = fn(t.objectStore("files"), t.objectStore("state"));
+    t.oncomplete = () => res(out?.result ?? out); t.onerror = t.onabort = () => rej(t.error);
+  });
+}
+const queueKeep = (fn) => (keepChain = keepChain.then(fn).catch((e) => console.warn("Not kept:", e)));
+function keep(it) { queueKeep(() => writeKept(it)); }
+function forget(it) { if (it.key != null) queueKeep(async () => { const db = await kdb(); await tx(db, "readwrite", (f, s) => { f.delete(it.key); s.delete(it.key); }); }); }
+
+const maskBlobs = new WeakMap(); // mask -> its PNGs, so a vote or a crop doesn't encode it again
+function maskRec(m) {
+  if (!m) return null;
+  let r = maskBlobs.get(m);
+  if (!r) maskBlobs.set(m, (r = (async () => ({ png: await m.convertToBlob({ type: "image/png" }), fix: m.fix ? await m.fix.convertToBlob({ type: "image/png" }) : null, box: m.box }))()));
+  return r;
+}
+const seeThrough = (b) => /png|webp|gif|svg|avif|tiff|icon|bmp/i.test(b.type) || /\.(png|webp|gif|svg|avif|tiff?|ico|bmp)$/i.test(b.name || "");
+
+let persisted = false;
+async function writeKept(it) {
+  if (!items.includes(it) || !it.bmp || !it.blob || it.key == null) return;
+  // Asks the browser not to clear this site's storage when space runs low. Not in Firefox: there it asks the visitor.
+  if (!persisted) { persisted = true; if (!/Firefox/.test(navigator.userAgent)) navigator.storage?.persist?.().catch(() => {}); }
+  if (!it.prev) {
+    const c = new OffscreenCanvas(it.bmp.width, it.bmp.height); c.getContext("2d").drawImage(it.bmp, 0, 0);
+    it.prev = await c.convertToBlob(seeThrough(it.blob) ? { type: "image/png" } : { type: "image/jpeg", quality: 0.92 });
+  }
+  const mask = await maskRec(it.mask), first = it.first ? { rect: it.first.rect || null, mask: await maskRec(it.first.mask) } : null;
+  const gif = it.anim && it.gifUrl ? await it.png : null;
+  const size = (r) => (r ? r.png.size + (r.fix?.size || 0) : 0);
+  const state = { id: it.key, name: it.name, w: it.w, h: it.h, crop: it.crop, rect: it.maskRect || null, mask, first, retried: !!it.retried,
+    vote: it.vote || null, anim: !!it.anim, gif, ms: it.ms || 0,
+    bytes: it.blob.size + it.prev.size + size(mask) + size(first?.mask) + (gif?.size || 0) };
+  const db = await kdb();
+  const put = () => tx(db, "readwrite", (f, s) => { if (!it.filed) f.put({ id: it.key, blob: it.blob, prev: it.prev }); s.put(state); });
+  // A full disk: make room by dropping the oldest, a few times, then give up quietly.
+  for (let n = 0; ; n++) {
+    try { await put(); break; }
+    catch (e) { if (e?.name !== "QuotaExceededError" || n >= 3 || !(await trim(db, 1, it.key))) throw e; }
+  }
+  it.filed = true;
+  if (!items.includes(it)) return forget(it); // removed while this was written
+  await trim(db);
+}
+// Oldest first out: the end of the grid. extra > 0 drops that many more (to make room).
+async function trim(db, extra = 0, spare = null) {
+  const all = await tx(db, "readonly", (f, s) => s.getAll()); // grid order
+  let n = 0, bytes = 0;
+  const drop = all.filter((r) => (n++, (bytes += r.bytes || 0), n > KEEP_MAX || bytes > KEEP_BYTES)).map((r) => r.id);
+  for (const r of [...all].reverse()) if (extra > 0 && r.id !== spare && !drop.includes(r.id)) { drop.push(r.id); extra--; }
+  if (drop.length) await tx(db, "readwrite", (f, s) => { for (const id of drop) { f.delete(id); s.delete(id); } });
+  return drop.length;
+}
+
+async function canvasOf(blob) {
+  const b = await createImageBitmap(blob), c = new OffscreenCanvas(b.width, b.height);
+  c.getContext("2d").drawImage(b, 0, 0); b.close();
+  return c;
+}
+async function maskFrom(r) {
+  if (!r) return null;
+  const m = await canvasOf(r.png); m.box = r.box;
+  if (r.fix) m.fix = await canvasOf(r.fix);
+  maskBlobs.set(m, Promise.resolve(r));
+  return m;
+}
+
+// On load: the kept photos come back in their places. Cards go up at once (so a new batch lands on top), then fill in.
+async function restore() {
+  let db, files, states;
+  try {
+    db = await kdb();
+    [files, states] = await tx(db, "readonly", (f, s) => { const a = f.getAll(), b = s.getAll(); return { get result() { return [a.result, b.result]; } }; });
+  } catch (e) { console.info("goodbye.bg: nothing kept here", e?.name || e); return []; }
+  const byId = new Map(files.map((f) => [f.id, f]));
+  const list = [], orphans = [];
+  for (const st of states) {
+    const f = byId.get(st.id); byId.delete(st.id);
+    if (!f?.blob || !f.prev) { orphans.push(st.id); continue; }
+    const it = { id: ++uid, key: st.id, name: st.name, bmp: null, blob: f.blob, prev: f.prev, w: st.w, h: st.h, mask: null, crop: st.crop,
+      maskRect: st.rect, retried: st.retried, vote: st.vote, ms: st.ms, filed: true, st };
+    items.push(it); list.push(it);
+  }
+  orphans.push(...byId.keys());
+  if (orphans.length) tx(db, "readwrite", (f, s) => { for (const id of orphans) { f.delete(id); s.delete(id); } }).catch(() => {});
+  if (!list.length) return [];
+  dbg("restore", { n: list.length });
+  show();
+  const cards = document.createDocumentFragment();
+  for (const it of list) { cards.append(makeCard(it)); named(it, it.name); }
+  $("grid").prepend(cards);
+  sync();
+  return list;
+}
+async function fillRestored(list) {
+  for (const it of list) {
+    const st = it.st; delete it.st;
+    if (!items.includes(it)) continue;
+    try {
+      const bmp = await createImageBitmap(it.prev);
+      if (st.anim && st.gif) { it.anim = { frames: [], w: it.w, h: it.h }; it.png = Promise.resolve(st.gif); it.gifUrl = URL.createObjectURL(st.gif); }
+      else if (st.anim && !st.mask) try { it.anim = (await loadGif()).readGif(await it.blob.arrayBuffer(), MAX_FRAMES) || null; } catch {}
+      it.mask = await maskFrom(st.mask);
+      if (st.first) it.first = { rect: st.first.rect, mask: await maskFrom(st.first.mask) };
+      if (!items.includes(it)) { bmp.close(); continue; }
+      it.bmp = bmp; // only now: a running batch picks up photos that have a bitmap and no mask
+      if (it.mask) { ready(it); if (it.vote) showVote(it, it.vote); }
+      drawCard(it);
+    } catch (e) { console.warn("Could not bring back a kept photo", e); fail(it, "Could not open this image."); }
+  }
+  sync();
+  if (items.some((i) => i.bmp && !i.mask && !i.failed)) run(); // the tab went away mid-batch: carry on
+  else if (!IOS) preparePngs(); // iPhone: not next to an engine that may be starting (a Download tap builds its PNG)
+}
+const restoring = restore().then((list) => { fillRestored(list); }, () => {});
 
 /* ---------- ways in ---------- */
 

@@ -124,6 +124,20 @@ Anything the browser opens goes straight in. HEIC and TIFF on Chrome/Edge/Firefo
 - ZIPs (picked, dropped or in a dropped folder) open with fflate's `unzipSync`: pictures by extension, in natural name
   order, skipping `__MACOSX` and dot-files, at most `MAX_BATCH`.
 
+## Kept on the device (2026-11-21)
+
+Kevin: leaving and coming back lost every photo. Cause: nothing was stored. The page is bfcache-eligible (headless Chrome
+restores it on Back, IndexedDB open included), and desktop ad clicks already open a new tab, but bfcache drops big pages
+and anything over 10 min, a reload or new visit starts empty, iPhones discard background tabs, and on phones
+`window.open` after the share sheet can be blocked, which sends this tab to the partner.
+Now every photo is kept in IndexedDB (`goodbye-bg`, stores `files` and `state`, keyed in grid order) until removed:
+the original file, a preview (JPEG, PNG for see-through types), mask(s) as PNG, crop, vote, retry (and the first result),
+the finished GIF. On load the cards come back in place without the model; unfinished photos run. FIFO (Kevin: "into
+perpetuity, sane limit"): newest 50 photos within 1 GB on computers, 400 MB on phones; oldest out first; quota errors
+drop the oldest and retry, then give up quietly. Removing a card deletes its copy. `navigator.storage.persist()` is
+asked except in Firefox (it prompts there). Safari still clears site storage after 7 days without a visit.
+Tested in headless Chrome only (reload, Back). Not tested on an iPhone.
+
 ## UX decisions (2026-11-20, from Kevin)
 
 - One screen, no scrolling. No double-tap zoom; pinch-zoom is allowed for accessibility (Kevin, 2026-11-20). Cards are square and sized to fit; a batch appears at
