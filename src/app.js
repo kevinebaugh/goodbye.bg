@@ -1202,7 +1202,7 @@ function layout() {
   g.classList.toggle("scroll", scroll);
   $("main").style.setProperty("--cols", c); $("main").style.setProperty("--p", `${p}px`); // grid and tools row share them
   placeAds(n, scroll ? 0 : Math.ceil(slots / c) * c - n);
-  requestAnimationFrame(() => hugFooter(scroll ? 0 : Math.ceil(slots / c))); // rows, the cells kept for ads included
+  requestAnimationFrame(() => { hugFooter(scroll ? 0 : Math.ceil(slots / c)); document.body.classList.remove("restoring"); }); // rows, the cells kept for ads included; kept photos measured: show them
 }
 // When the cards fill the width before the height (a phone in portrait), the grid has empty space under them. The
 // footer moves up to sit under the cards and the spare space goes to the bottom of the screen. A transform, so the
@@ -1606,6 +1606,7 @@ function sync() {
   $("all").textContent = `Download all (${done})`;
   $("tools").hidden = items.length < 2; // reserve the row early so the cards don't jump
   if (!items.length) document.body.classList.remove("has-work");
+  try { localStorage.setItem("gb-kept", String(items.length)); } catch {} // early.js: start in the photos layout next visit
   requestAnimationFrame(layout);
 }
 
@@ -1773,7 +1774,7 @@ async function restore() {
   try {
     db = await kdb();
     [files, states] = await tx(db, "readonly", (f, s) => { const a = f.getAll(), b = s.getAll(); return { get result() { return [a.result, b.result]; } }; });
-  } catch (e) { console.info("goodbye.bg: nothing kept here", e?.name || e); return []; }
+  } catch (e) { console.info("goodbye.bg: nothing kept here", e?.name || e); unrestore(); return []; }
   const byId = new Map(files.map((f) => [f.id, f]));
   const list = [], orphans = [];
   for (const st of states) {
@@ -1785,14 +1786,20 @@ async function restore() {
   }
   orphans.push(...byId.keys());
   if (orphans.length) tx(db, "readwrite", (f, s) => { for (const id of orphans) { f.delete(id); s.delete(id); } }).catch(() => {});
-  if (!list.length) return [];
+  if (!list.length) { unrestore(); return []; }
   dbg("restore", { n: list.length });
   show();
   const cards = document.createDocumentFragment();
-  for (const it of list) { cards.append(makeCard(it)); named(it, it.name); }
+  for (const it of list) { const c = makeCard(it); c.classList.add("back"); cards.append(c); named(it, it.name); } // already seen: no pop
   $("grid").prepend(cards);
   sync();
   return list;
+}
+// early.js guessed photos were kept and none came back: the landing as usual.
+function unrestore() {
+  document.body.classList.remove("restoring");
+  if (!items.length) document.body.classList.remove("has-work");
+  try { localStorage.setItem("gb-kept", "0"); } catch {}
 }
 async function fillRestored(list) {
   for (const it of list) {
