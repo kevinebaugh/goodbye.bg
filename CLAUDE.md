@@ -361,6 +361,14 @@ Tested: headless Chrome (reload in a restarted browser, Back still from bfcache)
   - The footer count never shows less than this browser showed before (`gb-count` in localStorage): a reload could
     show a lower number than the local growth had reached.
   - Every icon-only control has a `title` (Download, crop and remove had none).
+- Accessibility (audit 2026-11-22, all 14 findings but `#pick` as a label): a polite `#sr` status line announces each
+  finished or failed photo and a retry's outcome (`announce()`); cards are `aria-busy` while waiting. After a keyboard
+  👍 👎 focus goes to Download (or the card during a retry). A keyboard Remove focuses Undo. The page may scroll when it
+  overflows (`overflow-y: auto`): only at 300-400% zoom in practice; every normal size measured 0 px overflow, so the
+  one-screen rule holds. Focus rings stay visible on the ink Undo pill and the input-backed swatches; swatch focus (ink,
+  offset) differs from the chosen ring (brand). Failed-card text sits on an opaque panel. Light-mode thumbs and swatch
+  rings reach 3:1. Ad sway and cut-out swaps stop after about 24 s (WCAG 2.2.2), never under pointer or focus. Tabbing
+  out of a picker row closes it. The h1 stays in the page, visually hidden, once photos are up.
   - Short screens (height 520 px or less, a phone on its side): the wordmark sits left of the buttons (buttons go
     right), the privacy note is hidden, spacing tightens; the empty page shrinks the headline so the footer fits.
   - Download and Download all shimmer while a big PNG or the zip is built; repeat taps don't start it again. A failed
