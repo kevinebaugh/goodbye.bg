@@ -48,7 +48,7 @@ models take a fixed 1024 x 1024 input, so the mask is scaled back to the photo.
 | CPU | Everything else, and the fallback | ISNet, WebAssembly | 5 to 7 s a photo on a desktop CPU; about 5 s on an iPhone with 2 threads |
 
 The first cut-out needs about 120 MB (the model plus the 29 MB ONNX Runtime wasm); the browser keeps both. Computers start
-the download when the page loads; phones wait until someone goes to add a photo. Model
+the download when the page loads; phones at the first touch, or after 3 s on the page on a fast connection. Model
 and runtime are served in parts because Cloudflare Pages caps a file at 25 MiB.
 
 BiRefNet on the CPU took 10 s and 6.7 GB in Node, so the CPU engine stays on ISNet.

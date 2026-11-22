@@ -2768,8 +2768,12 @@ if (ADS) { $("ad").querySelector("iframe").src = AD_SRC; $("ad").hidden = false;
      year), kept photos, and links or shares that bring a photo (addSources starts it too).
    - Computers: right after the page has loaded (idle), unless the browser asks to save data. The few seconds a
      visitor needs to pick a photo hide much of the download.
-   - Phones and tablets, and Save-Data: on the first sign of a photo coming: a touch or focus on Choose photos or
-     Paste, a drag over the page, a paste. The photo picker then hides part of the download. */
+   - Phones and tablets: on the first touch or scroll anywhere, or after 3 s of the page being visible (the count stops
+     while the tab is hidden) when the connection says 4g or the browser has no Network Information API (iPhones,
+     Firefox). On a slower connection, only the touch. A visitor who leaves within 3 s without touching downloads
+     nothing; one who stays has most of the download hidden behind reading and the photo picker.
+   - Save-Data, phone or computer: only on a sign of a photo coming: a touch or focus on Choose photos or Paste, a drag
+     over the page, a paste. */
 function startModel() { // a declaration, with no outside let: ?url= calls addSources (and so this) before the code below has run
   const p = loadModel();
   if (p === startModel.asked) return;
@@ -2782,14 +2786,25 @@ function startModel() { // a declaration, with no outside let: ?url= calls addSo
   const saveData = !!navigator.connection?.saveData;
   if (seen || params.has("url") || params.has("share")) startModel();
   else {
+    let timer = 0;
     const intent = () => { off(); startModel(); };
     const evs = [[$("pick").parentElement, "pointerover"], [$("pick").parentElement, "pointerdown"], [$("pick").parentElement, "focusin"],
       [window, "dragenter"], [window, "paste"]];
-    const off = () => { for (const [el, ev] of evs) el.removeEventListener(ev, intent, true); };
+    if (!DESKTOP && !saveData) evs.push([window, "pointerdown"], [window, "touchstart"], [window, "scroll"]);
+    const arm = () => { clearTimeout(timer); if (document.visibilityState === "visible" && !document.prerendering) timer = setTimeout(intent, 3000); };
+    const off = () => {
+      clearTimeout(timer);
+      for (const [el, ev] of evs) el.removeEventListener(ev, intent, true);
+      for (const ev of ["visibilitychange", "prerenderingchange"]) document.removeEventListener(ev, arm);
+    };
     for (const [el, ev] of evs) el.addEventListener(ev, intent, { capture: true, passive: true });
     if (DESKTOP && !saveData) {
       const soon = () => (self.requestIdleCallback || setTimeout)(intent, { timeout: 800 });
       document.readyState === "complete" ? soon() : addEventListener("load", soon, { once: true });
+    } else if (!saveData && (navigator.connection ? navigator.connection.effectiveType === "4g" : true)) {
+      // 3 s of the page being visible; hiding the tab stops the count, coming back starts it again
+      for (const ev of ["visibilitychange", "prerenderingchange"]) document.addEventListener(ev, arm);
+      arm();
     }
   }
 }

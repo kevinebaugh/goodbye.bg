@@ -131,9 +131,13 @@ Lighthouse mobile 100 (LCP 1.2 s, CLS 0, TBT 0). Time to the first cut-out is do
 121 MB with BiRefNet). When the model starts downloading:
 - **At once**: returning visitors (`gb-model` in localStorage), kept photos, `?url=`, shares.
 - **Computers** (`any-pointer: fine`, no Save-Data): right after `load`, at idle.
-- **Phones, tablets, Save-Data**: on intent only (pointer over, touch or focus on Choose photos / Paste, a drag, a
-  paste): a visitor who leaves without a photo downloads 0.2 MB, not 116 MB. To go back to eager on phones, start the
-  model in the `else` branch at the end of app.js.
+- **Phones, tablets**: the first touch or scroll anywhere, or 3 s of the page being visible (count paused while hidden)
+  when `navigator.connection.effectiveType` is 4g or the API is missing (iPhones, Firefox); slower connections only
+  on the touch. A visitor who leaves
+  within 3 s without touching downloads 0.5 MB, not 116 MB; one who stays 10 s, 17 MB at 20 Mbps. Tap at 16 s, photo
+  4 s later, 20 Mbps, CPU engine: first cut-out at 55.5 s (intent-only 68.5 s; headless Chrome, 2026-11-22).
+- **Save-Data** (any device): on intent only (pointer over, touch or focus on
+  Choose photos / Paste, a drag, a paste). Code: the `else` branch at the end of app.js.
 - Landing to grid is a View Transition (`landing()`); `body.moving` hides the one changing frame (CLS 0).
 
 ## Formats
