@@ -2,7 +2,7 @@
 // a string missing here shows in English, and a changed English string falls back to English until its key is
 // updated (the smoke test lists both). {name}-style slots are filled in by t(). See docs/i18n.md.
 // The build inlines this into early.js (no extra request); early.js picks the language from the browser
-// (?lang=xx overrides, for testing) and exposes self.GB = { lang, t, quips } to app.js.
+// (?lang=xx overrides, for testing) and exposes self.GB = { lang, t, quips, retryQuips } to app.js.
 // Reviewed for wording by a second pass (docs/i18n.md, Reviewed); a native speaker still needs to read it.
 export const LANGS = {
   de: {
@@ -39,6 +39,16 @@ export const LANGS = {
       "Wir rufen dem Hintergrund ein Taxi…",
       "Zurück an den Absender…",
       "Wir ghosten den Hintergrund…",
+    ],
+    retryQuips: [ // while a 👎 retry runs
+      "Wir schauen genauer hin…",
+      "Noch ein Versuch…",
+      "Aller guten Dinge sind zwei…",
+      "Wir schärfen die Schere…",
+      "Lesebrille aufgesetzt…",
+      "Kanten unter der Lupe…",
+      "Diesmal richtig…",
+      "Zweiter Anlauf…",
     ],
     t: {
       // index.html
@@ -203,6 +213,16 @@ export const LANGS = {
       "Pidiéndole un taxi al fondo…",
       "Devolviendo el fondo al remitente…",
     ],
+    retryQuips: [ // while a 👎 retry runs
+      "Mirando más de cerca…",
+      "Otra vez, con calma…",
+      "A la segunda va la vencida…",
+      "Afilando las tijeras…",
+      "Poniéndonos las gafas…",
+      "Revisando los bordes…",
+      "Ahora sí, en serio…",
+      "Segundo intento…",
+    ],
     t: {
       "Remove Image Background Free, Private – goodbye.bg": "Quitar el fondo de una imagen gratis y en privado – goodbye.bg",
       "Say goodbye<br>to the background.": "Dile adiós<br>al fondo.",
@@ -361,6 +381,16 @@ export const LANGS = {
       "On appelle un taxi pour le fond…",
       "Retour à l’envoyeur…",
       "Le fond ? Parti sans laisser d’adresse.",
+    ],
+    retryQuips: [ // while a 👎 retry runs
+      "On regarde de plus près…",
+      "On recommence…",
+      "La deuxième sera la bonne…",
+      "On aiguise les ciseaux…",
+      "On chausse nos lunettes…",
+      "On inspecte les bords…",
+      "Cette fois, c’est la bonne…",
+      "Deuxième essai…",
     ],
     t: {
       "Remove Image Background Free, Private – goodbye.bg": "Supprimer l’arrière-plan d’une image, gratuit et privé – goodbye.bg",
@@ -521,6 +551,16 @@ export const LANGS = {
       "Chamando um táxi para o fundo…",
       "Devolvendo o fundo ao remetente…",
     ],
+    retryQuips: [ // while a 👎 retry runs
+      "Olhando mais de perto…",
+      "Vamos de novo…",
+      "Agora vai…",
+      "Afiando a tesoura…",
+      "Colocando os óculos…",
+      "Conferindo as bordas…",
+      "Segunda tentativa…",
+      "Dessa vez, com capricho…",
+    ],
     t: {
       "Remove Image Background Free, Private – goodbye.bg": "Remover fundo de imagem grátis e com privacidade – goodbye.bg",
       "Say goodbye<br>to the background.": "Diga tchau<br>para o fundo.",
@@ -679,6 +719,16 @@ export const LANGS = {
       "Memanggilkan taksi untuk latar belakang…",
       "Mengembalikan latar belakang ke pengirim…",
       "Nge-ghosting latar belakang…",
+    ],
+    retryQuips: [ // while a 👎 retry runs
+      "Melihat lebih dekat…",
+      "Coba sekali lagi…",
+      "Mengasah gunting…",
+      "Memakai kacamata baca…",
+      "Memeriksa tepinya…",
+      "Kali ini pasti beres…",
+      "Percobaan kedua…",
+      "Pelan-pelan saja…",
     ],
     t: {
       "Remove Image Background Free, Private – goodbye.bg": "Hapus latar belakang gambar gratis dan privat – goodbye.bg",

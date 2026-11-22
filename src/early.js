@@ -29,7 +29,7 @@ for (const t of ["gesturestart", "gesturechange"]) document.addEventListener(t, 
   } catch {}
   const L = all[lang] || {}, dict = L.t || {};
   const t = (s, v) => { const out = dict[s] ?? s; return v ? out.replace(/\{(\w+)\}/g, (m, k) => (k in v ? v[k] : m)) : out; };
-  self.GB = { lang, t, quips: L.quips || null, path: L.path || "" };
+  self.GB = { lang, t, quips: L.quips || null, retryQuips: L.retryQuips || null, path: L.path || "" };
   if (lang === "en") return;
   document.documentElement.lang = lang;
   document.title = t(document.title);

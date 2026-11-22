@@ -39,7 +39,7 @@ for (const f of ["index.html", "robots.txt", "sitemap.xml", ...TEXT_PAGES]) {
   for (const [code, l] of Object.entries(LANGS)) {
     const missing = [...keys].filter((k) => !(k in l.t));
     if (missing.length) throw new Error(`src/i18n.js: ${code} has no ${missing.slice(0, 3).map((k) => JSON.stringify(k)).join(", ")}`);
-    if (!l.quips?.length || !l.path) throw new Error(`src/i18n.js: ${code} needs quips and a path`);
+    if (!l.quips?.length || !l.retryQuips?.length || !l.path) throw new Error(`src/i18n.js: ${code} needs quips, retryQuips and a path`);
   }
   const early = readFileSync(join(dist, "early.js"), "utf8");
   if (!early.includes("/*%I18N%*/")) throw new Error("early.js must hold the /*%I18N%*/ placeholder");

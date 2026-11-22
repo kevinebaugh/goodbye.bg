@@ -58,6 +58,20 @@ const QUIPS_EN = [
   "Returning the backdrop to sender…",
 ];
 const QUIPS = GB.quips || QUIPS_EN;
+// While a 👎 retry runs: a second look, not another goodbye (Kevin, 2026-11-22).
+const RETRY_QUIPS_EN = [
+  "Taking a closer look…",
+  "Let’s try that again…",
+  "Second time’s the charm…",
+  "Sharpening the scissors…",
+  "Putting on our reading glasses…",
+  "Squinting at the edges…",
+  "Redoing it, properly this time…",
+  "Asking the background once more…",
+  "Taking a mulligan…",
+  "Going over it with a fine comb…",
+];
+const RETRY_QUIPS = GB.retryQuips || RETRY_QUIPS_EN;
 
 const $ = (id) => document.getElementById(id);
 const items = [];
@@ -1793,12 +1807,12 @@ async function run() {
   preparePngs(); // after the batch: don't compete with the model
 }
 
-function startQuips(it) {
+function startQuips(it, list = QUIPS) {
   it.el.card.classList.remove("queued");
-  let line = Math.floor(Math.random() * QUIPS.length);
-  say(it, QUIPS[line]);
+  let line = Math.floor(Math.random() * list.length);
+  say(it, list[line]);
   clearInterval(it.quip);
-  it.quip = setInterval(() => { if (!it.failed) say(it, QUIPS[++line % QUIPS.length]); }, 1600);
+  it.quip = setInterval(() => { if (!it.failed) say(it, list[++line % list.length]); }, 1600);
 }
 // One line of status in the bar (each new line rises in); the card shows the bar's status instead of its controls.
 function say(it, text) {
@@ -1911,7 +1925,7 @@ async function retry(it) {
   retrying++; working("retry", it);
   const { busy, up, down, dl } = it.el;
   busy.textContent = ""; busy.hidden = false; dl.disabled = true;
-  say(it, QUIPS[Math.floor(Math.random() * QUIPS.length)]);
+  startQuips(it, RETRY_QUIPS);
   let changed = false;
   // Never next to a PNG being built (a full photo each): wait for those, and hold back the ones not started.
   clearTimeout(pngTimer);
@@ -1926,7 +1940,7 @@ async function retry(it) {
     const m = await segment(part); part.close();
     if (m.box) { changed = true; it.mask = mergeRetry(it.first, m, { x: sx / it.w, y: sy / it.h, w: sw / it.w, h: sh / it.h }); it.maskRect = null; it.ms = lastMs; it.engine = lastEngine; it.png = null; }
   } catch (e) { console.warn("Retry failed", e); }
-  retrying--;
+  retrying--; clearInterval(it.quip);
   busy.hidden = true; dl.disabled = false; it.el.card.classList.remove("working");
   if (!items.includes(it)) { rested(); return; }
   if (changed) reveal(it); else it.first = null;
