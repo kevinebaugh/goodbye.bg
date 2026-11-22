@@ -268,7 +268,7 @@ Only the newest 50 are kept on the device (`KEEP_MAX`, photos past it aren't wri
 into Download all, but a reload loses them. Download all streams its zip (fflate `Zip` + `ZipPassThrough`, gathered as
 Blob parts of 32 MB) instead of holding every file and then the whole zip. Measured in headless Chrome (M5 Pro, 1200x1600
 photos, GPU): about 10 MB of page memory per finished photo (preview bitmap, mask, edge colours): 0.8 GB for 50, 2.2 GB
-for 200 (98 s, zip 4 s), hence 100. Past about 40 photos on a computer screen the cards hit their 96 px minimum and the
+for 200 (98 s, zip 4 s), hence 100. At 50 photos on a 1440x900 window the cards already hit their 96 px minimum and the
 grid scrolls (the one-screen rule gives way for bulk). remove.bg bulk users mostly need "drop a folder, get a zip": that
 works up to 100 at a time; more means another drop.
 
