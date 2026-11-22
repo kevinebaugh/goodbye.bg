@@ -2,8 +2,12 @@
 
 Background remover that runs in the browser. Replacement for remove.bg, which shuts down
 1 December 2026. Photos are cut out on the device, never uploaded for it (a click on a Zazzle product ad takes
-that one cut-out along, see below). Kevin uses it often, so it must be
+that one cut-out along, see Ads). Kevin uses it often, so it must be
 zero friction: fun copy and small animations are fine, delays and popups are not.
+
+Measurements and the history behind the decisions below: `docs/history.md`. Other docs: `docs/birefnet.md`,
+`docs/quality-1000.md`, `docs/quality-products.md`, `docs/platforms-and-phone-model.md`, `docs/removebg-parity.md`,
+`docs/zazzle-cap.md`, `docs/ads.md`, `docs/seo.md`, `docs/launch-drafts.md`, `docs/domain-cutover.md`.
 
 ## Commands
 
@@ -15,58 +19,28 @@ zero friction: fun copy and small animations are fine, delays and popups are not
     node scripts/test/offline.mjs   # offline/install test (about 1.5 min); its upgrade step edits dist/: rebuild after
     npm run test:x       # WebKit (computer + iPhone) and Firefox via Playwright (about 2 min); once: npx playwright install webkit firefox
 
-`npm run test` (`scripts/test/smoke.mjs`, no dependencies beyond Chrome; `--no-build` reuses dist/, `CHROME=` picks
-another Chrome) drives headless Chrome over the DevTools protocol, each check in a fresh profile, and prints PASS/FAIL/SKIP;
-exit code 1 on any failure. Covers: build placeholders, CSP/COOP/COEP headers, empty page clean (no console errors, CSP
-violations, crash reports), one photo on the GPU engine (when headless has WebGPU with shader-f16, else CPU) and one on
-the CPU engine with PNG downloads, `?adtest=1` ad cards, White background -> JPG, 3 photos + Download all (zip names),
-reload with CLS 0 (desktop, and phone width at 300 ms latency), Remove/Undo and removal surviving a reload, an animated
-GIF staying animated, a ZIP opening, the 404 page and `/share`, the SEO pages (CSP, no sideways scroll at 390 px, first
-visit drawn in Nunito). Test photos are generated. Each cut-out adds to the public count (serve.mjs passes `/api/count` to
-the live site); ad cards are never clicked. `scripts/serve.mjs` mirrors Pages for unknown paths (404.html, status 404),
-`/dir` -> `/dir/`, `.html` -> clean URL and `_redirects`.
-
-`npm run test:x` (`scripts/test/xbrowser.mjs`; `--browser webkit|firefox`, `--device desktop|iphone`, `--no-build`)
-runs the same flow in Playwright (devDependency; browsers in ~/Library/Caches/ms-playwright, nothing global) on
-webkit-desktop (1280x800), webkit-iphone (Playwright's iPhone 15: touch, iPhone user agent, so the app takes its iPhone
-paths; the share sheet is stubbed to record the files) and firefox-desktop: cross-origin isolation, the landing View
-Transition, one photo + Download, 3D ad cards, White -> JPG and the colour input, the options row (Square; WebP button
-only where the browser encodes WebP; 16 px controls on touch), 3 photos + Download all, a tell() bubble, reload with kept
-photos, Remove/Undo, offline through the service worker, HEIC, an animated GIF, `?engine=cpu`, 404 and SEO pages, and
-a WebKit private window. Persistent profiles, because an ephemeral WebKit context acts like Private Browsing.
-
-Tested 2026-11-22 (Playwright 1.65.0: WebKit 27.2 = Safari's engine on macOS, Firefox 159), all passing:
-- WebKit: cross-origin isolated with COEP require-corp (threads on), also offline from the service worker's cache.
-  Computer: WebGPU with shader-f16, so it picks BiRefNet on the GPU, and it works (warm-up 0.4 to 1.6 s, about 1 s a
-  photo here). iPhone profile: CPU engine with 2 threads, about 4 s a photo. View Transition runs and finishes. WebGL2 3D
-  ad cards draw. HEIC opens natively (createImageBitmap; libheif not fetched). WebP can't be encoded (it hands back a
-  PNG), so the WebP button stays hidden and those photos save as PNG/JPG. A 16384x16384 canvas works on the Mac (the
-  16 MP cap is the iPhone's).
-- WebKit private window: IndexedDB refuses Blobs ("Not kept: null" warning), so nothing is kept across a reload; photos
-  still work. Real Safari Private Browsing likely the same.
-- Firefox: WebGPU is blocklisted in headless (so the CPU engine; real Firefox may differ), isolated, View Transition,
-  WebGL2, HEIC through libheif, WebP encodes. Firefox's default for a downloaded .webp is to save it and also open it
-  in a new tab (WebP is "viewable internally"; an octet-stream blob doesn't change that, it goes by extension).
-- Not covered by Playwright: real iOS memory limits, the real share sheet (stubbed; Download all awaits the PNGs before
-  `navigator.share`, which a real iPhone may refuse once the tap's activation has lapsed), touch gestures (clicks are
-  mouse events), select wheels and focus zoom (only the 16 px font size is checked).
-
 Deploys: Cloudflare Pages project `goodbye-bg-git` builds from GitHub. Every push to `main`
 deploys; other branches get preview URLs (`<branch>.goodbye-bg-git.pages.dev`). No GitHub
 Actions. The old upload-only project `goodbye-bg` can be deleted.
 
 ## Layout
 
-- `src/` static site: `index.html`, `style.css`, `app.js` (everything), `sw.js` (Android share target, offline caches),
-  `manifest.webmanifest`, `_headers` (security headers, also used by local dev), `ad.html` (sandboxed ad slot, ads off),
-  `404.html` (real 404 for unknown paths; no scripts), `_redirects` (`/share` to `/` when the service worker missed it),
-  `remove-bg-alternative/` and `how-to-remove-background/` (SEO pages, see `docs/seo.md`; launch drafts in `docs/launch-drafts.md`)
-- `functions/api/fetch.js` Cloudflare Pages Function. Fetches an image for a pasted link (same-origin only,
-  30 MB cap, follows og:image for web pages). The only server code.
-- `scripts/build.mjs` assembles `dist/`. `scripts/serve.mjs` local server that applies `_headers` and runs the function.
-- `src/engine.js` the model worker. `weights/birefnet/` BiRefNet for the GPU engine, committed as 20 MiB parts with
-  a manifest (size, sha256); the build copies it to `m/birefnet-<hash>/`. `scripts/birefnet.sh` regenerates it
-  (download, then `deform-to-gridsample.py` and `narrow-onnx.py`; needs Python with onnx). Not part of the build.
+- `src/` static site: `index.html`, `style.css`, `app.js` (the page), `early.js` (first thing in <body>: starts a reload
+  with kept photos in its photos layout), `engine.js` (model worker), `formats.js` (HEIC/TIFF/RAW worker), `gif.js`,
+  `render3d.js` (3D ad products), `sw.js` (offline caches, Android share target), `manifest.webmanifest`, `_headers`
+  (security headers, also used by local dev), `_redirects` (`/share` to `/` when the service worker missed it),
+  `404.html` (no scripts), `ad.html` (sandboxed ad slot, ads off), `remove-bg-alternative/` and
+  `how-to-remove-background/` (SEO pages, `docs/seo.md`).
+- `functions/` Cloudflare Pages Functions: `api/fetch.js` (image for a pasted link: same-origin only, 30 MB cap, follows
+  og:image), `api/rate.js`, `api/crash.js`, `api/count.js`, `api/diag.js`, `api/cap/[key].js` and `cap/[file].js`
+  (Zazzle hand-off), `go/[id].js` (ad redirect and counts).
+- `lib/partners.mjs` (ad partners and Zazzle templates), `lib/test-traffic.mjs` (drops test traffic).
+- `scripts/build.mjs` assembles `dist/`. `scripts/serve.mjs` local server: applies `_headers`, runs the functions,
+  mirrors Pages routing; passes `/api/count` to the live site and never writes analytics.
+- `weights/birefnet/` BiRefNet, committed as 20 MiB parts with a manifest (size, sha256); the build copies it to
+  `m/birefnet-<hash>/`. `scripts/birefnet.sh` regenerates it (download, then `deform-to-gridsample.py` and
+  `narrow-onnx.py`; needs Python with onnx). Not part of the build.
+- `README.md` for people who click Source.
 
 ## Rules
 
@@ -75,492 +49,317 @@ Actions. The old upload-only project `goodbye-bg` can be deleted.
   server (votes, crashes, cut-outs, page views): no IP addresses, no identifiers. The one image the page uploads is
   the cut-out on a clicked Zazzle ad (functions/api/cap): R2, random one-time key, deleted once Zazzle has it.
 - Dark/light follows the system. No toggle.
-- Copy: plain, short, active voice.
+- Copy: plain, short, active voice. Quips are the one place for playful text; everything else is plain and only what
+  people need.
+- Every claim on the site must stay true, including once ads run.
+- Palette: the cool side of Giant Goldfish only (aqua, deep teal, sage). No orange; red only for errors.
+- Requirement from Kevin: 10 to 30 seconds per photo is unacceptable. Target a few seconds.
+- Typical photos: phone camera rolls. People, kids, pets, products, cars. Busy scenes (car interiors, a
+  small cat in a dark yard) are the model's weak spot; don't over-tune for them.
 
 ## Engines
 
-iPhones and iPads always use the CPU engine (2 threads: 4 threads peaked at 2.1 GB in the Simulator and crashed an
-18.75 MP photo half the time on Kevin's iPhone; 2 threads peak about 300 MB lower). Tested 2026-11-20 on Kevin's iPhone with
-`?debug=1`: the WebGPU engine crashed the tab ("A problem repeatedly occurred") on the first real photo,
-even with no warm-up run (one try in two); the CPU engine never crashed: 7.3 s a photo on 1 thread,
-5.0 s on 2, 3.5 s on 4. Safari needs `Cross-Origin-Embedder-Policy: require-corp` (it ignores
-`credentialless`) to be cross-origin isolated, which threads need.
+Two models, three tiers. `src/engine.js` runs ONNX Runtime Web 1.31.1 in its own module Worker; the page sends RGBA
+pixels, the worker builds its model's input. Both models are fixed at 1024x1024.
+- **BiRefNet lite** (MIT, fp16, 93 MB after the rewrite) on WebGPU, computers only (`any-pointer: fine`): 280 to 300 ms
+  a photo, GPU peak +3.0 GB. ImageNet mean/std in, logits out (the worker applies the sigmoid).
+- **ISNet medium** (IMG.LY, fp16, AGPL, 88 MB) on WebGPU: 150 to 300 ms a photo, GPU peak +1.0 GB. Input (x-128)/256,
+  output 0..1. `hardenHaze` in app.js (ISNet only; `?haze=0` off): wide half see-through areas become solid at 0.3 or
+  more, else clear.
+- **ISNet on the CPU** (WebAssembly, 4 threads; 2 on iPhones): 5 to 7 s a photo on the M5 Pro.
+- WebGPU is used when the adapter has `shader-f16`. iPhones and iPads always use the CPU engine (2 threads: 4 threads peaked at 2.1 GB in the Simulator and crashed an
+  18.75 MP photo half the time on Kevin's iPhone; 2 threads peak about 300 MB lower; 5.0 s a photo). WebGPU crashed
+  the tab there one try in two (2026-11-20). Safari needs `Cross-Origin-Embedder-Policy: require-corp` (it ignores
+  `credentialless`) to be cross-origin isolated, which threads need.
+- Votes and crash reports call the engines `gpu-birefnet`, `gpu` (ISNet) and `cpu` (ISNet). A vote names the engine
+  that made that photo's mask, even after a fallback.
+
+GPU gate (for weak GPUs; `docs/platforms-and-phone-model.md`, decision 3). The GPU worker does a warm-up run before
+"Ready" (compiles shaders, proves the GPU works). A failure terminates that worker and the next tier redoes the same
+photo; a separate worker is required because a failed WebGPU run aborts ORT's wasm instance for the whole realm.
+- BiRefNet steps down to ISNet on the GPU when its start fails, a run fails or its worker dies (out of GPU memory looks
+  like one of these), its start (session and warm-up, after the download) takes over 10 s, or its first photo over 2 s.
+  The time limits count only while the page is in view; hidden, only the hang limit counts. A slow first photo keeps
+  its result. ISNet on the GPU steps down to the CPU on a failure, NaN, or a hang (30 s warm-up, 15 s a run).
+- A failure before the worker has the model (download, offline, worker script) is not a GPU failure: "Could not load".
+- Computers reporting `navigator.deviceMemory` under 8 start on ISNet on the GPU.
+- The outcome is kept in localStorage `gb-gpu` (tier, user agent, runtime/model version, date); a browser update, new
+  runtime or model, or 30 days start over. Never written under `?engine=`, `?model=` or `?gpufail=`.
+- Each step down goes to `/api/crash` at once as `birefnet-start-failed`, `birefnet-run-failed`, `birefnet-slow-start`,
+  `birefnet-slow-run`, `gpu-start-failed` or `gpu-run-failed`. Tested in headless Chrome only.
+
+Runtime is served from `rt/<version>/` (cached forever, so upgrades get new URLs). Its 28.7 MB wasm is split into parts
+(Pages limit is 25 MiB per file) and passed in as `ort.env.wasm.wasmBinary`.
+
+BiRefNet export rewrites (`scripts/birefnet.sh`; details in `docs/history.md`): `narrow-onnx.py` splits wide
+Concat/Split ops (10 storage buffers per shader); `deform-to-gridsample.py` replaces the 20 deformable convs with
+chunked GridSample + Conv (mean mask difference 0.0005). All 3820 nodes run on WebGPU.
+
+Quality (`docs/quality-1000.md`; `scripts/quality/` copies the page's mask handling: change both together): real-mask
+IoU on 923 photos 0.960 BiRefNet vs 0.894 ISNet (0.901 with haze hardening); by eye of 104, bad 5 vs 15.
+
+Rejected: ISNet **small** (quint8, 61% of pixels unsure); BiRefNet on the CPU (10 s, 6.7 GB); an automatic zoomed
+second pass (worse on both models).
+
+Test switches: `?engine=gpu|cpu` (a forced gpu never falls back to the CPU; BiRefNet can still step down to ISNet),
+`?model=isnet|birefnet` (`birefnet` turns the gate off), `?threads=N`, `?nowarm=1`,
+`?gpufail=init|run|hang` (every GPU tier) or `birefnet-init|birefnet-oom|birefnet-slow|birefnet-slowrun` (BiRefNet only),
+`?haze=0`, `?keepmax=N`, `?keepmb=N`, `?maxbatch=N`, `?adtest=1`, `?adpartner=zazzle|printful|printify`, `?adv=<v>`,
+`?zazzlecap=0`, `?confetti=1`, `?debug=1`.
 
 Debugging on phones: `?debug=1` sends step names and numbers (never photo data) to `/api/diag`, which
 only writes to the Functions log. Read it with `npx wrangler pages deployment tail <deployment-id>
 --project-name goodbye-bg-git --format json` (find the ID with `wrangler pages deployment list`).
-Other test switches: `?keepmax=N`, `?keepmb=N` (kept-photo limits), `?engine=gpu|cpu`, `?model=isnet|birefnet`, `?threads=N`, `?nowarm=1`, `?gpufail=init|run|hang|birefnet-init|birefnet-oom|birefnet-slow|birefnet-slowrun`, `?haze=0` (ISNet without haze hardening), `?adpartner=zazzle|printful|printify` (with `?adtest=1`).
 
-Memory on phones (measured in the iOS Simulator, CPU engine): ISNet at 1024x1024 needs about 1.5 to
-2 GB of wasm heap, mostly activations; it can't run smaller (a Concat inside is fixed to 1024). Asking
-for only the first of its 13 outputs, freeing the model bytes after session creation, one PNG at a
-time, and compositing the mask instead of copying pixels took 3 photos from 2.1 GB to 1.46 GB.
-Safari caps photos at 16 MP (canvas limit); the original bitmap is kept and scaled when drawn.
-Restart after the iPhone idle shutdown (2026-11-22, headless Chrome and Playwright WebKit with the iPhone profile;
-**untested on a real iPhone**): a terminated engine's memory comes back about 2 s later in Chrome (session release,
-`close()`, ending its thread workers first: no faster), and in WebKit mostly within 0.6 s (phys_footprint).
-A 👎 or a new photo in that window held two engines: Chrome renderer RSS 3.3 GB for the 👎 and 4.6 GB for a new
-18.75 MP photo after it (batch alone 2.0 GB). Now `startEngine` waits until 3 s after an idle shutdown (`engineFree`):
-both 2.0 GB, the 👎 up to 3 s slower when tapped right away. The model and runtime parts are read into one buffer of
-the final size (were chunks + Blob + copy): batch peak about 130 MB lower. Masks bit-for-bit unchanged.
-If Safari turns out to free more slowly, keeping the engine a few seconds after a batch (a quick 👎 reuses it) is the next step.
+## Memory on phones
 
-Two models, two engines. `src/engine.js` runs ONNX Runtime Web 1.31.1 inside its own module Worker. `app.js`
-starts it with WebGPU when the adapter has `shader-f16`, else with WebAssembly (4 threads).
-- GPU on computers (`any-pointer: fine`): **BiRefNet lite** (MIT, fp16, 93 MB after the rewrite below).
-- CPU, and GPU on phones/tablets: IMG.LY **ISNet medium** (fp16, AGPL, 88 MB). BiRefNet on the CPU is 10 s
-  and 6.7 GB (Node, 64-bit): no.
-- Votes and crash reports call the engines `gpu-birefnet`, `gpu` (ISNet) and `cpu` (ISNet). A vote names the engine
-  that made that photo's mask, even after a fallback.
+Measured in the iOS Simulator, CPU engine: ISNet at 1024x1024 needs about 1.5 to 2 GB of wasm heap, mostly
+activations; it can't run smaller (a Concat inside is fixed to 1024). Asking for only the first of its 13 outputs,
+freeing the model bytes after session creation, one PNG at a time, and compositing the mask instead of copying pixels
+took 3 photos from 2.1 GB to 1.46 GB. Safari caps photos at 16 MP (canvas limit); the original bitmap is kept and
+scaled when drawn.
+- iPhones shut the engine down once idle (its ~1.8 GB never shrinks; 7 to 8 photos in one tab crashed Safari).
+  `startEngine` waits until 3 s after that shutdown (`engineFree`) so two engines never overlap (measured 3.3 to
+  4.6 GB in Chrome without the wait). Untested on a real iPhone; if Safari frees more slowly, keep the engine a few
+  seconds after a batch.
+- A full-size PNG on iOS first stops an idle engine (`fullBlob`, debug step `engine-png`; one crash report at step
+  "png"). The export stays full size. Untested on a real iPhone.
 
-The GPU worker does a warm-up run before "Ready", which compiles the shaders and proves the GPU works. If the GPU fails to start, fails a run, hangs (30 s warm-up, 15 s per run), or
-returns NaN, the page terminates that worker and the next tier redoes the same photo. A separate worker is
-required: a failed WebGPU run aborts ORT's wasm instance for the whole realm.
+## First visit
 
-GPU gate (2026-11-22, for weak GPUs; the proposal in `docs/platforms-and-phone-model.md`, decision 3). Three tiers:
-BiRefNet on the GPU, then ISNet on the GPU (a third of the GPU memory), then the CPU.
-- BiRefNet steps down to ISNet on the GPU when its start fails, a run fails or its worker dies (out of GPU memory
-  shows up as one of these), its start (session and warm-up, after the download) takes over 10 s, or its first
-  photo over 2 s (M5 Pro: about 2 s and 0.3 s). The time limits count only while the page stays in view (computers
-  start the model at load, often in a background tab); hidden, only the 30 s hang counts. A slow first photo keeps its BiRefNet result. ISNet on the GPU
-  steps down to the CPU on a failure or a hang. A failure before the worker has the model (the download, offline, or
-  the worker script) is not a GPU failure: no step down, nothing remembered, "Could not load" as before.
-- Computers that report `navigator.deviceMemory` under 8 (Chrome only, capped at 8) start on ISNet on the GPU.
-- The outcome is kept in localStorage `gb-gpu` (tier, user agent, runtime/model version, date), so later visits skip
-  the try that failed. A browser update, a new runtime or BiRefNet export, or 30 days start over. Never written
-  under `?engine=`, `?model=` or `?gpufail=`.
-- Each step down is sent at once to `/api/crash` with the engine that failed: `birefnet-start-failed`,
-  `birefnet-run-failed`, `birefnet-slow-start`, `birefnet-slow-run`, `gpu-start-failed`, `gpu-run-failed`
-  (the same names in `?debug=1`, plus `gpu-lowmem` and `gpu-remembered`).
-- Tested in headless Chrome (M5 Pro): every case below, a photo added while ISNet starts after a failed BiRefNet,
-  a kept tier (and a stale one ignored), deviceMemory 4, a hidden tab, a vote on a restored photo. Not tested on a
-  real weak GPU, Safari, Windows or Linux.
+Lighthouse mobile 100 (LCP 1.2 s, CLS 0, TBT 0). Time to the first cut-out is download-bound (116 MB on the CPU engine,
+121 MB with BiRefNet). When the model starts downloading:
+- **At once**: returning visitors (`gb-model` in localStorage), kept photos, `?url=`, shares.
+- **Computers** (`any-pointer: fine`, no Save-Data): right after `load`, at idle.
+- **Phones, tablets, Save-Data**: on intent only (pointer over, touch or focus on Choose photos / Paste, a drag, a
+  paste): a visitor who leaves without a photo downloads 0.2 MB, not 116 MB. To go back to eager on phones, start the
+  model in the `else` branch at the end of app.js.
+- Landing to grid is a View Transition (`landing()`); `body.moving` hides the one changing frame (CLS 0).
 
-- `?engine=gpu` or `?engine=cpu` forces one (a forced gpu never falls back to the CPU; BiRefNet can still step down
-  to ISNet on the GPU). `?model=birefnet` turns the gate off. `?gpufail=init|run|hang` simulates a broken GPU (every
-  GPU tier); `?gpufail=birefnet-init|birefnet-oom|birefnet-slow|birefnet-slowrun` a GPU too weak for BiRefNet only
-  (start fails after 3 s, worker dies on the first photo, start hangs, first photo takes 2.5 s).
-- ISNet: input (x-128)/256, output 0..1. BiRefNet: ImageNet mean/std, output logits (the worker applies the
-  sigmoid). Both fixed 1024x1024; the page sends RGBA pixels and the worker builds its model's input.
-- Runtime is served from `rt/<version>/` (cached forever, so upgrades get new URLs). Its 28.7 MB wasm is split
-  into parts (Pages limit is 25 MiB per file) and passed in as `ort.env.wasm.wasmBinary`.
-- ORT 1.21 cannot run ISNet on WebGPU (MaxPool with ceil mode unsupported).
-
-ISNet, measured 2026-11-20, Chrome 157, M5 Pro:
-- **gpu: 150 to 300 ms per photo**, warm-up about 0.3 s. Four photos end to end: 1.35 s.
-- **cpu: 5 to 7 s per photo.**
-- GPU and CPU masks match on five test photos: mean difference at most 0.002, max 0.05, no pixel off by more
-  than 0.1, no NaN.
-- Quality (same for both): clean on people, pets in scenes, the tree. Hair edges blocky. Fails on close-ups
-  over a soft blurred background (keeps the blur), and keeps blobs of busy backdrops (graffiti).
-- Tested: every forced GPU failure finishes the photo on the CPU; photos added during the first download wait
-  and then run; a dropped model part is retried.
-
-BiRefNet on WebGPU (2026-11-21; numbers and side-by-sides in `docs/birefnet.md`). The onnx-community export needs
-two rewrites, both in `scripts/birefnet.sh`:
-  1. Concat ops with up to 1024 inputs and Split ops with 8, 16 and 32 outputs exceed the 10 storage
-     buffers per shader. `scripts/narrow-onnx.py` rewrites them into trees of at most 6.
-  2. The decoder's 20 deformable convs were spelled out as GatherND/Mul over all taps at once (392 MiB fp16
-     tensors for the 7x7 at 256x256x64, `std::bad_alloc`). `scripts/deform-to-gridsample.py` replaces each with
-     GridSample (bilinear, zeros, align_corners=1: what the export computes) a few kernel rows at a time
-     (at most 64 MB a chunk), a strided Conv per chunk and a sum. Mask matches the original on CPU: mean
-     difference 0.0005, nothing crosses 0.5. All 3820 nodes run on WebGPU.
-- **gpu-birefnet: 280 to 300 ms per photo** (ISNet 86 ms), session 1.2 s, warm-up 0.3 to 0.7 s. GPU memory
-  peak +3.0 GB (ISNet +1.0 GB), hence computers only.
-- Quality: much better than ISNet on close-ups over a blurred background (cats, Larry: no leftover blur),
-  busy backdrops (bicycle on graffiti: no blobs), see-through objects (headphone case), small subjects
-  (yard cat), sky gaps in the tree. Hair about the same at 1024.
-
-Quality on 1,073 public photos (2026-11-21, `docs/quality-1000.md`, harness in `scripts/quality/`): by eye, of 104
-cut-outs, gpu-birefnet 85 good / 14 usable / 5 bad, ISNet 57 / 32 / 15. Mean IoU on 923 photos with real masks 0.960
-vs 0.894. ISNet loses or fades parts of the subject; BiRefNet's flaw is which thing it keeps. Hair is a solid shape
-on both; see-through objects fail on both. The harness copies the page's mask handling: change both together.
-ISNet haze hardening (2026-11-22, `hardenHaze` in app.js, ISNet only): wide half see-through areas become solid at 0.3
-or more, else clear. 102 photos better, 27 worse of 1,073; real-mask IoU 0.894 to 0.901. Rejected after measuring: an
-automatic zoomed second pass (the 👎 retry done unasked), whole or edge band only: worse on both models at these photo
-sizes (about 1.7 MP; untested on 12 MP). Both BiRefNet exports are fixed at 1024, so a smaller one for phones needs a new export.
-
-Rejected:
-- ISNet **small** (quint8): garbage (61% of pixels unsure).
-
-Requirement from Kevin: 10 to 30 seconds per photo is unacceptable. Target a few seconds.
-
-## First visit (2026-11-22)
-
-Measured on production first: Lighthouse mobile LCP 1.2 s (simulated; 1.5 s with DevTools throttling), CLS 0, TBT 0,
-score 100; desktop LCP 0.3 s. The model download never competed with first paint (it started after the h1 was drawn).
-Time to the first cut-out is download-bound (116 MB on the CPU engine, 121 MB with BiRefNet): every second the download
-starts later is about a second later for the first photo. So the trade-off is data (and iPhone memory) against speed:
-- **At once**: returning visitors (`gb-model` in localStorage, set when an engine was ready: the files are cached for a
-  year), kept photos, `?url=`, shares. `addSources` starts the model before it decodes or fetches anything.
-- **Computers** (`any-pointer: fine`, no Save-Data): right after `load`, at idle. Same time to first cut-out as before.
-- **Phones, tablets, Save-Data**: on intent only: pointer over, touch or focus on Choose photos / Paste, a drag over the
-  page, a paste. A phone visitor who leaves without adding a photo downloads 0.2 MB instead of 116 MB. Cost: the dwell
-  before the tap. Headless, 20 Mbps, photo added 8 s after load with the tap 4 s before: first cut-out at 58.8 s instead
-  of 56.1 s (+5%); added at 20 s: 72 s instead of 53 s (someone who reads 16 s first waits for the download after).
-  To go back to eager on phones, start the model in the `else` branch at the end of app.js.
-- engine.js fetches the runtime wasm and the model in parallel (no measurable change at a fixed bandwidth; saves round trips).
-- fflate (ZIPs) loads on first use; its static import held up app.js by about 0.7 s on slow 4G.
-- Landing to grid is a View Transition (`landing()` in app.js, about 0.3 s): the headline fades out, the buttons and the
-  wordmark glide, the cards fade in. For the one frame where the layout changes, `main` and the footer are hidden
-  (`body.moving`), which keeps that step out of CLS (it was 0.20 on a computer, 0.37 on a phone; now 0, with and without
-  the API). Reduced motion or no API: instant (one blank frame).
-
-## Offline and install (2026-11-22)
-
-Before: offline after a visit, nothing loaded (the page revalidates, `max-age=0`); the runtime and models sat in the
-HTTP cache only (`immutable`, never in the Cache API). Now `src/sw.js` keeps the app on the device; online it behaves as
-before. `scripts/build.mjs` writes its version list into sw.js (`"%SW%"`): every shell file with a hash, and the
-runtime/model folders with their files.
-- Shell (index, app.js, style.css, engine.js, workers, lazy modules, icons): network first, so deploys are live at once
-  and freshen() can't loop; a per-build copy (`gb-shell-<build>`) answers when the network fails. An update copies
-  unchanged files from the old copy by hash and refetches changed ones only if they were used. Install keeps only what
-  the page loads anyway (index, app.js, style.css, early.js, font, favicon, manifest); the lazy modules (GIF, HEIC/TIFF/RAW,
-  3D, zip, confetti, ~2.5 MB) are kept once the engine loads. Other pages go to `gb-pages` as visited.
-- `rt/<version>/` and `m/<name>/`: cache first, one cache each (`gb-rt-1.31.1`, `gb-m-isnet-<sha8>`,
-  `gb-m-birefnet-<hash>`), kept on use; activate deletes `gb-*` caches not in the list (never `share-inbox`). Downloads
-  use `cache: "no-store"`, so the 116 MB (210 MB with both models) are stored once. Chrome's `only-if-cached` from the
-  worker never hit what the page had put in the HTTP cache (tested), so it isn't used. Parts the engine fetched before the
-  worker took over (a first visit where the model starts at once) are fetched again (`whole()`): 5 s after the last
-  part through the worker has finished streaming, only numbered parts below the first one it saw, plus manifests and
-  the runtime's .mjs files; never parts the engine hasn't reached (the GPU gate can stop BiRefNet halfway). Measured at
-  20 Mbps with a photo added at once: the first part of the runtime and of BiRefNet went past the worker, so 40 MB extra
-  once; no part fetched twice by the worker (offline.mjs checks this). Time to first cut-out through a real 20 Mbps
-  limit (a throttling proxy, photo added at once, desktop GPU): 51.3 s before, 51.9 s with the worker (twice each).
-  CDP throttling showed 52 vs 61 s, an artifact: it throttles the worker-served responses as well.
-- Never cached: `/api/`, `/go/`, `/cap/`, `/version.txt`, `/ad.html`, `/sw.js`, non-GET. The share POST is handled as before.
-- Stored responses keep the server's COOP/COEP/CSP, so offline the page is `crossOriginIsolated` and the CPU engine runs
-  with its 3 thread workers (same speed as online).
-- Manifest: `id`, icons with `purpose`, `icon-maskable-512.png` (favicon glyph full-bleed, inside the safe zone), two wide
-  screenshots (launch kit) and one narrow (local build, three CC0 launch-kit photos + the Zazzle card), `categories`.
-  No install prompt UI; browsers show their own. Chrome reports no installability errors.
-Tested (`scripts/test/offline.mjs`, headless Chrome, server stopped and tab offline): reload, kept photos, a GPU photo
-(BiRefNet), a CPU photo (worker isolated, threads), GIF, TIFF (formats worker), 3D ad previews, the share-target POST,
-no requests leave; an existing visitor (old worker) works offline after one more online visit; an upgrade to a new
-runtime folder deletes the old shell and runtime caches, keeps share-inbox, and the next load keeps the new runtime.
-Not true offline: a computer that only ever ran the GPU engine has no CPU model, so a GPU failure offline fails the photo;
-after a runtime or model upgrade, one online run first (the first page after an update may still use the old worker);
-link fetching and ads clicks need the network. Not tested: Safari (iPhone or Mac), Firefox, Android install/share.
-Safari also deletes site storage after 7 days without a visit. The Cache API shares quota with kept photos.
-
-## Animated GIFs (2026-11-21)
-
-An animated GIF is read with gifuct-js and written back with gifenc (both MIT, bundled into `dist/gif.mjs`, loaded
-only when one is added). Every frame goes through the model (at most 100, or 16 when the CPU engine runs them, decided by the engine picked, not by `navigator.gpu`:
-longer GIFs keep every n-th frame and add up the delays) and the result is an animated GIF with on/off transparency
-(soft edges become hard). The card plays it; Download and long-press save the GIF. No crop and no zoomed retry
-for GIFs (👎 is a vote only). Measured: 10 frames at 360x540 in 5.7 s on the GPU engine.
-
-## Formats and ZIPs (2026-11-22)
+## Formats
 
 Anything the browser opens goes straight in. HEIC and TIFF on Chrome/Edge/Firefox and camera RAW everywhere go to
 `src/formats.js` (bundled to `dist/formats.mjs`), a module Worker started per file and terminated after it:
-- HEIC: libheif 1.23.5 (`libheif-js`, LGPL-3.0; `libheif.wasm` 1.4 MB served next to it with `libheif-LICENSE.txt`).
-  Fetched only when a HEIC arrives on a browser without HEIC. 1920x2306 decodes in about 0.16 s.
+- HEIC: libheif 1.23.5 (`libheif-js`, LGPL-3.0; `libheif.wasm` 1.4 MB served with `libheif-LICENSE.txt`), fetched only
+  when a HEIC arrives on a browser without HEIC.
 - TIFF: UTIF (`utif2`, MIT), the largest colour picture in the file, EXIF orientation applied.
 - RAW (DNG, CR2, CR3, NEF, ARW, RAF, ORF, RW2, ...): the largest baseline JPEG the camera stored inside, turned by the
-  TIFF orientation, or by that JPEG's own EXIF orientation when it has one (iPhone ProRAW; Chrome turns it while decoding,
-  so swapped sides mean it is done; portrait DNGs came out sideways before 2026-11-22). No developing. Older Canons store only about 2 MP (a 40D-era CR2 gave 1936x1288); a NEF gave
-  the full 4256x2832. A RAW without a usable preview says so.
-- ZIPs (picked, dropped or in a dropped folder) open with fflate's `unzipSync`: pictures by extension, in natural name
-  order, skipping `__MACOSX` and dot-files, at most `MAX_BATCH` (the first by name; a name-only first pass picks them).
-- Tested 2026-11-22 (headless Chrome, raw.pixls.us samples): CR2 1936x1288, NEF 6016x4000, iPhone 12 Pro DNG 3024x4032,
-  Sony A7 III ARW 1616x1080 (the largest preview that camera stores), CR3 3408x2272; HEIC 6016x6016 in 1.9 s; LZW TIFF;
-  a portrait HEIC (irot) comes out upright; broken HEIC/TIFF/fake DNG give an error card; mixed ZIP (nested folders, HEIC, CR2, TIFF, junk) in name order.
+  TIFF orientation or that JPEG's own EXIF orientation (iPhone ProRAW). No developing; older Canons store only about 2 MP.
+  A RAW without a usable preview says so.
+- ZIPs (picked, dropped or in a dropped folder): fflate, pictures by extension in natural name order, skipping
+  `__MACOSX` and dot-files, the first `MAX_BATCH` by name.
+- Animated GIFs: gifuct-js in, gifenc out (MIT, `dist/gif.mjs`, loaded when one is added). Every frame goes through the
+  model, at most 100, or 16 when the CPU engine runs them (longer GIFs keep every n-th frame and add up the delays).
+  On/off transparency (soft edges become hard). The card plays it; Download and long-press save the GIF. No crop, no
+  background or options, no zoomed retry (👎 is a vote only). 10 frames at 360x540 in 5.7 s on the GPU.
+- See-through inputs reach the model on white, or on black when the subject is light. SVGs are drawn at 2048 px+.
+- A file that can't be opened never gets a card; one bubble at Choose photos names them. A photo the model fails on
+  keeps its card.
 
-## Batches (2026-11-22)
+Batches: `MAX_BATCH` per drop, paste, folder or ZIP: 100 on computers (fine pointer, not iOS, `deviceMemory` 8 or
+unknown), 50 otherwise (about 10 MB of page memory per finished photo). Download all streams its zip.
 
-`MAX_BATCH` per drop, paste, folder or ZIP: 100 on computers (fine pointer, not iOS, `deviceMemory` 8 or unknown), 50 on
-phones, tablets and computers reporting under 8 GB; `?maxbatch=N` to test. A drop over the cap says "Added the first N".
-Only the newest 50 are kept on the device (`KEEP_MAX`, photos past it aren't written at all); the rest are cut out and go
-into Download all, but a reload loses them. Download all streams its zip (fflate `Zip` + `ZipPassThrough`, gathered as
-Blob parts of 32 MB) instead of holding every file and then the whole zip. Measured in headless Chrome (M5 Pro, 1200x1600
-photos, GPU): about 10 MB of page memory per finished photo (preview bitmap, mask, edge colours): 0.8 GB for 50, 2.2 GB
-for 200 (98 s, zip 4 s), hence 100. At 50 photos on a 1440x900 window the cards are near their 84 px minimum (96 before 2026-11-22) and the
-grid scrolls (the one-screen rule gives way for bulk). remove.bg bulk users mostly need "drop a folder, get a zip": that
-works up to 100 at a time; more means another drop.
+## Kept photos
 
-## Kept on the device (2026-11-21)
+Kevin: leaving and coming back lost every photo. Every photo is kept in IndexedDB (`goodbye-bg` version 2, stores
+`files`, `state`, `backs`, keyed in grid order as `-time x 1024 + n`) until removed: the original file, a preview (JPEG,
+PNG for see-through types), mask(s) as PNG, crop, vote, retry (and the first result), background, options, the
+finished GIF. On load the cards come back in place without the model; unfinished photos run. FIFO (Kevin: "into
+perpetuity, sane limit"): newest 50 photos (`KEEP_MAX`; photos past it aren't written) within 1 GB on computers, 400 MB
+on phones; oldest out first; a photo bigger than the whole limit isn't kept; quota errors drop the oldest and retry,
+then give up quietly. Background photos are stored once (`backs`); unused ones are deleted on load.
+`navigator.storage.persist()` is asked except in Firefox (it prompts there). Safari clears site storage after 7 days
+without a visit; private windows refuse Blobs, so nothing is kept there.
+- Reload without jitter: early.js reads `gb-kept` and starts in the photos layout, hidden ("restoring") until the
+  first kept photo is drawn (1.5 s failsafe). The partner list is built into app.js (`%PARTNERS%`) so the first layout
+  knows the ad cells; restored ads come straight in (`adsStraight`). CLS 0.
 
-Kevin: leaving and coming back lost every photo. Cause: nothing was stored. The page is bfcache-eligible (headless Chrome
-restores it on Back, IndexedDB open included), and desktop ad clicks already open a new tab, but bfcache drops big pages
-and anything over 10 min, a reload or new visit starts empty, iPhones discard background tabs, and on phones
-`window.open` after the share sheet can be blocked, which sends this tab to the partner.
-Now every photo is kept in IndexedDB (`goodbye-bg` version 2, stores `files`, `state` and `backs`, keyed in grid order) until removed:
-the original file, a preview (JPEG, PNG for see-through types), mask(s) as PNG, crop, vote, retry (and the first result),
-the finished GIF. On load the cards come back in place without the model; unfinished photos run. FIFO (Kevin: "into
-perpetuity, sane limit"): newest 50 photos within 1 GB on computers, 400 MB on phones; oldest out first; quota errors
-drop the oldest and retry, then give up quietly. Removing a card deletes its copy. Background photos (`backs`, a JPEG of at most
-2048 px on iPhones, 4096 elsewhere) are stored once however many photos use them; on load the unused ones are deleted.
-Keys are `-time x 1024 + n` (x64 before 2026-11-22, which let a batch over 64 overwrite the one before it). `navigator.storage.persist()` is
-asked except in Firefox (it prompts there). Safari still clears site storage after 7 days without a visit.
-Tested: headless Chrome (reload in a restarted browser, Back still from bfcache); iOS Simulator (iPhone 17, iOS 27): force-quitting Safari and reopening brings back both photos in order with the 👍 lit, a removed card stays gone, and Download on a restored photo shares the full-size PNG; an animated GIF comes back playing. Headless Chrome: a 👎 retry comes back with its first result (2048 merged mask, 1024 first), a 👎 after the reload still puts the first back, and that sticks; a GIF's Download after a reload is the GIF. Cap (headless Chrome, `?keepmax=N` / `?keepmb=N` lower it to test): 52 photos in two batches keep 50 (the two at the end of the grid go), about 2 MB a photo (97 MB for 50); with 5 MB, older photos go first and a single photo bigger than the whole limit is not kept (it used to push out everything). Restoring 50: cards up in 60 ms, all drawn in 1.0 s warm, 9.5 s on a cold start next to the CPU engine starting. Not tested: a real QuotaExceededError.
+## UX decisions
 
-## UX decisions (2026-11-20, from Kevin)
-
-- One screen, no scrolling. No double-tap zoom; pinch-zoom is allowed for accessibility (Kevin, 2026-11-20). Cards are square and sized to fit; a batch appears at
-  once, in the order picked, and processing goes top-left first.
-- Only the photo being worked on waves and shows a quip; waiting cards stay still. It is also the lightest photo on screen,
-  with a soft light sweeping across it (2026-11-22; it used to be the darkest, so the eye went to the waiting ones). A failed
-  card says which file it was. The wave and quip live in the card's bar (where
-  Download appears when done), never on the photo: the subject is what stays (Kevin, 2026-11-21). Phone cards hide remove while working
-  so the quip fits two lines; the smallest cards show only the wave. Footer: "Goodbye to N backgrounds since 2026."
-- Kept photos load without jitter: `src/early.js` (first thing in <body>) reads the count `gb-kept` that app.js keeps in
-  localStorage and starts the page in its photos layout, grid and footer hidden ("restoring") until layout() has sized the
-  cards and the first kept photo is drawn (1.5 s failsafe; waiting for the whole first row hit it on a 6x-throttled phone). Restored cards don't pop. A stale count falls back to the landing.
-  Jitter on reload, round 2 (2026-11-22, measured with a CDP script: layout-shift observer, per-frame rects, screencast):
-  the partner list is written into app.js by the build (`%PARTNERS%`; partners.json stays as the fallback), because a
-  fetched list arrived after the kept photos were laid out and the photo shrank from 1 cell to 4 (production, 300 ms
-  latency: CLS 0.08 desktop, 0.24 phone). A layout before the masks were back reset `adsAt`, so restored ads waited the
-  1.1 s reveal pause: now `adsStraight` puts them in the first visible frame, without their entrance (`.adcard.back`);
-  the placeholder crossfades into the product. early.js modulepreloads render3d.mjs. The footer has a fixed width (the
-  count text arriving moved its box). While photos are added, the footer used to land 34 px off and then move: hugFooter
-  measured a card mid pop-in (scaled .92); it reads offsetHeight now. After: CLS 0 in every case (1 to 4 photos, desktop and phone, light and dark).
-- Remove can be undone for 5 s (Kevin, 2026-11-21): a pill at the bottom, "Removed." + Undo (the file name only for
-  screen readers: camera names were noise), with a ring on the button that
-  runs down (hover or focus pauses it; Cmd/Ctrl+Z works). The deadline is a JS timer (`UNDO_MS`), not the ring's animation
-  (reduced motion turned that off and the pill stayed). Undo also finishes a photo removed while the model was on it, and
-  opens one removed before its turn. The stored copy is deleted at once and rewritten on Undo; memory
-  is freed when the time is up. One at a time: a second removal settles the first.
-- Messages sit next to what they're about (Kevin, 2026-11-21), one look everywhere: `tell(msg, button)` in app.js shows one
-  bubble pointing at the button (adding photos: Choose photos/Paste; a failed save: that Download; a failed zip: Download all),
-  below it or above when there's no room. Trouble with one photo stays on its card. No bottom toast; zip progress is on the
-  Download all button. Undo is the only thing at the bottom. With photos on screen, a message about adding photos sits
-  above Choose photos/Paste (below, it covered the photos; 2026-11-22). A bubble about adding photos ("Paste was
-  blocked") closes as soon as photos arrive (second review: it stayed over the wordmark on phones). A file that can't
-  be opened never gets a card (a card for notes.txt reflowed a batch that fitted, opened two ad cells and made a phone's
-  grid scroll): obvious non-images (a type that isn't image/ and no picture extension) are skipped before any card
-  exists, a picture that fails to decode loses its card when it fails, and one bubble at Choose photos names them
-  (8 s, also read out). A photo the model fails on keeps its card (it was already laid out). Quips are the one place
-  for playful text; everything else is plain and only what people need.
-- Results are cropped to the subject by default (crop icon switches to the whole frame). 👎 retries zoomed in (merged into the first result outside the zoomed part, feathered where they meet; mergeRetry)
-  on the subject, a second 👎 restores the first result. One vote per result (on phones, which never hover, 👍 👎 rest at full strength on a soft chip instead of grey at 70%, which read as disabled; still grey, for the palette): the chosen emoji stays lit and the
-  other steps aside; a retry that finds a new result brings both back for it.
+- One screen, no scrolling. No double-tap zoom; pinch-zoom is allowed for accessibility (Kevin, 2026-11-20). Cards are
+  square and sized to fit; a batch appears at once, in the order picked, and processing goes top-left first. The grid
+  fits down to 84 px cards (a phone in portrait fits 12, 3 x 4, with Download all in sight); past that it scrolls and
+  Download all sticks to its bottom edge. The grid uses the window's width (up to 1800 px).
+- Only the photo being worked on waves and shows a quip; waiting cards stay still. It is the lightest photo on screen,
+  with a soft light sweeping across it. The wave and quip live in the card's bar (where
+  Download appears when done), never on the photo: the subject is what stays (Kevin, 2026-11-21). Phone cards hide
+  remove while working so the quip fits two lines; the smallest cards show only the wave. A failed card says which
+  file it was, on an opaque panel, and hides Download.
+- Results are cropped to the subject by default (crop icon switches to the whole frame). 👎 retries zoomed in on the
+  subject (merged into the first result outside the zoomed part, feathered where they meet; `mergeRetry`), only when
+  the subject's padded box is under 80% of the photo; otherwise it is a vote only, labelled "Bad result" instead of
+  "Bad result, try again". A second 👎 restores the first result. One vote per result: the chosen emoji stays lit and
+  the other steps aside; a retry that finds a new result brings both back.
 - Nothing ever overlaps the image. Every card control (crop, Download, 👍 👎, remove) lives in the bar below it.
 - A finished cut-out is an `<img>`, so long-press on iPhone offers Save to Photos (a press swaps in the
-  full-size PNG). Safari ignores `touch-action` for double taps, so app.js swallows a second
-  tap within 350 ms.
+  full-size PNG). Safari ignores `touch-action` for double taps, so app.js swallows a second tap within 350 ms.
 - Hover effects only on devices with a real pointer (phones keep :hover after a tap).
-- QA pass 2026-11-21 (details in git log):
-  - 👎 zooms in only when the subject's padded box is under 80% of the photo; otherwise it is a vote only and its
-    label says "Bad result" instead of "Bad result, try again" (most phone photos fill the frame).
-  - The card bar drops controls so Download stays at least ~40 px wide (measured 39 to 43 px at the tightest widths).
-    Every bar control is 32 px (`--h-sm`, 2026-11-22 visitor review: they were 28 px on narrow cards). The icons
-    (background, crop, 👍 👎, remove) share one resting look on every device: full strength on a faint ink chip (grey
-    thumbs at 70% read as disabled on computers); crop when on has a teal ring on an aqua tint. Bar order:
-    crop, background, Download, 👍 👎, remove. What the bar has no room for rides along in the background picker
-    (`wantcrop`/`wantx` classes, set from what the bar actually hides), so crop and remove are never lost (card widths):
-    242+ px everything; 206 to 241 no crop; 162 to 205 no crop and no remove, 👍 👎 stay (Kevin, 2026-11-21: voting
-    beats crop); 130 to 161 background, Download, remove; under 130 background and Download.
-    **Roomy bars** (2026-11-22, visitor review: "no visible way to remove a photo on a phone"): on touch screens only
-    (`pointer: coarse`), when the cards fill the width first and there is height to spare (a phone in portrait with 1 to
-    4 photos, 165 px cards), layout() sets `.grid.roomy` and the bar takes a second row: background + Download, then
-    crop, 👍 👎, remove. Photo bars get `min-height: var(--bar)` so a row's cards line up; ad cards keep a one-row bar
-    (`--bar1`) and the second row's height goes to the product art. A working card's quip fills both rows (wave on top).
-    With a mouse the bar is always one row and the picker carries crop and remove (second review: a laptop with 12
-    photos had two-row bars, 35% of every card, and 165 px photos).
-    **The grid uses the window's width** (`body.app.has-work main` up to 1800 px; it was capped at 1100 px, which made
-    a laptop width-bound): cards are sized from both axes. 1440x900: 1 photo 339 px (was 277), 12 photos 6 x 2 at
-    222 px with one-row bars (was 165 px with two rows; still slightly width-bound, 5 columns would be smaller).
-    Download all's padding (only while the grid scrolls) is left out of the fit, so a grid that scrolled goes back to
-    fitting when a card goes (it stayed scrolling at 12 on a phone after a 13th was removed).
-    Cards without a picker (waiting, failed, animated GIFs) keep remove in the bar, in the background button's place, so
-    Download doesn't move when a card finishes. A background or crop change on a phone builds the PNG ahead only when no
-    batch or retry is running.
-  - The grid fits the screen down to 84 px cards (was 96), and the bar's height is worked out per candidate width (it
-    was measured from the current cards): a phone in portrait fits 12 photos (3 x 4, 85 px cards) with Download all in
-    sight (visitor review: they scrolled). Past that the grid scrolls and Download all sticks to its bottom edge.
-  - A last row with empty cells (one photo before its ads arrive, or no ads) sits in the middle, under the centred
-    buttons (`centreLastRow`, a `translate`, so no layout shift); it glides aside when an ad fills a cell.
-  - The tell() bubble is placed again on every layout and resize (it used to stay where the Paste button had been).
-  - The Undo pill sits in the footer's place, and the footer fades out meanwhile (it covered the count on phones).
-  - The footer count never shows less than this browser showed before (`gb-count` in localStorage): a reload could
-    show a lower number than the local growth had reached.
-  - Every icon-only control has a `title` (Download, crop and remove had none).
-- Accessibility (audit 2026-11-22, all 14 findings but `#pick` as a label): a polite `#sr` status line announces each
-  finished or failed photo and a retry's outcome (`announce()`); cards are `aria-busy` while waiting. After a keyboard
-  👍 👎 focus goes to Download (or the card during a retry). A keyboard Remove focuses Undo. The page may scroll when it
-  overflows (`overflow-y: auto`): only at 300-400% zoom in practice; every normal size measured 0 px overflow, so the
-  one-screen rule holds. Focus rings stay visible on the ink Undo pill and the input-backed swatches; swatch focus (ink,
-  offset) differs from the chosen ring (brand). Failed-card text sits on an opaque panel. Light-mode thumbs and swatch
-  rings reach 3:1. Ad sway and cut-out swaps stop after about 24 s (WCAG 2.2.2), never under pointer or focus. Tabbing
-  out of a picker row closes it. The h1 stays in the page, visually hidden, once photos are up.
-  - Short screens (height 520 px or less, a phone on its side): the wordmark sits left of the buttons (buttons go
-    right), the privacy note is hidden, spacing tightens; the empty page shrinks the headline so the footer fits.
-  - Download and Download all shimmer while a big PNG or the zip is built; repeat taps don't start it again. A failed
-    save says so. Failed cards hide Download.
-  - See-through inputs (PNG cut-outs, SVG logos) reach the model on white, or on black when the subject is light.
-    SVGs are drawn at least 2048 px on their longest side.
-  - Drags that start on the page (a cut-out dragged out) are ignored if dropped back on it.
-  - Background (2026-11-22, remove.bg parity): a round button in the bar shows the cut-out's background (see-through,
-    the default, is half checkerboard and half aqua: "this swaps the background"; on a device's first cut-out it rings
-    twice until the picker has been opened, `gb-bg-seen`). Tapping it swaps the bar for a row of swatches at the same height (never over the photo,
-    cards never resize): see-through, white, black, light aqua, sage, any colour (`<input type=color>`, live on the card).
-    A tap on a swatch, outside the bar or Escape closes it. The card, Download, long press, Download all and the
-    partner-ad save follow it; a solid background downloads as a JPG (0.92), see-through stays PNG. Ad card art and the
-    cut-out sent to Zazzle stay see-through. Not for animated GIFs (no button). Kept in IndexedDB (`bg` in the state record).
-    Blur and your own photo (2026-11-22, parity item 4): more swatches. Blur: the photo's own background blurred,
-    the subject sharp; two swatches, soft and strong, that close the row like every other one (until the visitor
-    review it was one swatch that toggled in place). It is made per photo and strength from the preview bitmap at 480 px (never full size), with the subject
-    taken out first (blur of colour x background weight / blur of the weight, so no halo of the subject's colours), box
-    blur two passes, no canvas filter; scaled up wherever drawn. Picking blur switches the card to the whole frame (the
-    portrait-mode look; the crop button puts the crop back; Kevin may want this off). Leaving blur for any other
-    background puts back the crop blur took away (`cropBack`, kept in IndexedDB; cleared when crop is toggled). Your photo: the picture swatch opens
-    a file picker, or drop a picture on the open row or the background button (the full-window drop target steps aside
-    there); decoded once, scaled to 2048 px on iPhones (4096 elsewhere), on iPhones only while no photo is being worked on,
-    cover-fit behind the subject, shared by every photo that uses it (All), never uploaded. Both download as JPG and follow
-    Download all, long press, reload and the partner-ad save; Zazzle gets the see-through crop. `it.bg` holds
-    `"blur:1"`, `"blur:2"` or `"img:<id>"`; everything that paints a background goes through `backdrop()`.
-    **Pages and the dock** (2026-11-22, visitor review: 19 px swatches on phones, colours dropped, WebP cut off): the
-    swatch row and the options row never scroll and never drop or cut a control. `pageRow` measures what fits; the rest
-    goes on the next page, and › at the end turns the page (on the last page it points back). Swatches are 32 px on touch,
-    28 px with a mouse. Pages break between groups (`data-g`; second review: Soft and Strong blur landed on different
-    pages): the colours (see-through, white, black, aqua, sage, any colour), then blur soft + strong (`data-u`, never
-    split) and your photo, then crop and remove when the bar has no room for them; a group is split only when it can't
-    fit on a page of its own. Size, margin, shadow (sliders) is pinned next to › on every page, so it is two taps from
-    the bar (it was background, ›, sliders). With a mouse the rows open in the card's bar, however many pages (the
-    dock at the bottom of a big window was far from the card), unless a page can't hold one control next to the
-    sliders and › (cards under ~130 px, 40+ photos on a laptop: `pagesFit`), which docks: 1440x900 with 1 photo shows every swatch on one page;
-    12 photos (222 px) page the colours 4 + 2, then blur, photo and crop. On touch a row that fits on two pages opens in
-    the bar's place (two rows of swatches on a roomy bar); a narrower card (12 on a phone) opens it in the **dock**
-    (`seat()`): a pill in the footer's place (the footer fades out), the card ringed in teal, nothing over any photo,
-    no card moves.
-  - Output options (2026-11-22, sellers, parity items 5 and 7): the picker's sliders button (pinned next to ›) swaps the swatches
-    for a second row at the bar's height: Size (native select: Original, Square, 4:5, 16:9, Custom W x H up to 5000 px,
-    4096 on iPhones), Margin (0, 4%, 10%, 20% of the subject's longer side; 4% is the old crop; on the whole frame at Original it shows 0%
-    and picking a margin turns the crop on: it used to grey out with no reason given), a ground shadow toggle,
-    Apply to all, WebP, after a Done button (✓, first, so there is always a way back). Shadow and WebP are chips that
-    fill and show a check when on; Apply to all is an action (dashed, a copy icon, "Applied" with a check for a moment;
-    it was an outlined "All" that read as a toggle). Custom's width and height go together and come up on their own page
-    when they don't fit. Phones build the PNG ahead when the row closes, not per change; controls are 16 px on touch (iOS focus zoom). All off by default, and then
-    the output is byte-for-byte the old one. Original never goes past the photo's edges; a ratio grows the canvas around
-    the subject at the photo's own resolution (no resampling); Custom scales into exactly W x H; centred, except that a
-    side where the subject runs off the photo (mask within 1.5/1024 of the edge: a person cut at the waist, a bottle at
-    its base) gets no margin and sits on the canvas edge, and no shadow goes under a cut bottom (visitor review: the cut
-    floated in mid-air with a shadow under it; cut on two opposite sides: centred); the margin is
-    see-through or the background colour (the cut-out is clipped to the subject's box). The shadow is a radial-gradient
-    ellipse under the subject's bottom edge (no canvas filter: Safari). Output capped at 16 MP on iPhones, 64 elsewhere.
-    WebP only where the browser encodes it (a 1x1 test at load; not tested in Safari), quality 0.9,
-    keeps transparency. Card, Download, long press, Download all and the partner-ad save follow; the Zazzle upload and ad
-    art stay the plain see-through crop (`fullBlob(it, true)`). All copies this photo's background and options to every
-    other photo (not GIFs) and to photos added later in this visit (memory only, not across visits). Kept in IndexedDB
-    (`out` in the state record). A see-through Square looks like Original on the card (the checkerboard fills the cell);
-    with a colour the frame shows. No marketplace names in the UI: a see-through square doesn't meet Amazon's white rule.
-  - Removing a photo frees its bitmap and moves any ad card showing it to another cut-out; focus goes to the next card.
+- Remove can be undone for 5 s (Kevin, 2026-11-21): a pill at the bottom, "Removed." + Undo, in the footer's place
+  (the footer fades out), with a ring that runs down (hover or focus pauses it; Cmd/Ctrl+Z works). The deadline is a
+  JS timer (`UNDO_MS`). Undo also finishes a photo removed mid-run. One at a time. Removing frees the bitmap, moves any
+  ad card showing it to another cut-out, and focuses the next card.
+- Messages sit next to what they're about (Kevin, 2026-11-21), one look everywhere: `tell(msg, button)` in app.js shows one
+  bubble pointing at the button (adding photos: Choose photos/Paste, above them once photos are up; a failed save:
+  that Download; a failed zip: Download all), placed again on every layout. An add-photos bubble closes when photos
+  arrive. Trouble with one photo stays on its card. No bottom toast; zip progress is on Download all. Undo is the only
+  thing at the bottom.
+- Download and Download all shimmer while a big PNG or the zip is built; repeat taps don't start it again.
+- Short screens (height 520 px or less): the wordmark sits left of the buttons, the privacy note is hidden, spacing
+  tightens; the empty page shrinks the headline so the footer fits.
+- Drags that start on the page (a cut-out dragged out) are ignored if dropped back on it.
+- Haptics: a light tick on result, crop, 👍/👎 and Download (Android vibrate; iOS 18+ hidden switch control).
 - Buttons follow one small system in style.css (Kevin, 2026-11-21: "a mature design system"): spacing tokens
   `--s1..--s5` (4 px scale), heights `--h-sm/md/lg` (32/40/48), every button a size plus a variant (`.primary`,
   `.ghost`, plain). Set `--h`, `--px`, `--fs` instead of padding by hand. Whimsy: lift on hover, press on click.
-- Palette: the cool side of Giant Goldfish only (aqua, deep teal, sage). No orange; red only for errors.
-- Every claim on the site must stay true, including once ads run.
-- Typical photos: phone camera rolls. People, kids, pets, products, cars. Busy scenes (car interiors, a
-  small cat in a dark yard) are the model's weak spot; don't over-tune for them.
+- Accessibility (audit 2026-11-22, `docs/history.md`): `announce()` reads out finished and failed photos; every
+  icon-only control has a `title`; ad motion stops after about 24 s; the page may scroll only at 300-400% zoom.
 
-Anonymous counts the page sends (never photo data): 👍/👎 to `/api/rate`; crash reports to `/api/crash` (the page
-leaves a note in localStorage while working on a photo; the next visit sends it if the tab died: step, engine,
-device kind, photos done, megapixels); `/api/count` adds one to a single global number in D1
-(`goodbye-bg-counter`, binding COUNTER) per finished cut-out, and every 100th gets confetti (`?confetti=1` forces it).
-The footer: one GET `/api/count` on load (total + pace since a snapshot the row keeps 10 to 20 min back), then it grows
-locally at that pace with random gaps, no more requests (Kevin: "one accurate-ish number on load, then contrived growth";
-it can drift ahead of the real total). A visitor's own cut-out counts at once. Its line is always reserved, so it never moves
-the cards. Shown from the first cut-out (Kevin, 2026-11-20); tapping it throws confetti. Kevin: tests count toward the total, never reset it.
-Test traffic stays out of the A/B, vote and crash data (2026-11-22): a visit with a test switch (`TEST_SWITCHES` in app.js:
-adtest, adpartner, adv, engine, gpufail, model, threads, nowarm, haze, keepmax, keepmb, maxbatch, zazzlecap, confetti,
-debug; not ref/utm/url/share) or `navigator.webdriver` adds `t=1` to its `/go/` links and beacons and `"t": 1` to its
-`/api/rate` and `/api/crash` bodies (and to its crash note). `lib/test-traffic.mjs` drops those, and anything from a
-`HeadlessChrome` User-Agent, without writing; the answers are unchanged (204, and `/go/` still redirects). The page
-still sends them because the suites read those requests. `/api/count` (counter and page views) is not filtered. The
-local server never writes analytics (no RATINGS binding); only `/api/count` reaches production from the suites.
-Haptics: a light tick on result, crop, 👍/👎 and Download (Android vibrate; iOS 18+ hidden switch control).
-iPhone 16 MP PNG crash (crash step "png", one report): a full-size PNG built on iOS now first stops the engine if it is
-up and nothing is waiting for it (`fullBlob`, debug step `engine-png`); the export stays full size (the pages promise the
-photo's own resolution). Untested on a real iPhone. iPhones shut the engine down once idle (its ~1.8 GB never shrinks; 7 to 8 photos in one tab crashed Safari).
+## Card bar
 
-Crash reports carry the page's last 20 steps (blob6; the same step names as `?debug=1`, kept in memory and in the
-localStorage note, never sent unless something fails). Page views: the page's first GET `/api/count?view=1&from=<host>`
-writes blob1 'view', blob2 device, blob3 referring host, blob4 country (no IP, no cookies). A Pages Function on `/`
-was avoided: `_headers` (COEP/COOP, which give iPhones their threads) would not apply to its responses.
+Bar order: crop, background, Download, 👍 👎, remove. Every bar control is 32 px (`--h-sm`); icons rest at full
+strength on a faint ink chip; crop when on has a teal ring on an aqua tint. The bar drops controls so Download stays
+at least ~40 px wide (card widths, style.css): 242+ px everything; 206 to 241 no crop; 162 to 205 no crop and no remove,
+👍 👎 stay (Kevin, 2026-11-21: voting beats crop); 130 to 161 background, Download, remove; under 130 background and
+Download. What the bar hides rides along in the background picker (`wantcrop`/`wantx`), so crop and remove are never
+lost. Cards without a picker (waiting, failed, GIFs) keep remove in the background button's place.
+- **Roomy bars**: on touch screens only, when cards fill the width first with height to spare (a phone in portrait
+  with 1 to 4 photos), `.grid.roomy` gives the bar a second row: background + Download, then crop, 👍 👎, remove. With
+  a mouse the bar is always one row. Ad cards keep a one-row bar.
+- A last row with empty cells sits in the middle (`centreLastRow`, a `translate`, no layout shift).
 
-Ads (affiliate, Kevin 2026-11-20): `lib/partners.mjs` lists partners (Printful, Printify, Zazzle; Canva's program is closed to us); one shows only once its
-`url` holds Kevin's affiliate link (`?adtest=1` shows them all, linking to home pages). Each card is a different product, never a repeat: a partner with
-one variant (Printful, Printify) leaves the other reserved cells empty. The ad card fills a grid cell
-that would otherwise be empty, after the batch is done, one partner per visit, marked "Ad", not in Download all, no
-rating. Links go through `/go/<id>` (functions/go/[id].js), which counts the click (blob1 'adclick') and redirects;
-a POST there counts the card being shown ('adseen'). EthicalAds would need the below-results slot (their rules forbid
-ads inside the main content) and a proxy (Safari blocks their images under COEP require-corp).
+## Backgrounds and options
 
-Ads fill the grid (Kevin, 2026-11-20: "always fill the grid"): up to 3 photos are laid out as 4 cells (1 photo + 3 ads,
-2 + 2, 3 + 1); more photos fill out their last row. The cells are reserved from the start so photos don't resize when
-the ads arrive after the batch. Each card is a different variant (product), using a different cut-out when there are
-several, and with 2+ cut-outs one card at a time changes cut-out every 4 s, round-robin (the old one dips out, the
-next rises in), starting a full beat after ads come on screen; off when hidden or with reduced motion. Ads appear once the first cut-out is done; they wait 1.1 s after it (the cut-out gets the stage), come in one after another with a shimmering placeholder, and each product rises in once drawn (at least 0.45 s after its card), and the 3D code is fetched while the first photo is still being worked on. The label is centered. Products follow light/dark (black mug/shirt/tote in dark mode). Button names the product ("Put it on a mug", "Put it on a sticker", ...; it was "Make a mug" until the click took the cut-out along), outlined so Download stays the loud button. Ad cards are quieter than a photo card (2026-11-22, visitor review: same surface as the result): no card surface, no fill, a solid hairline (dashes read as empty slots or drop targets and vanished in dark mode, second review).
-Zazzle cards take the cut-out along (Create-a-Product, Kevin 2026-11-21: the click implies it, no interstitial;
-the button says "Put it on a mug"; no footer line (Kevin: the hero says "cut out right on your device" where people decide); the remove.bg page's FAQ has the details). The click PUTs the cut-out shown on the card (at most 2400 px) to `/api/cap/<random key>` (R2
-bucket goodbye-bg-cap, binding CAP) and opens `/go/zazzle?...&k=<key>`, which waits up to 10 s for it and redirects to
-that product's template in Kevin's store goodbyebg with the image on it. Zazzle copies the image on the first fetch;
-`/cap/<key>.png` deletes ours 20 s later (never fetched: gone after an hour; a lifecycle rule clears `cap/` after a
-day). Upload fails or times out: the usual link, and computers still get the cut-out saved. GIFs and
-`?zazzlecap=0` keep the old behaviour. Clicks that sent one count as 'adcap' next to 'adclick'. Templates, findings and
-the open commission question (Ambassador agreement §2.1.3, asked of api.help@zazzle.com 2026-11-21) in
-`docs/zazzle-cap.md`.
+remove.bg parity (`docs/removebg-parity.md`). A round button in the bar shows the cut-out's background (see-through,
+the default, is half checkerboard and half aqua; on a device's first cut-out it rings twice until opened,
+`gb-bg-seen`). Tapping it swaps the bar for a row of swatches at the same height (never over the photo, cards never
+resize). A tap on a swatch, outside the bar or Escape closes it.
+- Swatches: see-through, white, black, light aqua, sage, any colour (`<input type=color>`, live); blur soft and strong
+  (the photo's own background blurred at 480 px with the subject taken out first, box blur, no canvas filter); your
+  own photo (picker, or drop on the row or button; 2048 px on iPhones, 4096 elsewhere; shared by every photo that
+  uses it; never uploaded). `it.bg` holds a colour, `"blur:1"`, `"blur:2"` or `"img:<id>"`; everything that paints a
+  background goes through `backdrop()`.
+- Picking blur switches the card to the whole frame (the portrait-mode look; Kevin may want this off); leaving blur
+  puts the crop back (`cropBack`).
+- Rows never scroll and never cut a control: `pageRow` pages them (›), breaking between groups; the sliders button
+  sits next to › on every page. Narrow cards open the rows in the **dock** (`seat()`): a pill in the footer's place,
+  the card ringed in teal, nothing over any photo.
+- Output options (sliders): Size (Original, Square, 4:5, 16:9, Custom up to 5000 px, 4096 on iPhones), Margin (0, 4%,
+  10%, 20% of the subject's longer side; 4% is the crop), ground shadow, Apply to all (this visit, not GIFs), WebP
+  (where the browser encodes it). All off by default, and then the output is byte-for-byte the old one. A side where
+  the subject runs off the photo gets no margin and no shadow. Output capped at 16 MP on iPhones, 64 elsewhere.
+- The card, Download, long press and Download all follow the background and options; a solid, blur or photo
+  background downloads as JPG (0.92), see-through as PNG (or WebP). Ad art, ad-click saves and the Zazzle upload are
+  always the plain see-through crop (`plainBlob`). Kept in IndexedDB (`bg`, `out`). No marketplace names in the UI.
+- Phones build the PNG ahead when a row closes, only when no batch or retry is running.
 
-Products render in real 3D (src/render3d.js + Three.js 0.187.0, MIT, bundled by esbuild into dist/render3d.mjs,
-~150 KB gzipped, loaded only when ads show): lathe-turned glazed mug with a real handle, die-cut vinyl sticker with a
-peeling corner, canvas tote with straps front and back, flat-lay t-shirt with folds, porcelain ornament on a gold cap with a ribbon,
-phone case with camera bump, throw pillow, die-cut acrylic keychain; physical materials, a studio
-environment (RoomEnvironment, no download), a soft blob shadow (not a shadow map: on iPhones the shadow test failed and the
-whole floor turned into a dark slab); each product sways slowly and leans toward a moving mouse, a few degrees at most; one shared WebGL context, ~20 ms a render. The 2D canvas
-drawings in app.js are the fallback (crash step '3d-failed'). The mug camera centres on the body, not the handle.
+## Offline
 
-Clicking a non-Zazzle ad card (or any card with `?zazzlecap=0`) saves the cut-out shown on it (the card keeps that photo as `artIt`) as the see-through PNG whatever the card's background, size or format (`plainBlob`, also what Zazzle gets), ready to upload on the partner's site: a normal download on computers; on phones the share sheet comes first (Safari won't save from a tab that went to the background), then the partner opens (tested in the iOS Simulator 2026-11-21).
+`src/sw.js` keeps the app on the device; online it behaves as before. The build writes its file list into sw.js (`%SW%`).
+- Shell: network first (deploys are live at once), a per-build copy (`gb-shell-<build>`) answers offline.
+- `rt/` and `m/`: cache first, one `gb-*` cache each; activate deletes `gb-*` caches not in the list (never
+  `share-inbox`). Parts fetched before the worker took over are fetched again (`whole()`), up to 40 MB once.
+- Never cached: `/api/`, `/go/`, `/cap/`, `/version.txt`, `/ad.html`, `/sw.js`, non-GET. Stored responses keep
+  COOP/COEP/CSP, so offline the CPU engine still has threads. No install prompt UI.
+- Not offline: the CPU fallback on a computer that only ever ran the GPU engine; the first page after an upgrade;
+  link fetching and ad clicks. Tested in headless Chrome only (`scripts/test/offline.mjs`). **Not claimed on the site**
+  until Kevin checks Safari (then add "Works offline after your first cut-out").
 
-Zazzle variant "mug" (the A): the visitor's first finished cut-out drawn on a mug in a canvas on the device
-(drawMug in app.js: cylinder wrap column by column, shading, rim, shadow); drawing it uploads nothing; Zazzle gets
-the image only when the card is clicked. Variant "b": "Put your cut-out on anything." Both go to zazzle.com/custom. `?adv=<v>` forces a
-variant, `?adtest=1` shows partners without links.
+## Ads and Zazzle
 
-Ad blockers hide the card (class names like `adcard`) and block `/go/` beacons; that is the visitor's choice, so we
-don't work around it. A failing card is reported as crash step 'ad-failed' or 'mug-failed' (the mug falls back to the
-emoji) instead of disappearing silently.
+Ads (affiliate, Kevin 2026-11-20): `lib/partners.mjs` lists partners (Printful, Printify, Zazzle; Canva's program is
+closed to us); one shows only once its `url` holds Kevin's affiliate link (`?adtest=1` shows them all, linking to home
+pages). Today only Zazzle has a link. One partner per visit. Each card is a different product, never a repeat: a
+partner with one variant (Printful, Printify) leaves the other reserved cells empty. Marked "Ad" or "Sponsored"
+(random per visit), not in Download all, no rating. Links go through `/go/<id>`, which counts the click ('adclick')
+and redirects; a POST there counts the card being shown ('adseen').
+- Ads fill the grid (Kevin, 2026-11-20: "always fill the grid"): up to 3 photos are laid out as 4 cells (1 photo + 3
+  ads, 2 + 2, 3 + 1); more photos fill out their last row. The cells are reserved from the start so photos don't
+  resize. Ads appear once the first cut-out is done, 1.1 s after it (`ADS_PAUSE`), one after another with a shimmering
+  placeholder; the 3D code is fetched while the first photo is worked on.
+- Zazzle's 8 variants draw the visitor's cut-out on a product (mug, sticker, shirt, tote, ornament, phone case, pillow,
+  keychain), a different cut-out per card when there are several; with 2+ one card at a time swaps cut-out every 4 s.
+  The button names the product ("Put it on a mug"), outlined so Download stays the loud button. Ad cards have no
+  surface, a solid hairline. Products follow light/dark.
+- Products render in 3D (`src/render3d.js` + Three.js 0.187.0, MIT, ~150 KB gzipped, loaded only when ads show): a
+  blob shadow (a shadow map turned the floor into a dark slab on iPhones), slow sway, a lean toward the mouse; one
+  shared WebGL context. The 2D drawings in app.js (`drawMug` and friends) are the fallback (crash step '3d-failed').
+- Zazzle cards take the cut-out along (Create-a-Product, Kevin 2026-11-21: the click implies it, no interstitial;
+  no footer line (Kevin: the hero says "cut out right on your device" where people decide); the remove.bg page's FAQ
+  has the details). The click PUTs the cut-out shown on the card (see-through, at most 2400 px) to
+  `/api/cap/<random key>` (R2 bucket goodbye-bg-cap, binding CAP) and opens `/go/zazzle?...&k=<key>`, which waits up to
+  10 s for it and redirects to that product's template in Kevin's store goodbyebg. Zazzle copies the image on the
+  first fetch; `/cap/<key>.png` deletes ours 20 s later (never fetched: gone after an hour; a lifecycle rule clears
+  `cap/` after a day). Upload fails or times out: the usual link, and computers still get the cut-out saved. Clicks
+  that sent one count as 'adcap'. Templates, findings and the open commission question in `docs/zazzle-cap.md`.
+- Other partners, GIFs, or `?zazzlecap=0`: the partner opens in a new tab and this tab saves the cut-out on the card
+  (`artIt`) as the plain see-through PNG (`plainBlob`): a download on computers; on phones the share sheet first
+  (Safari won't save from a tab that went to the background), then the partner (tested in the iOS Simulator).
+- Ad blockers hide the card and block `/go/` beacons; that is the visitor's choice, so we don't work around it. A
+  failing card is reported as 'ad-failed' or 'mug-failed'. EthicalAds: see `docs/ads.md`.
 
-Product test: Zazzle's variants are products drawn from the visitor's cut-out (mug, sticker, shirt, tote; drawProduct
-functions in app.js, light and dark) plus "b" (text card); one per visit. Button-wording test: "Make it on Zazzle" vs
-"Make it", blob7 = c (0 or 1), independent of the product and the label.
+## Analytics and test traffic
 
-Reading the ad A/B test (blob5 = variant): `SELECT blob1 AS kind, blob2 AS partner, blob5 AS variant, count() AS n
-FROM goodbye_bg_ratings WHERE blob1 IN ('adseen','adclick') GROUP BY kind, partner, variant` (clicks / shows per variant;
-expect a few hundred clicks per variant before trusting a difference). Label test, independent of the variant:
-blob6 = 'ad' or 'sponsored' (the card's label, picked at random per visit); group by blob6 the same way.
+Anonymous counts the page sends (never photo data), to Workers Analytics Engine dataset `goodbye_bg_ratings`:
+- 👍/👎 to `/api/rate`: blob1 vote, blob2 engine, blob3 first/retry, double1 ms, double2 megapixels.
+- Crash reports to `/api/crash`: the page leaves a note in localStorage while working on a photo; the next visit sends
+  it if the tab died (blob2 engine, blob3 step, blob4 device, blob6 the last 20 steps, double1 photos done, double2
+  megapixels). GPU step-downs are sent at once.
+- Page views: the first GET `/api/count?view=1&from=<host>` writes blob1 'view', blob2 device, blob3 referring host,
+  blob4 country (no IP, no cookies). Launch links can carry `?ref=<tag>` (or `utm_source`), sent as `from=ref.<tag>`
+  and then taken out of the address bar. A Pages Function on `/` was avoided: `_headers` (COEP/COOP) would not apply.
+- Ads (`functions/go/[id].js`): blob1 'adseen'/'adclick'/'adcap', blob2 partner, blob5 variant, blob6 label ('ad' or
+  'sponsored'), blob7 cta index.
+- The count: `/api/count` adds one to a single global number in D1 (`goodbye-bg-counter`, binding COUNTER) per
+  finished cut-out; every 100th gets confetti (`?confetti=1` forces it). The footer ("Goodbye to N backgrounds since
+  2026."): one GET on load (total + pace since a snapshot the row keeps 10 to 20 min back), then it grows locally at
+  that pace with random gaps, no more requests (Kevin: "one accurate-ish number on load, then contrived growth"; it can
+  drift ahead of the real total). It never shows less than this browser showed before (`gb-count`). A visitor's own
+  cut-out counts at once. Its line is always reserved. Shown from the first cut-out (Kevin, 2026-11-20); tapping it
+  throws confetti. Kevin: tests count toward the total, never reset it.
+- Test traffic: a visit with a test switch (`TEST_SWITCHES`) or `navigator.webdriver` marks its `/go/`, `/api/rate` and
+  `/api/crash` requests `t=1`; `lib/test-traffic.mjs` drops those and `HeadlessChrome` unwritten. `/api/count` is not filtered.
 
-Referrers (2026-11-22): blob3 was empty because the visits had none (typed, bookmarked, apps); a cross-site click does
-send its host (tested). Launch links can carry `?ref=<tag>` (or `utm_source`): the page sends it as `from=ref.<tag>`
-(a-z 0-9 . - only, 40 chars) and takes `ref`/`utm_*` out of the address bar so a shared link doesn't count again.
-E.g. `https://goodbye.bg/?ref=hn` shows up as blob3 `ref.hn`. No change to functions/.
+Queries (`POST /accounts/<account>/analytics_engine/sql`, text/plain body):
 
-Reading views: `SELECT toDate(timestamp) AS day, blob2 AS device, blob3 AS from_site, count() AS views
-FROM goodbye_bg_ratings WHERE blob1 = 'view' GROUP BY day, device, from_site ORDER BY day DESC`
-
-Reading crashes: `SELECT blob2 AS engine, blob3 AS step, blob4 AS device, count() AS n, avg(double1) AS done,
-avg(double2) AS mp FROM goodbye_bg_ratings WHERE blob1 = 'crash' GROUP BY engine, step, device`
-
-Reading ratings (Workers Analytics Engine, dataset `goodbye_bg_ratings`; blob1 vote, blob2 engine,
-blob3 first/retry, double1 ms, double2 megapixels):
-
-    POST /accounts/<account>/analytics_engine/sql   (text/plain body)
     SELECT blob1 AS vote, blob2 AS engine, blob3 AS kind, count() AS n, avg(double1) AS ms
     FROM goodbye_bg_ratings GROUP BY vote, engine, kind ORDER BY n DESC
+    SELECT blob2 AS engine, blob3 AS step, blob4 AS device, count() AS n, avg(double1) AS done, avg(double2) AS mp
+    FROM goodbye_bg_ratings WHERE blob1 = 'crash' GROUP BY engine, step, device
+    SELECT toDate(timestamp) AS day, blob2 AS device, blob3 AS from_site, count() AS views
+    FROM goodbye_bg_ratings WHERE blob1 = 'view' GROUP BY day, device, from_site ORDER BY day DESC
+    SELECT blob1 AS kind, blob2 AS partner, blob5 AS variant, count() AS n
+    FROM goodbye_bg_ratings WHERE blob1 IN ('adseen','adclick') GROUP BY kind, partner, variant
+
+Ad tests: clicks / shows per variant (blob5) or label (blob6); expect a few hundred clicks per variant before trusting
+a difference.
+
+## Testing
+
+- `npm run test` (`scripts/test/smoke.mjs`; `--no-build`, `CHROME=`): headless Chrome over DevTools, a fresh profile per
+  check, exit 1 on failure. Test photos are generated; each cut-out adds to the public count; ads are never clicked.
+- `npm run test:x` (`scripts/test/xbrowser.mjs`; `--browser webkit|firefox`, `--device desktop|iphone`): WebKit desktop,
+  WebKit iPhone (share sheet stubbed), Firefox. Persistent profiles (ephemeral WebKit acts like Private Browsing).
+- What each covers and the 2026-11-22 results: `docs/history.md`. In short, WebKit runs BiRefNet on WebGPU on the Mac,
+  2 CPU threads on the iPhone profile, HEIC natively, no WebP encoding (button hidden).
+- Not covered anywhere: real iOS memory limits, the real share sheet, touch gestures, real Safari, a real weak GPU.
 
 ## Next steps
 
-1. Mac Safari picks the GPU engine (BiRefNet); it works in Playwright's WebKit 27.2 (see Commands), not yet checked in
-   Safari itself. A smaller GPU footprint might make WebGPU safe on iPhones again (try once ORT or the model changes).
-2. BiRefNet untested on Windows and Linux GPUs and 8 GB Macs (3 GB GPU peak).
-3. Not yet tested on real devices: Android share target, desktop "Open with", folder drops, live link fetching.
+1. Real-device tests: Mac Safari (BiRefNet on WebGPU; the 2-minute check in `docs/platforms-and-phone-model.md`), a
+   real iPhone (engine restart after idle, the 16 MP PNG, the share sheet after Download all), Android (share target,
+   install), desktop "Open with", folder drops, live link fetching; BiRefNet on Windows and Linux GPUs and 8 GB Macs.
+2. Offline claim: check offline in Safari, then add "Works offline after your first cut-out" to the site and launch kit.
+3. Open draft PRs for Kevin to decide: #2 mask editing (tap pieces, erase/restore brush, undo), #3 phones on BiRefNet
+   lite at 640 instead of ISNet (`docs/platforms-and-phone-model.md`), #4 guided filter for hair edges (`?pp=1`).
+   Branch `bulk-cli` (a desktop bulk tool) has no PR. No i18n PR exists.
+4. A smaller GPU footprint might make WebGPU safe on iPhones again (try once ORT or the model changes).
 
 ## Open items outside the code
 
+- Zazzle: the commission question (Ambassador agreement §2.1.3, asked of api.help@zazzle.com 2026-11-21) is unanswered.
 - Domain goodbye.bg ordered at Netim (trustee service) on 2026-11-19, waiting on the trustee ID check.
-  Nameservers are set to Cloudflare (`lou.ns.cloudflare.com`, `mira.ns.cloudflare.com`). When it registers:
-  click "Check nameservers" on the zone, then add goodbye.bg as a custom domain on `goodbye-bg-git`.
+  Nameservers are set to Cloudflare (`lou.ns.cloudflare.com`, `mira.ns.cloudflare.com`). When it registers, follow
+  `docs/domain-cutover.md` (check nameservers on the zone, add goodbye.bg as a custom domain on `goodbye-bg-git`).
 - Git email: repo uses the GitHub noreply address. The first commit (aa3d4bd) still has the work email;
   fix with `git commit --amend --reset-author --no-edit && git push --force-with-lease` if wanted.
 - License: repo is AGPL-3.0 because the ISNet model is AGPL. BiRefNet (MIT) only replaces it on computer GPUs;
