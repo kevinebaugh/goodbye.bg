@@ -109,7 +109,12 @@ a PNG for an hour. Mitigations:
   `/go` falls back after 10 s to the usual page. Not tested on a device.
 - The buttons are `role=button` spans inside the card's `<a>`, with Enter/Space wired up: fine for a prototype,
   not great for accessibility. If this ships, the card should become a `<div>` with a real link and real buttons.
-- Tested on zazzle.com with an image from goodbye-bg-git.pages.dev, not yet through the R2 upload (no bucket yet).
+- Tested on the preview with the R2 bucket (2026-11-21):
+  - PUT returned 201, a repeat PUT 409, and a cross-site PUT 403. R2 honours `onlyIf: { etagDoesNotMatch: "*" }`.
+  - `/go` redirected to the mug link with `/cap/<key>.png`.
+  - Opening that link, Zazzle fetched the image, and our copy returned 404 thirty seconds later.
+  - Zazzle reused the image ID of an identical image fetched earlier, so it also dedupes by content.
+  - Not yet tested with a real photo through the page on a phone.
 - The mug's slot is centred on the wrap, so the cut-out faces away from the handle: half visible in the "Left" view,
   whole in the Center view. Moving it to the front for right-handed drinkers is a Zazzle-side tweak.
 
@@ -171,7 +176,7 @@ deletes our copy 20 s after the first fetch.
 1. **Commission question** (api.help@zazzle.com): do sales through these links earn the self-promotion rate when
    the image is a visitor's photo (agreement §2.1.3)? The templates exist either way; if the answer is no, the
    feature still lands visitors on a ready product, but it pays like the plain link or not at all.
-2. Create the R2 bucket and its cleanup rule (Claude wasn't allowed to change the Cloudflare account):
+2. Done 2026-11-21 (Kevin): R2 bucket and its cleanup rule. The binding is in `wrangler.toml`.
 
         npx wrangler r2 bucket create goodbye-bg-cap
         npx wrangler r2 bucket lifecycle add goodbye-bg-cap cap-1-day cap/ --expire-days 1
