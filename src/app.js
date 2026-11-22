@@ -77,8 +77,19 @@ let running = false, uid = 0, lastMs = 0, lastEngine = ""; // lastEngine: what m
    adding photos at Choose photos and Paste, a failed save at that Download, a failed zip at Download all. Trouble
    with one photo is said on its card instead (see fail). Below the button, or above it when there's no room. */
 function tell(msg, at = $("pick").parentElement, ms = 4500) {
-  const t = $("tell"), r = at.getBoundingClientRect(), gap = 10;
-  t.textContent = msg; t.hidden = false; t.classList.remove("above");
+  const t = $("tell");
+  t.textContent = msg; t.hidden = false; t.at = at;
+  placeTell();
+  t.classList.remove("in"); void t.offsetWidth; t.classList.add("in");
+  clearTimeout(t.timer); t.timer = setTimeout(() => (t.hidden = true), ms);
+}
+// Placed again whenever the layout moves (the first photos, a resized window), so it never points at empty space.
+function placeTell() {
+  const t = $("tell"), at = t.at;
+  if (t.hidden || !at) return;
+  if (!at.isConnected || !at.getClientRects().length) { t.hidden = true; return; } // its button is gone
+  const r = at.getBoundingClientRect(), gap = 10;
+  t.classList.remove("above");
   const w = t.offsetWidth, h = t.offsetHeight, mid = r.left + r.width / 2;
   // With photos on screen, a message about adding photos goes above the buttons: below it would cover the photos.
   const overCards = document.body.classList.contains("has-work") && (at === $("pick").parentElement || at === $("paste"));
@@ -88,10 +99,8 @@ function tell(msg, at = $("pick").parentElement, ms = 4500) {
   t.style.top = `${(above ? r.top - gap - h : r.bottom + gap) + scrollY}px`;
   t.style.setProperty("--cx", `${mid - x}px`); // the pointer stays on the button even when the bubble is pushed in from an edge
   t.classList.toggle("above", above);
-  t.classList.remove("in"); void t.offsetWidth; t.classList.add("in");
-  clearTimeout(t.timer); t.timer = setTimeout(() => (t.hidden = true), ms);
 }
-addEventListener("resize", () => ($("tell").hidden = true)); // its place was measured for the old layout
+addEventListener("resize", placeTell);
 // Setup progress goes to the console only. People need to know when something fails, not how it is going.
 let lastStatus = "";
 function status(msg) { if (msg !== lastStatus) console.info(`goodbye.bg: ${(lastStatus = msg)}`); }
@@ -1177,9 +1186,9 @@ function makeCard(it) {
   canvas.setAttribute("role", "img"); canvas.setAttribute("aria-label", "Image");
   const busy = document.createElement("div"); busy.className = "busy";
   card.classList.add("queued"); // waits quietly; only the photo being worked on waves and talks
-  const x = document.createElement("button"); x.type = "button"; x.className = "x"; x.textContent = "×"; x.setAttribute("aria-label", "Remove");
+  const x = document.createElement("button"); x.type = "button"; x.className = "x"; x.textContent = "×"; x.setAttribute("aria-label", "Remove"); x.title = "Remove";
   const crop = document.createElement("button"); crop.type = "button"; crop.className = "crop"; crop.style.visibility = "hidden"; // keeps its place, so the bar never shifts
-  crop.setAttribute("aria-label", "Crop to subject"); crop.setAttribute("aria-pressed", "true");
+  crop.setAttribute("aria-label", "Crop to subject"); crop.title = "Crop to subject"; crop.setAttribute("aria-pressed", "true");
   crop.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M2 6h14a2 2 0 0 1 2 2v14"/></svg>';
   const img = document.createElement("img"); img.alt = "Cut-out"; img.draggable = true;
   img.addEventListener("touchstart", () => holdFull(it), { passive: true });
@@ -1187,7 +1196,7 @@ function makeCard(it) {
   pic.append(canvas, img, busy);
   const bar = document.createElement("div"); bar.className = "bar";
   const dl = document.createElement("button"); dl.type = "button"; dl.className = "btn primary dl"; dl.disabled = true;
-  dl.setAttribute("aria-label", "Download");
+  dl.setAttribute("aria-label", "Download"); dl.title = "Download";
   dl.innerHTML = '<span>Download</span><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>';
   const up = document.createElement("button"), down = document.createElement("button");
   for (const [b, label, emoji] of [[up, "Good result", "👍"], [down, "Bad result", "👎"]]) {
@@ -1436,6 +1445,10 @@ function offerUndo(u) {
   pendingUndo = u;
   const bar = $("undo"), ring = bar.querySelector(".ring circle");
   bar.hidden = false;
+  // In the footer's place (the footer fades out meanwhile), so it covers neither the count nor the cards.
+  const f = document.querySelector(".foot").getBoundingClientRect();
+  bar.style.bottom = `${Math.max(8, Math.round(innerHeight - f.bottom + (f.height - bar.offsetHeight) / 2))}px`;
+  document.body.classList.add("undoing");
   ring.style.animation = "none"; void ring.getBoundingClientRect(); ring.style.animation = ""; // restart the countdown
   undoLeft = UNDO_MS; undoClock();
 }
@@ -1452,14 +1465,14 @@ function undoClock() {
 for (const ev of ["pointerenter", "focusin"]) $("undo").addEventListener(ev, () => { if (undoTimer) { clearTimeout(undoTimer); undoTimer = 0; undoLeft = Math.max(0, undoLeft - (performance.now() - undoAt)); } });
 for (const ev of ["pointerleave", "focusout"]) $("undo").addEventListener(ev, () => setTimeout(undoClock, 0));
 function settle(u) {
-  if (pendingUndo === u) { pendingUndo = null; $("undo").hidden = true; }
+  if (pendingUndo === u) { pendingUndo = null; $("undo").hidden = true; document.body.classList.remove("undoing"); }
   const { it } = u; it.gen = -1;
   for (const url of [it.previewUrl, it.fullUrl, it.gifUrl]) if (url) URL.revokeObjectURL(url);
   unshow(it);
 }
 function undoRemove() {
   const u = pendingUndo; if (!u) return;
-  pendingUndo = null; $("undo").hidden = true;
+  pendingUndo = null; $("undo").hidden = true; document.body.classList.remove("undoing");
   const { it, card, at, next } = u, g = $("grid");
   // Back where it was: before the card that followed it, else after the photos (ahead of the ads and Download all).
   const before = next?.parentNode === g ? next : g.querySelector(".adcard") || $("tools");
