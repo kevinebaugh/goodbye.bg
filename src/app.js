@@ -19,8 +19,8 @@ const AD_SRC = "ad.html";    // later: ad.html on its own origin, e.g. https://a
 const QUIPS = [
   "Asking the background to leave…",
   "Showing the backdrop the door…",
-  "Packing the background's bags…",
-  "It's not you, background. It's us.",
+  "Packing the background’s bags…",
+  "It’s not you, background. It’s us.",
   "Waving goodbye…",
   "Cutting ties with the background…",
   "Reticulating splines…",
@@ -228,9 +228,13 @@ async function confetti(from) {
 // The footer count: one request on load for the total and the recent pace (Kevin: "one accurate-ish number on
 // load, then contrived growth"), then it grows here at that pace, one at a time at random moments, with no more
 // requests. It never goes backwards. This visitor's own cut-outs count at once (that request is made anyway).
-let countShown = -1, countPace = 0, countTimer = 0;
+// A reload never shows a lower number than this browser saw last (the local growth can run ahead of the real total).
+const COUNT_KEY = "gb-count";
+let countShown = -1, countPace = 0, countTimer = 0, countMax = 0;
+try { countMax = +localStorage.getItem(COUNT_KEY) || 0; } catch {}
 function renderCount(v) {
   countShown = v;
+  if (v > countMax) { countMax = v; try { localStorage.setItem(COUNT_KEY, String(v)); } catch {} }
   const el = $("count");
   if (v <= 0) return;
   el.classList.add("on"); el.tabIndex = 0;
@@ -261,7 +265,7 @@ function ownCount(n) { renderCount(Math.max(countShown + 1, n || 0)); }
   }
   try {
     const r = await (await fetch(`/api/count?view=1&from=${encodeURIComponent(from === location.hostname ? "" : from)}`)).json();
-    if (r.n >= 0) renderCount(Math.max(countShown, r.n));
+    if (r.n >= 0) renderCount(Math.max(countShown, r.n, countMax));
     countPace = r.perMin || 0; growCount();
   } catch {}
 })();
@@ -1115,7 +1119,7 @@ async function decodeElsewhere(blob) {
       w.postMessage({ buf, name: blob.name || "", type: blob.type || "" }, [buf]);
     });
     if (r.bitmap) return r.bitmap;
-    throw new Error(r.say ? r.error : r.raw ? "This RAW file has no full-size preview inside. Export it as JPG first." : "This file isn't an image goodbye.bg can open.");
+    throw new Error(r.say ? r.error : r.raw ? "This RAW file has no full-size preview inside. Export it as JPG first." : "This file isn’t an image goodbye.bg can open.");
   } finally { w.terminate(); }
 }
 

@@ -32,7 +32,7 @@ export async function onRequestGet({ request }) {
     const found = previewImage(html);
     if (!found) return fail(415, "That page has no image we can find. Try a direct image link.");
     let next;
-    try { next = new URL(found, res.url || url); } catch { return fail(415, "That page's image link is broken."); }
+    try { next = new URL(found, res.url || url); } catch { return fail(415, "That page’s image link is broken."); }
     res = await get(next);
     if (!(res instanceof Response)) return res;
     if (!res.ok) return fail(502, `The other site answered ${res.status}.`);
