@@ -158,9 +158,9 @@ for (const w of [birefnet, birefnet640]) {
 // top-level names; early.js is a classic script, so its names stay (no format given).
 const minify = async (f, opts) => writeFileSync(join(dist, f), (await esbuild.transform(readFileSync(join(dist, f), "utf8"), { minify: true, legalComments: "none", ...opts })).code);
 if (!process.env.NO_MINIFY) {
-  for (const f of ["app.js", "edit.js", "engine.js"]) await minify(f, { loader: "js", format: "esm", target: "es2022" });
+  for (const f of ["app.js", "engine.js"]) await minify(f, { loader: "js", format: "esm", target: "es2022" });
   await minify("early.js", { loader: "js", target: "es2022" });
-  for (const f of ["style.css", "edit.css"]) await minify(f, { loader: "css" });
+  await minify("style.css", { loader: "css" });
 }
 
 // The service worker's version list (src/sw.js). Shell: the app page's files with a hash each, so an update keeps
