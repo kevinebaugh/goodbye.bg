@@ -64,6 +64,9 @@ Two models, three tiers. `src/engine.js` runs ONNX Runtime Web 1.31.1 in its own
 pixels, the worker builds its model's input. Both models are fixed at 1024x1024.
 - **BiRefNet lite** (MIT, fp16, 93 MB after the rewrite) on WebGPU, computers only (`any-pointer: fine`): 280 to 300 ms
   a photo, GPU peak +3.0 GB. ImageNet mean/std in, logits out (the worker applies the sigmoid).
+  `refineEdge` in app.js (`docs/mask-postprocess.md`; `?pp=0` off, skipped for ISNet and GIF frames): a colour guided
+  filter redraws the mask from the photo in soft zones wider than 3 px (hair, fur, fluff); crisp edges stay. Held-out
+  half: 12 photos better, 0 worse. Streams rows (12 MB at most); 0.27 s median at 6x CPU throttling, 45 ms unthrottled.
 - **ISNet medium** (IMG.LY, fp16, AGPL, 88 MB) on WebGPU: 150 to 300 ms a photo, GPU peak +1.0 GB. Input (x-128)/256,
   output 0..1. `hardenHaze` in app.js (ISNet only; `?haze=0` off): wide half see-through areas become solid at 0.3 or
   more, else clear.
@@ -105,7 +108,7 @@ second pass (worse on both models).
 Test switches: `?engine=gpu|cpu` (a forced gpu never falls back to the CPU; BiRefNet can still step down to ISNet),
 `?model=isnet|birefnet` (`birefnet` turns the gate off), `?threads=N`, `?nowarm=1`,
 `?gpufail=init|run|hang` (every GPU tier) or `birefnet-init|birefnet-oom|birefnet-slow|birefnet-slowrun` (BiRefNet only),
-`?haze=0`, `?keepmax=N`, `?keepmb=N`, `?maxbatch=N`, `?adtest=1`, `?adpartner=zazzle|printful|printify`, `?adv=<v>`,
+`?haze=0`, `?pp=0`, `?keepmax=N`, `?keepmb=N`, `?maxbatch=N`, `?adtest=1`, `?adpartner=zazzle|printful|printify`, `?adv=<v>`,
 `?zazzlecap=0`, `?confetti=1`, `?debug=1`.
 
 Debugging on phones: `?debug=1` sends step names and numbers (never photo data) to `/api/diag`, which

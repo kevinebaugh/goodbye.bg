@@ -20,15 +20,17 @@ Contact sheets hold dataset photos, so they stay in `~/goodbye-bg-quality/sheets
 - **Otsu threshold per photo: don't ship.** BiRefNet's masks are confident (Otsu lands at 0.5 on most), and where it
   moves the cut-off it is slightly worse (0 better, 6 worse), all on see-through photos (smoke, glass, a galaxy) where
   it thins the faint parts. ISNet: 1 better, 1 worse.
-- **Guided filter on wide soft edges (`refineEdge`): ship for BiRefNet only, behind `?pp=1` first.** On the held-out half,
+- **Guided filter on wide soft edges (`refineEdge`): on by default for BiRefNet (`?pp=0` turns it off).** On the held-out half,
   12 photos better and 0 worse on IoU, edge error 0.0615 to 0.0561 (9% lower) and lower on 176 photos and higher on 1, no
   catastrophic failures. The good/usable/bad counts don't move: it fixes edges, not subjects. What it looks like: fur,
   dandelion fluff, smoke and twigs against the sky get their gaps back instead of a soft blur of old background. On
   ISNet it does almost nothing (1 better, 1 worse; edge error 2% lower), so the page runs it on BiRefNet only.
 
-Implemented on branch `mask-postprocess`: `refineEdge` in `src/app.js`, run in `segment()` after the edge curve when the
-page has `?pp=1` and the model is BiRefNet; it reports its step as `edge` with ms and pixels changed. All results go
-through `segment()`, so 👎 retries and GIF frames get it too. The subject box (the crop) is read again after the filter. Smoke check: "edge refinement (?pp=1, BiRefNet)".
+Implemented on branch `mask-postprocess`: `refineEdge` in `src/app.js`, run in `segment()` after the edge curve whenever
+the model is BiRefNet, unless the page has `?pp=0`; it reports its step as `edge` with ms and pixels changed. 👎 retries go
+through `segment()` and get it too. GIF frames don't: GIF transparency is on or off, so a redrawn soft edge is thrown
+away, and up to 100 frames at up to 0.1 s each would add seconds to a GIF; GIF output stays as before. The subject box (the
+crop) is read again after the filter. Smoke check: "edge refinement (BiRefNet, on by default, off with ?pp=0)".
 
 ## The filter
 
@@ -97,19 +99,57 @@ ISNet's failures are missing or hazy parts, decided long before the edge; a 4 px
 
 All 923, the winner: IoU 0.9478 to 0.9495, edge error 0.075 to 0.070, better/worse 15/0 (IoU) and 327/3 (edge). The
 plain filter gains more here (the 640 mask is blurrier once scaled up, so more of its edge counts as unsure) but it
-again makes 66 edges worse. If BiRefNet 640 goes to phones, `refineEdge` should go with it (change `PP && birefnet` to
-cover it; it is a BiRefNet result too). The worst 10 photos for the winner on 640 show no visible change. The plain
+again makes 66 edges worse. If BiRefNet 640 goes to phones, `refineEdge` goes with it (the page runs it on any
+BiRefNet result; BiRefNet 640 is not on main yet, so today that means computers only). The worst 10 photos for the winner on 640 show no visible change. The plain
 filter on 640 is worth a look by eye then.
 
 ## Cost
 
-ms at 1024, one Node thread on the M5 Pro, median of 20 photos (`scripts/quality/ppbench.cjs`, which times the page's
-own `refineEdge`; other sessions kept the load average near 7 on 18 cores): **65 ms median, 122 ms at most** on BiRefNet 1024 masks,
-85 ms median and 122 ms at most on BiRefNet 640 masks. `edgeColors`, which the page already runs on every photo, takes
-97 ms on the same photos. The filter works only on the box around the wide soft zones; a photo without any skips it after the full-frame
-checks (a few ms to 25 ms). On computers that is about a fifth of BiRefNet's 0.3 s. A phone CPU is several times slower
-than the M5 Pro (ISNet: 3.7 s here against 5.0 s on Kevin's iPhone with 2 threads, but single-thread JavaScript
-differs more); if BiRefNet 640 goes to phones, expect roughly 0.2 to 0.4 s a photo on top of about 5 s. Not measured on a phone.
+**Phone-like timing (2026-11-22).** Headless Chrome on the M5 Pro, V8 single-threaded (`--js-flags=--single-threaded`),
+CDP CPU throttling at 1x, 4x and 6x (`scripts/quality/ppchrome.mjs`, data from `ppchrome-prep.cjs`). 24 runs per set: 20
+photos, 10 of them the photos with the largest soft-zone boxes of all 923 and 10 spread (16 of the 20 are AIM-500, so the
+set leans to the worst case), plus 18 MP (5184 x 3456) copies of 4 of the largest. Each photo is decoded and drawn to 1024
+the way `segment()` does; the time is `refineEdge` alone, median of 3 runs per photo. The measured version and the new one
+ran in the same Chrome, taking turns photo by photo (the load average was 2 to 7 from other sessions).
+
+| ms per photo | 1x median / max | 4x median / max | 6x median / max | Typed arrays allocated (median / max) |
+|---|---|---|---|---|
+| Measured version, BiRefNet 1024 masks | 130 / 165 | 504 / 683 | 768 / 1070 | 213 / 217 MB |
+| **Streaming version, BiRefNet 1024** | **45 / 111** | **183 / 451** | **271 / 682** | **11.8 / 12.1 MB** |
+| Measured version, BiRefNet 640 masks | 138 / 158 | 579 / 682 | 917 / 1048 | 217 / 217 MB |
+| **Streaming version, BiRefNet 640** | **46 / 106** | **185 / 431** | **291 / 667** | **12.0 / 12.1 MB** |
+
+The measured version was 0.77 to 1.07 s at 6x and held up to 217 MB of whole-box planes (25 float planes of the box, which is
+the whole frame on many photos: median box 0.27 MP, 90th percentile 0.76 MP, largest the full 1 MP). Too much for phones,
+so it was rewritten first:
+- **Streaming.** Every box blur runs a row at a time through a ring of 2r + 2 rows (boxBlur's own sums, in its order), and
+  the steps hand rows to each other. Everything it allocates comes to 12 MB at most (an upper bound on its peak: nothing
+  is freed before it returns), mostly the 1 MB 0/1 maps for the opening, band and wide zone.
+- **Only where needed.** The window statistics (13 sums of colour, mask and their products) are worked out only at wide
+  soft pixels, and their row blurs only within r rows of one. Those sums are exact in a double in any order (every term
+  is a multiple of 2^-39 below 2^4; the row means are multiples of 2^-43 below 1), so the order does not matter. The a/b
+  blur is not exact and keeps the plain filter's order over the whole box.
+- **The opening on the soft pixels' box** rather than the whole frame, and `morph` walks columns a row at a time.
+- **Bit for bit the same masks** as the measured version: all 923 BiRefNet 1024 masks and all 923 BiRefNet 640 masks
+  byte-identical (`scripts/quality/ppsame.cjs`, the old function from the measured commit), so the quality results above
+  stand unchanged. `morph` is shared with `hardenHaze`: all 923 ISNet masks with the haze fix are byte-identical too.
+  Node, all 923: 71 ms to 27 ms a photo (1024 masks), 90 ms to 35 ms (640).
+
+What that means:
+- **Photo size doesn't matter.** The 18 MP copies cost the same as their originals (the filter only sees the 1024 drawing);
+  drawing an 18 MP photo to 1024 is 27 to 32 ms, which the page does anyway.
+- **There is no 2048 case.** The filter runs inside `segment()` at 1024. A 👎 retry runs `segment()` once more on the
+  zoomed crop at 1024 (one more filter run), then `mergeRetry` merges the two filtered masks into the 2048 mask; nothing
+  filters the 2048 mask.
+- **Computers (BiRefNet today):** 45 ms median at full speed next to BiRefNet's 0.3 s; a slow laptop at 4x, 0.18 s
+  median and 0.45 s at worst. On by default.
+- **Phones (if BiRefNet 640 ships there):** at 6x, 0.29 s median and 0.67 s at worst on top of about 5 s, holding 12 MB.
+  The worst photos are those with large see-through or fluffy areas (a dandelion, smoke), where it also changes the most.
+  It stays on there too unless a real phone says otherwise. Not measured on a real phone or in Safari.
+- The step runs on the main thread, so the page is busy for that long once per photo.
+
+Earlier, Node on the M5 Pro (`scripts/quality/ppbench.cjs`, measured version): 65 ms median, 122 ms at most on BiRefNet
+1024 masks; `edgeColors`, which the page already runs on every photo, 97 ms on the same photos.
 
 ## How
 
@@ -135,7 +175,7 @@ differs more); if BiRefNet 640 goes to phones, expect roughly 0.2 to 0.4 s a pho
   pieces can only lose. COCO's busy scenes, where BiRefNet keeps a second car or a blanket, were left out: their truth
   is one labelled object, so dropping the rider would wrongly score as a win on the bicycle.
 - Phone camera photos at 12 MP: the mask is still 1024, so the filter works at a quarter of the photo's pixels.
-- Not looked at on a real iPhone or in Safari. ISNet on the GPU provider was not rerun (the CPU provider is what phones
+- Not looked at on a real iPhone or in Safari (timed only in Chrome with CPU throttling, see Cost). ISNet on the GPU provider was not rerun (the CPU provider is what phones
   use; GPU and CPU masks match closely on all but hazy photos).
 - The bar asked for: better on at least 3 times as many photos as it hurts, and no catastrophic failures. The winner
   clears it on BiRefNet 1024 (12/0 held out, 23/1 on all 923) and 640 (8/0, 15/0), but the counts are small because
