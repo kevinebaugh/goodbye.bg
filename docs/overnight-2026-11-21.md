@@ -58,6 +58,7 @@ Extra usage capped at $0. Stop starting new work at 85% weekly; never pass 90%.
 | 07:47 | Bulk tool: Windows/Linux builds, remove.bg API shadow (branch bulk-cli) | background agent | 46% → 48% | bulk-cli ec82205, 073ec21, ef84613, b8aba10. Windows x64 141 MB (valid PE, ORT + DirectML DLLs; never run; DirectML licence texts missing). Linux x64 180 MB, ran in Docker on the CPU, matches the Mac within 3/255 (needs libatomic1). macOS rebuilt identical. serve supports shadows with the site's ground shadow. |
 | 07:42 | Draft PR for the bulk tool | coordinator | 48% | kevinebaugh/goodbye.bg#5 (not for merging as is; for the sell-or-not decision). |
 | 07:43 | Phones: start the model download sooner (any touch/scroll, or a few seconds visible on a good connection) | background agent | 48% → | started |
+| 07:50 | Zazzle money path check, read-only (Sonnet) | background agent | 47% → 47% | All 8 links build correctly; fallback carries rf=238003133086051540, CAP link has no rf by design; cap flow (PUT, GET, delete 20 s after fetch, expiry) passes locally. Zazzle returns a 403 bot wall to curl, so product pages could not be checked: Kevin should click one card. goodbye.bg is already a declared image domain (runbook covers it). |
 
 Check-in 23:46: weekly 28%, 5-hour window 6% (reset 04:30 UTC). About 4 weekly points in the first 45 min.
 
