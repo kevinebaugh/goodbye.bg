@@ -42,6 +42,8 @@ Extra usage capped at $0. Stop starting new work at 85% weekly; never pass 90%.
 | 03:47 | Domain cutover runbook (Sonnet) | background agent | 39% → 39% | docs/domain-cutover.md: 15-minute checklist. Risks: Bulk Redirect must not include subdomains (would break previews), start 302; Rocket Loader / beacon / Flexible SSL can break COEP/COOP and CSP (check with curl first); Change of Address can't verify pages.dev; kept photos don't carry over to the new origin. |
 | 04:18 | Mask post-processing experiments on the 923-photo set (branch mask-postprocess if a winner) | background agent | 39% → | started |
 | 04:18 | README for HN readers (Sonnet) | background agent | 39% → | started |
+| 04:37 | Final rebase of mask-edit and phone-birefnet640 onto main | background agent | 40% → 41% | mask-edit at cca09f8 (erase works on the preview; tests 22/22 + 41/41; a tap with the picker dock open only closes it); phone-birefnet640 at 2a9b359 (iPhone-UA photo finishes, vote cpu-birefnet640; tests pass). Found README on main wrongly said photo backgrounds were missing: fixed. |
+| 04:37 | Bulk CLI as a single binary + shipping doc + rembg comparison (branch bulk-cli) | background agent | 40% → | started |
 
 Check-in 23:46: weekly 28%, 5-hour window 6% (reset 04:30 UTC). About 4 weekly points in the first 45 min.
 
