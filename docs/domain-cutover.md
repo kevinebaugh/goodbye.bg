@@ -34,8 +34,8 @@ Order matters: serve the domain first, switch the site's own URLs second, redire
 
 6. `scripts/build.mjs`: `SITE` default becomes `https://goodbye.bg`. This fills `%SITE%` in `index.html` (canonical, JSON-LD),
    the two text pages' canonicals, `sitemap.xml` and `robots.txt`; those need no edit.
-7. `src/index.html:31` `og:url` -> `https://goodbye.bg/`; `:34` `og:image` -> `https://goodbye.bg/og.png?v=3` (bump `v` so
-   link-preview caches refetch). Update the comment on line 28.
+7. `src/index.html`: `og:url` and `og:image` use `%SITE%` too since 2026-11-22, so step 6 covers them. Bump the `v` on
+   `og.png?v=` so link-preview caches refetch, and update the comment above them.
 8. `scripts/serve.mjs:30`: `LIVE` default -> `https://goodbye.bg`. Local dev proxies `/api/count` to it, and the
    POST would hit the redirect from step 10 otherwise.
 9. Docs and launch copy: swap the host in the files in the table. Keep `?ref=` on `/` only (launch README says why).

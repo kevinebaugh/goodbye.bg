@@ -248,7 +248,7 @@ without a visit; private windows refuse Blobs, so nothing is kept there.
 ## Card bar (just the cut-out)
 
 Kevin, 2026-11-22: "Wildly simplify/reduce the image editing controls. We lost the plot of goodbye.bg. It's not a full
-image editor." A finished card has Download, 👍 👎 and remove, in one row, always all four. The output is always the
+image editor." A finished card has Download, 👍 👎 and remove, in one row (all four down to 100 px cards; below that 👍 steps out, see below). The output is always the
 see-through PNG of the crop (or the GIF). Removed that day, on purpose: backgrounds (colours, blur, your own photo),
 size/margin/shadow/WebP/Apply to all, the crop toggle, and the mask editor (#2, "Tap a piece? To do what?"); the
 history is in git (before f4612b5) and `docs/history.md`. Don't bring them back without Kevin asking.

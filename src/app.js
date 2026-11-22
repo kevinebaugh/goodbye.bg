@@ -2139,7 +2139,8 @@ $("all").addEventListener("click", async () => {
   finally { zipping = false; $("all").removeAttribute("aria-busy"); }
 });
 async function saveAll() {
-  const done = items.filter((i) => i.mask), used = new Set();
+  // In the order on screen (newest batch first), not the order they were added: the zip lists them as the grid shows them.
+  const done = [...$("grid").children].map((card) => items.find((i) => i.el.card === card)).filter((i) => i?.mask), used = new Set();
   if (PHONE) {
     const list = [];
     for (const it of done) {
