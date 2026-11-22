@@ -46,6 +46,7 @@ Extra usage capped at $0. Stop starting new work at 85% weekly; never pass 90%.
 | 04:37 | Bulk CLI as a single binary + shipping doc + rembg comparison (branch bulk-cli) | background agent | 40% → 42% | bulk-cli e188135, ddc2c10, 78dd4c9. macOS arm64 binary (scratchpad, 169 MB, 67 MB zipped), BiRefNet only, runs on the GPU without Node. On 40 photos with true masks: rembg's BiRefNet lite 0.981 vs ours 0.977 (rembg default 0.815); Apple Vision (likely Finder) 0.932 at 25 ms; ours ~15x faster than rembg on CPU. Suggests $29 once, no keys, curl install. Found onnxruntime-node's built-in telemetry (likely Windows-only), now turned off in the CLI. A Gatekeeper test dialog may still be on screen. |
 | 05:05 | Refresh the launch kit for tonight's new features | background agent | 41% → 43% | 355eba0: new PH gallery, square social and demo showing blur, seller presets, batch; copy covers backgrounds, sizes, margin, shadow, Apply to all, 100 per drop (8 GB+); Show HN adds the GPU fallback; offline still not claimed (checklist step after Kevin's Safari check). Blur shot uses a corgi: no CC0 portrait without Kevin's OK. og.png unchanged. |
 | 05:12 | Final QA sweep of production with fixes | background agent | 42% → | started |
+| 05:47 | Quality on product photos and high-res phone-style photos (all 4 pipelines) | background agent | 43% → | started |
 
 Check-in 23:46: weekly 28%, 5-hour window 6% (reset 04:30 UTC). About 4 weekly points in the first 45 min.
 
