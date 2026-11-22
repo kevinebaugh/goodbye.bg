@@ -9,14 +9,17 @@ Contact sheets hold dataset photos, so they stay in `~/goodbye-bg-quality/sheets
 
 - **Picking pieces (largest component, components above X% of it, drop small ones at the border, centre-weighted
   choice): don't ship.** On these photos they only hurt: 0 to 2 photos better, 4 to 9 worse on the held-out half, for
-  both engines. By eye the photos they hurt lose real parts of the subject: leaves cut off by the frame, splashes and
-  drops, strands of a spider web, blades of grass. "Which thing it keeps" (BiRefNet's main flaw) is a choice
+  both engines. By eye (worst 10 of each on BiRefNet) the photos they hurt lose real parts of the subject: a boxer's tail
+  and a leopard's tail where they meet the frame, leaf tips and palm fronds cut by the frame, splashes and water drops,
+  strands of a spider web, blades of grass. "Which thing it keeps" (BiRefNet's main flaw) is a choice
   between whole objects; size and position don't make that choice better than the model does. A tap to drop a piece
   (idea 3 in `docs/quality-1000.md`) still looks like the way to fix it.
-- **Filling holes: don't ship.** Even holes under 0.2% of the subject are mostly real (gaps between fingers, legs,
-  leaves, handles): boundary IoU worse on 54 photos and better on 5 (BiRefNet, held-out half).
+- **Filling holes: don't ship.** Even holes under 0.2% of the subject are mostly real: by eye, sky between leaves and
+  twigs, gaps between curls of hair, the spaces inside dandelion fluff. Boundary IoU worse on 54 photos and better on 5
+  (BiRefNet, held-out half); ISNet 68 worse, 21 better.
 - **Otsu threshold per photo: don't ship.** BiRefNet's masks are confident (Otsu lands at 0.5 on most), and where it
-  moves the cut-off it is slightly worse (0 better, 6 worse). ISNet: 1 better, 1 worse.
+  moves the cut-off it is slightly worse (0 better, 6 worse), all on see-through photos (smoke, glass, a galaxy) where
+  it thins the faint parts. ISNet: 1 better, 1 worse.
 - **Guided filter on wide soft edges (`refineEdge`): ship for BiRefNet only, behind `?pp=1` first.** On the held-out half,
   12 photos better and 0 worse on IoU, edge error 0.0615 to 0.0561 (9% lower) and lower on 176 photos and higher on 1, no
   catastrophic failures. The good/usable/bad counts don't move: it fixes edges, not subjects. What it looks like: fur,
@@ -25,7 +28,7 @@ Contact sheets hold dataset photos, so they stay in `~/goodbye-bg-quality/sheets
 
 Implemented on branch `mask-postprocess`: `refineEdge` in `src/app.js`, run in `segment()` after the edge curve when the
 page has `?pp=1` and the model is BiRefNet; it reports its step as `edge` with ms and pixels changed. All results go
-through `segment()`, so 👎 retries and GIF frames get it too. Smoke check: "edge refinement (?pp=1, BiRefNet)".
+through `segment()`, so 👎 retries and GIF frames get it too. The subject box (the crop) is read again after the filter. Smoke check: "edge refinement (?pp=1, BiRefNet)".
 
 ## The filter
 
@@ -79,7 +82,7 @@ furniture and DIS thin objects are unchanged (0.038 and 0.058 before and after).
 
 ISNet's failures are missing or hazy parts, decided long before the edge; a 4 px filter can't bring back a tail.
 
-**BiRefNet lite 640 (phone candidate)**
+**BiRefNet lite 640 (phone candidate; same parameters as for 1024, not re-tuned)**
 
 | Step | IoU | Boundary IoU | Edge error | Good/usable/bad | Better/worse IoU | Boundary b/w | Edge b/w | Catastrophic |
 |---|---|---|---|---|---|---|---|---|
@@ -95,7 +98,8 @@ ISNet's failures are missing or hazy parts, decided long before the edge; a 4 px
 All 923, the winner: IoU 0.9478 to 0.9495, edge error 0.075 to 0.070, better/worse 15/0 (IoU) and 327/3 (edge). The
 plain filter gains more here (the 640 mask is blurrier once scaled up, so more of its edge counts as unsure) but it
 again makes 66 edges worse. If BiRefNet 640 goes to phones, `refineEdge` should go with it (change `PP && birefnet` to
-cover it; it is a BiRefNet result too). The plain filter on 640 is worth a look by eye then.
+cover it; it is a BiRefNet result too). The worst 10 photos for the winner on 640 show no visible change. The plain
+filter on 640 is worth a look by eye then.
 
 ## Cost
 
