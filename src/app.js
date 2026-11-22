@@ -1498,7 +1498,8 @@ document.addEventListener("dblclick", (e) => e.preventDefault(), { passive: fals
    Removing a card deletes its copy. Where storage throws (some private windows, a full disk) nothing is kept.
    Per photo: the original file (Download and 👎 need full size), a preview (JPEG, or PNG when the file can be
    see-through) so cards come back without decoding the original, and each mask as a PNG. */
-const KEEP_MAX = MAX_BATCH, KEEP_BYTES = (DESKTOP && !IOS ? 1024 : 400) * 2 ** 20;
+// ?keepmax=N and ?keepmb=N lower the limits to test them.
+const KEEP_MAX = +params.get("keepmax") || MAX_BATCH, KEEP_BYTES = (+params.get("keepmb") || (DESKTOP && !IOS ? 1024 : 400)) * 2 ** 20;
 // Keys sort in grid order: a newer batch gets smaller keys, and its photos count up in the order picked.
 let lastStamp = 0;
 const keyBase = () => -(lastStamp = Math.max(Date.now(), lastStamp + 1)) * 64; // MAX_BATCH < 64
@@ -1546,6 +1547,7 @@ async function writeKept(it) {
   const state = { id: it.key, name: it.name, w: it.w, h: it.h, crop: it.crop, rect: it.maskRect || null, mask, first, retried: !!it.retried,
     vote: it.vote || null, anim: !!it.anim, gif, ms: it.ms || 0,
     bytes: it.blob.size + it.prev.size + size(mask) + size(first?.mask) + (gif?.size || 0) };
+  if (state.bytes > KEEP_BYTES) return; // never fits (see trim)
   const db = await kdb();
   const put = () => tx(db, "readwrite", (f, s) => { if (!it.filed) f.put({ id: it.key, blob: it.blob, prev: it.prev }); s.put(state); });
   // A full disk: make room by dropping the oldest, a few times, then give up quietly.
@@ -1561,7 +1563,8 @@ async function writeKept(it) {
 async function trim(db, extra = 0, spare = null) {
   const all = await tx(db, "readonly", (f, s) => s.getAll()); // grid order
   let n = 0, bytes = 0;
-  const drop = all.filter((r) => (n++, (bytes += r.bytes || 0), n > KEEP_MAX || bytes > KEEP_BYTES)).map((r) => r.id);
+  // A photo bigger than the whole limit is never kept, and doesn't push the others out.
+  const drop = all.filter((r) => r.bytes > KEEP_BYTES || (n++, (bytes += r.bytes || 0), n > KEEP_MAX || bytes > KEEP_BYTES)).map((r) => r.id);
   for (const r of [...all].reverse()) if (extra > 0 && r.id !== spare && !drop.includes(r.id)) { drop.push(r.id); extra--; }
   if (drop.length) await tx(db, "readwrite", (f, s) => { for (const id of drop) { f.delete(id); s.delete(id); } });
   return drop.length;

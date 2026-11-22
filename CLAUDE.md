@@ -46,7 +46,7 @@ even with no warm-up run (one try in two); the CPU engine never crashed: 7.3 s a
 Debugging on phones: `?debug=1` sends step names and numbers (never photo data) to `/api/diag`, which
 only writes to the Functions log. Read it with `npx wrangler pages deployment tail <deployment-id>
 --project-name goodbye-bg-git --format json` (find the ID with `wrangler pages deployment list`).
-Other test switches: `?engine=gpu|cpu`, `?model=isnet|birefnet`, `?threads=N`, `?nowarm=1`, `?gpufail=init|run|hang`.
+Other test switches: `?keepmax=N`, `?keepmb=N` (kept-photo limits), `?engine=gpu|cpu`, `?model=isnet|birefnet`, `?threads=N`, `?nowarm=1`, `?gpufail=init|run|hang`.
 
 Memory on phones (measured in the iOS Simulator, CPU engine): ISNet at 1024x1024 needs about 1.5 to
 2 GB of wasm heap, mostly activations; it can't run smaller (a Concat inside is fixed to 1024). Asking
@@ -136,7 +136,7 @@ the finished GIF. On load the cards come back in place without the model; unfini
 perpetuity, sane limit"): newest 50 photos within 1 GB on computers, 400 MB on phones; oldest out first; quota errors
 drop the oldest and retry, then give up quietly. Removing a card deletes its copy. `navigator.storage.persist()` is
 asked except in Firefox (it prompts there). Safari still clears site storage after 7 days without a visit.
-Tested: headless Chrome (reload in a restarted browser, Back still from bfcache); iOS Simulator (iPhone 17, iOS 27): force-quitting Safari and reopening brings back both photos in order with the 👍 lit, a removed card stays gone, and Download on a restored photo shares the full-size PNG; an animated GIF comes back playing. Headless Chrome: a 👎 retry comes back with its first result (2048 merged mask, 1024 first), a 👎 after the reload still puts the first back, and that sticks; a GIF's Download after a reload is the GIF. Not tested: the size cap.
+Tested: headless Chrome (reload in a restarted browser, Back still from bfcache); iOS Simulator (iPhone 17, iOS 27): force-quitting Safari and reopening brings back both photos in order with the 👍 lit, a removed card stays gone, and Download on a restored photo shares the full-size PNG; an animated GIF comes back playing. Headless Chrome: a 👎 retry comes back with its first result (2048 merged mask, 1024 first), a 👎 after the reload still puts the first back, and that sticks; a GIF's Download after a reload is the GIF. Cap (headless Chrome, `?keepmax=N` / `?keepmb=N` lower it to test): 52 photos in two batches keep 50 (the two at the end of the grid go), about 2 MB a photo (97 MB for 50); with 5 MB, older photos go first and a single photo bigger than the whole limit is not kept (it used to push out everything). Restoring 50: cards up in 60 ms, all drawn in 1.0 s warm, 9.5 s on a cold start next to the CPU engine starting. Not tested: a real QuotaExceededError.
 
 ## UX decisions (2026-11-20, from Kevin)
 
