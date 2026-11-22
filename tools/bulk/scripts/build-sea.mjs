@@ -11,6 +11,8 @@
 // its --model choice) is left out, so the binary can neither run nor fetch ISNet. --open keeps ISNet (that build is
 // AGPL, like the repo). The binary is about 170 MB (Node itself is 147 MB); it is not committed (docs/bulk-cli.md).
 //
+// The window (no arguments, or `app`) is included: lib/app.cjs and its page in lib/app/, checked below.
+//
 // How it works: bin/, lib/ and the runtime parts of node_modules for this platform go into one gzip asset inside a
 // copy of this node. scripts/sea-main.cjs unpacks them on the first run to <cache>/runtime-<hash>/ and runs them from
 // there, because native addons, their dylibs and worker threads have to be real files.
@@ -60,11 +62,18 @@ for (const p of ["sharp", "@img/colour", "detect-libc", "semver", `@img/sharp-${
 addTree("node_modules/libheif-js", (r) => !/\/libheif\//.test(r) && !/(^|\/)(index|wasm)\.js$/.test(r)); // wasm-bundle.js only
 addTree("node_modules/fflate", (r) => /package\.json$|LICENSE|\/lib\/.*\.cjs$/.test(r));
 
-// Closed build: drop every line marked AGPL-only, then check nothing that names ISNet's model is left.
+// The window (goodbye-bg with no arguments, lib/app.cjs) serves these from the unpacked runtime.
+for (const f of ["lib/app.cjs", "lib/app/index.html", "lib/app/app.css", "lib/app/app.js"]) if (!files.some(([rel]) => rel === f)) throw new Error(`the window's ${f} is missing from the build`);
+
+// Closed build: drop every line marked AGPL-only, then check nothing that names ISNet's model is left. The window's
+// page files have no AGPL-only lines; they must not name ISNet at all.
+const ISNET = ["m/isnet", "b6e8497b", "isnet:", '"isnet"', "--model isnet"];
 const strip = (rel, buf) => {
-  if (open || !/^(bin|lib)\//.test(rel) || !rel.endsWith(".cjs")) return buf;
+  if (open || !/^(bin|lib)\//.test(rel)) return buf;
+  if (/^lib\/app\//.test(rel)) { const s = buf.toString("utf8").toLowerCase(); if (s.includes("isnet")) throw new Error(`${rel} names ISNet; the page must get the model list from the server`); return buf; }
+  if (!rel.endsWith(".cjs")) return buf;
   const s = buf.toString("utf8").split("\n").filter((l) => !l.includes("// AGPL-only")).join("\n");
-  for (const bad of ["m/isnet", "b6e8497b", "isnet:", '"isnet"', "--model isnet"]) if (s.includes(bad)) throw new Error(`${rel} still names ISNet (${bad}); mark the line AGPL-only`);
+  for (const bad of ISNET) if (s.includes(bad)) throw new Error(`${rel} still names ISNet (${bad}); mark the line AGPL-only`);
   return Buffer.from(s);
 };
 

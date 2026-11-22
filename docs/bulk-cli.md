@@ -12,7 +12,53 @@ computer, sold once. Nothing here has been bought, signed up for or published.
 - Masks match the site's (quality harness): mean IoU 0.991 on 100 photos.
 - Product-photo options are there: `--bg white`, `--size 2000x2000 --pad 8%`, `--crop`, JPG/WebP/PNG.
 - One file for macOS: built and run (169 MB, BiRefNet only), see "Shipping it".
-- Not done: Windows and Linux runs, signing, a licence check, a window for people who don't use a terminal.
+- A window for people who don't use a terminal: `goodbye-bg` with no arguments opens a local page in the browser
+  (section below). Same speed as the command line.
+- Not done: Windows and Linux runs, signing, a licence check, a native app (Dock icon, no Terminal window).
+
+## A window: `goodbye-bg` with no arguments (prototype 2026-11-22)
+
+Question 2 below ("CLI only, or wait for a window?"), answered cheaply: **a window now, in the browser, with no new
+dependencies; a native app only if people buy.** Details, tests and numbers in `tools/bulk/README.md`.
+
+What it is: `goodbye-bg` (or `goodbye-bg app`) starts a local server on 127.0.0.1 and opens the user's browser on a
+small page in the site's look (same tokens and palette, no ads, no counts, no analytics, nothing fetched from
+anywhere). Drop photos or a folder, or Choose folder; pick background, format, size and margin; Start. Thumbnails land
+as photos finish, with the pace, time left and Stop; at the end, the folder's path and Show in Finder. About 840
+lines: `lib/app.cjs` (server), `lib/app/` (page), and the folder mode's batch code moved to `lib/batch.cjs` so the CLI
+and the window share it (CLI output byte for byte unchanged, checked).
+
+What it gives:
+- **The folder mode for people who don't type commands.** Double-clicking the binary should run it (macOS opens a
+  Terminal window for a bare binary; not tried), and the browser shows the rest.
+- **The same speed**: 175 to 185 photos a minute against the CLI's 174 to 184 in alternating runs on a busy machine
+  (BiRefNet on the GPU). The model stays warm between batches.
+- **Next to the input** for Choose folder (a native dialog run by goodbye-bg, so it knows the path): `Shop` gives
+  `Shop cut-outs`, resumable. Drops can't be: browsers hide file paths, so dropped photos are sent to goodbye-bg over
+  loopback and their cut-outs go to `~/Downloads/<folder> cut-outs` (or a folder picked with Change).
+- **It stays in the one file**: the binary serves the page from its unpacked runtime; the window's 32-check Playwright
+  test passes against the binary with no Node on the PATH.
+- **Safe enough for a local server**: 127.0.0.1 only, a random token in the opened address on every API call, other
+  origins and host names refused, Finder only ever opened on folders it made.
+
+What a native app (Tauri or Electron around this page, or Swift) would add, and what this lacks:
+- **No Terminal window.** A double-clicked bare binary opens Terminal, which looks broken to a shop owner. A `.app`
+  bundle with a Dock icon, a menu and Quit is the real fix. Halfway step: a tiny `.app` wrapper (an `Info.plist` and a
+  launcher script) around the same binary, with `LSUIElement` so no Terminal shows; not tried.
+- **A clear lifecycle.** Here the process stops a minute after the last tab closes; closing the tab doesn't feel like
+  quitting, and a second launch starts a second server on another port.
+- **Real drops from Finder with paths**, so dropped folders can also be saved next to themselves and resumed.
+- **Stapled notarization.** A `.app` in a `.dmg` can be stapled and opened offline; a bare binary can't (see
+  "macOS: Gatekeeper").
+- **Dock progress, notifications when a batch ends, "Open with" from Finder**, and a window that isn't one browser tab
+  among forty.
+- Cost: Tauri needs Rust and a WebView build per platform and still has to run this Node engine as a sidecar
+  (onnxruntime-node and sharp are native Node modules), so it is mostly packaging work on top of this page, not a
+  rewrite: perhaps 2 to 4 days rather than the 6 to 10 in `removebg-parity.md` for a fresh app, plus the $99 Apple
+  membership to make it open without warnings.
+
+Suggestion: ship the browser window with the CLI (it is already the default when there are no arguments), put a
+screenshot of it on the sales page, and only build the native wrapper once a few copies sell or buyers ask.
 
 ## Drop-in for the remove.bg API (`goodbye-bg serve`, prototype 2026-11-22)
 
@@ -279,8 +325,8 @@ or only to terminal users through the install line.**
 1. Sell it at all, given free `rembg` and the Finder quick action? Or keep it free and open as a reason to visit,
    with a "support" link? Measured: rembg's BiRefNet lite gives the same quality as ours; what we'd sell is
    convenience, GPU speed and the remove.bg API drop-in ("Against the free options").
-2. CLI only, or wait for a window (Tauri around the web app, 6 to 10 days per `removebg-parity.md`)? Shops mostly
-   want the window.
+2. CLI only, or wait for a window? **Answered with a prototype: the browser window above** (no arguments opens it; same
+   speed; in the one file). A native wrapper (Dock icon, no Terminal, stapled .dmg) only once copies sell?
 3. A local remove.bg-compatible server: built as a prototype (`goodbye-bg serve`, section above). It works with one
    URL changed (one line for the common Python and Node wrappers). Keep it, and say so on the remove.bg page?
 4. Licence keys: none, or offline signed keys? (Suggested: none at launch; a readable binary makes a key a speed bump.)

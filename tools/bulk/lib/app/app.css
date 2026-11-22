@@ -1,0 +1,123 @@
+/* goodbye-bg's local window. Same tokens and palette as the site (src/style.css): the cool side of Giant Goldfish
+   (aqua, deep teal, sage), no orange, red only for errors. The system font stack only: nothing is fetched. */
+:root {
+  --ink: #1d3a41; --paper: #f7f8f0; --card: #ffffff; --line: #e0e4cc; --muted: #5b7377;
+  --accent: #69d2e7; --accent-ink: #0c2a30; --brand: #258aa1; --danger: #b23a2a;
+  --check-a: #e1f1f0; --check-b: #ffffff;
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px;
+  --h-sm: 32px; --h-md: 40px; --h-lg: 48px;
+  --font: ui-rounded, "SF Pro Rounded", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #edf6f3; --paper: #0e262b; --card: #143238; --line: #23464e; --muted: #9dbfc3;
+    --accent: #69d2e7; --accent-ink: #0c2a30; --brand: #69d2e7; --danger: #ff8a7a;
+    --check-a: #3d6168; --check-b: #476c73;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body { background: var(--paper); color: var(--ink); font: 16px/1.5 var(--font); min-height: 100vh; display: flex; flex-direction: column; }
+button, input { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+code { font: 600 14px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+.muted { color: var(--muted); }
+
+.top { padding: 18px 24px; display: flex; align-items: center; gap: var(--s3); }
+.mark { font-weight: 800; font-size: 26px; letter-spacing: -0.03em; display: inline-flex; align-items: center; }
+.mark span { color: var(--brand); }
+.wave { font-style: normal; display: inline-block; margin-left: 8px; transform-origin: 70% 80%; animation: wave 1.6s ease-in-out 0.4s 2; }
+@keyframes wave { 0%,60%,100% { transform: rotate(0); } 10%,30% { transform: rotate(16deg); } 20%,40% { transform: rotate(-10deg); } }
+.tag { font-size: 13px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--accent-ink); background: var(--accent); border-radius: 999px; padding: 2px 10px; }
+
+main { flex: 1; width: 100%; max-width: 1100px; margin: 0 auto; padding: 0 24px 24px; display: grid; align-content: start; gap: var(--s4); }
+
+/* The empty page: one big drop target with the checkerboard, the site's motif. */
+.drop { margin-top: 6vh; display: grid; justify-items: center; gap: 18px; text-align: center; padding: 56px 24px; border-radius: 28px;
+  border: 2px dashed color-mix(in srgb, var(--accent) 70%, var(--line));
+  background: repeating-conic-gradient(var(--check-a) 0 25%, var(--check-b) 0 50%) 0 0 / 24px 24px; }
+.drop h1 { margin: 0; font-size: clamp(34px, 6vw, 60px); line-height: 1; letter-spacing: -0.04em; font-weight: 800; text-wrap: balance; }
+.sub { margin: 0; color: var(--muted); font-size: 18px; font-weight: 600; }
+.note { margin: 0; color: var(--muted); font-size: 14px; min-height: 1.5em; }
+.note.err { color: var(--danger); }
+.row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.row.left { justify-content: flex-start; }
+
+/* Buttons: a size plus a variant, as on the site. */
+.btn, .big { --h: var(--h-md); --px: 20px; --fs: 15px;
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--s2); height: var(--h); padding: 0 var(--px);
+  font-size: var(--fs); font-weight: 700; line-height: 1; white-space: nowrap; border-radius: 999px; cursor: pointer;
+  border: 1.5px solid var(--line); background: var(--card); color: var(--ink);
+  transition: transform .25s ease-out, box-shadow .25s ease-out, background .15s, border-color .15s; }
+.big { --h: var(--h-lg); --px: 28px; --fs: 18px; background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.big.ghost, .btn.ghost { background: transparent; color: var(--ink); border-color: var(--accent); }
+.btn:disabled, .big:disabled { opacity: .4; cursor: default; }
+@media (hover: hover) {
+  .btn:hover:not(:disabled), .big:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 16px -8px color-mix(in srgb, var(--ink) 45%, transparent); }
+  .btn:hover:not(:disabled) { border-color: var(--accent); }
+}
+.btn:active:not(:disabled), .big:active:not(:disabled) { transform: translateY(0) scale(.98); box-shadow: none; transition-duration: .08s; }
+
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: var(--s5); display: grid; gap: var(--s5); animation: pop .35s cubic-bezier(.2,1.4,.4,1); }
+@keyframes pop { from { transform: scale(.97); opacity: 0; } }
+.picked { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; font-size: 20px; }
+.picked-name { min-width: 0; overflow-wrap: anywhere; }
+.picked-name strong:empty + span { font-weight: 800; }
+
+.opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--s5) var(--s4); }
+fieldset { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; gap: var(--s2); align-content: start; }
+legend { padding: 0; margin-bottom: var(--s2); font-weight: 800; font-size: 14px; letter-spacing: .02em; color: var(--muted); }
+/* Segmented choices: pills, the chosen one filled aqua. */
+.seg { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.seg label { position: relative; }
+.seg input[type="radio"] { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.seg span { display: inline-flex; align-items: center; gap: var(--s2); height: var(--h-sm); padding: 0 14px; border-radius: 999px; border: 1.5px solid var(--line);
+  font-size: 14px; font-weight: 700; background: var(--card); transition: background .15s, border-color .15s; }
+.seg input:checked + span { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.seg input:focus-visible + span { outline: 3px solid var(--ink); outline-offset: 2px; }
+.seg input:disabled + span { opacity: .4; }
+@media (hover: hover) { .seg label:hover input:not(:checked):not(:disabled) + span { border-color: var(--accent); } }
+.swatch input[type="color"] { position: relative; z-index: 1; width: 22px; height: 22px; padding: 0; border: 1.5px solid var(--line); border-radius: 50%; background: none; cursor: pointer; }
+.swatch input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+.swatch input[type="color"]::-webkit-color-swatch { border: 0; border-radius: 50%; }
+.range { display: flex; align-items: center; gap: var(--s3); }
+.range input { flex: 1; accent-color: var(--brand); }
+.range output { min-width: 3.5ch; font-weight: 800; }
+
+.saveto { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; justify-content: space-between; padding-top: var(--s4); border-top: 1px solid var(--line); }
+.saveto-text { min-width: 0; color: var(--muted); font-weight: 600; }
+.saveto-text code { color: var(--ink); }
+
+/* Running: a meter, the numbers, then the cut-outs as they land. */
+.meter { height: 10px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--accent); transition: width .3s ease-out; }
+.running .meter i { background-image: linear-gradient(100deg, transparent 30%, rgba(255,255,255,.55) 50%, transparent 70%); background-size: 250% 100%; animation: shimmer 1.4s ease-in-out infinite; }
+@keyframes shimmer { from { background-position: 100% 0; } to { background-position: -150% 0; } }
+.status-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; }
+.status-text { margin: 0; font-size: 20px; font-weight: 800; }
+.status-text small { font-size: 15px; font-weight: 600; color: var(--muted); margin-left: var(--s2); }
+.done-row { display: grid; gap: var(--s3); }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--s3); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; animation: pop .35s cubic-bezier(.2,1.4,.4,1); }
+.pic { position: relative; aspect-ratio: 1; display: grid; place-items: center; padding: 8px; background: repeating-conic-gradient(var(--check-a) 0 25%, var(--check-b) 0 50%) 0 0 / 14px 14px; }
+.pic img { position: absolute; inset: 8px; width: calc(100% - 16px); height: calc(100% - 16px); object-fit: contain; display: block; }
+.card .name { font-size: 12px; font-weight: 600; color: var(--muted); padding: 6px 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card.failed .pic { background: var(--card); color: var(--danger); font-size: 13px; font-weight: 600; text-align: center; padding: 12px; }
+.card.failed .pic::before { content: "🙈"; display: block; font-size: 28px; }
+.more { order: -1; grid-column: 1 / -1; text-align: center; color: var(--muted); font-weight: 600; margin: 0; }
+
+.foot { padding: 14px 24px 20px; text-align: center; color: var(--muted); font-size: 14px; font-weight: 600; display: flex; gap: var(--s2); justify-content: center; flex-wrap: wrap; }
+.foot .dot { opacity: .6; }
+.foot .err { color: var(--danger); }
+
+/* Something dragged over the window. */
+.drop-hint { position: fixed; inset: 12px; border-radius: 28px; border: 3px dashed var(--accent); background: color-mix(in srgb, var(--paper) 80%, transparent);
+  display: grid; place-items: center; pointer-events: none; z-index: 10; }
+.drop-hint span { font-size: 32px; font-weight: 800; }
+
+@media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } }
+@media (max-width: 520px) { .top, main { padding-left: 16px; padding-right: 16px; } .panel { padding: var(--s4); } .drop { padding: 40px 16px; } }

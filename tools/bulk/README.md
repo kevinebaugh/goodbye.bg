@@ -89,6 +89,77 @@ can't decode HEVC, so libheif-js does it), an EXIF-rotated JPEG, `--bg` with `--
 WebP, Ctrl-C and resume (28 done, 72 left, then 100 with nothing redone), the settings guard, forced GPU failures.
 Not tested: Windows, Linux, Intel Macs, a real iPhone HEIC with a rotation flag, tens of thousands of files.
 
+## A window: `goodbye-bg` with no arguments
+
+    goodbye-bg                 # or: goodbye-bg app, or node bin/goodbye-bg.cjs from a checkout
+
+It starts a small local server on 127.0.0.1 (any free port) and opens the browser on its page (`lib/app/`). On the page:
+drop photos or a folder, or use **Choose folder** / **Choose photos**; pick a background (see-through, white or a
+colour), a format (PNG, JPG, WebP), a size (original, crop to subject, square 2000 or 1000) and, for the squares, a
+margin; **Start**. The cut-outs appear as thumbnails as they land, with a count, the pace and the time left, and
+**Stop**. At the end: the output folder's path, **Show in Finder** (Explorer on Windows) and **New batch**. The
+options are remembered in that browser.
+
+Where the cut-outs go:
+- **Choose folder** opens the system's folder dialog from goodbye-bg itself (osascript on macOS, PowerShell on Windows,
+  zenity on Linux), so it knows the real path. Photos are read straight from disk, as in the folder mode, and the
+  cut-outs go **next to the folder**: `Shop` gives `Shop cut-outs`. Running the same folder with the same options
+  again carries on where it stopped (finished photos are skipped); other options go to `Shop cut-outs 2`, never into
+  a mix.
+- **Dropped or browser-picked photos:** a browser never tells a page where a file lives. So the page sends each photo
+  to goodbye-bg over loopback, three at a time, and it is kept in a temporary folder only until it is cut out. The
+  cut-outs go to `~/Downloads/<dropped folder> cut-outs` (or `Cut-outs <date time>` for loose photos), always a new
+  folder. **Change** picks another folder (native dialog).
+- Without a folder dialog (Linux without zenity), Choose folder falls back to the browser's own folder picker, which
+  sends the photos like a drop.
+
+It uses the same engine, workers and settings file (`.goodbye-bg.json`) as the folder mode: same speed, and the same
+cut-outs byte for byte (checked by `test/app-bench.mjs` on 20 photos, see-through PNG and white JPG 2000 square, for
+both Choose folder and drops).
+It is the folder mode with a page in front, not the website: no ads, no counts, no analytics, no fonts or scripts from
+anywhere. The page's CSP allows only its own origin.
+
+Safety: it listens on 127.0.0.1 only. The address it opens carries a random token (`/#<token>`), and every `/api/`
+request must send it; requests with another `Origin` or `Host` (DNS rebinding) get a 403. The only folders it ever
+opens in Finder are output folders it made; thumbnails are looked up by number, never by a path from the page.
+
+Lifecycle: it stops by itself a minute after its last window closes, or with Ctrl-C. A Choose-folder batch finishes
+first, and a reload reconnects to it. A dropped batch needs its window to send the photos: closing or reloading the
+window that started it stops it after the photos in progress, and a minute later the process exits (tested over the
+API: 10 of 20 sent, the window gone, a few cut-outs, no half files, exit 0; without the window's id, the idle timer
+does the same).
+
+Options: `--port`, `--no-open` (print the address only), `--model`, `--engine`, `--jobs`. Test switches:
+`GOODBYE_BG_PICK` / `GOODBYE_BG_PICK_OUT` (answer the folder dialog), `GOODBYE_BG_DOWNLOADS` (instead of
+~/Downloads), `GOODBYE_BG_DRYOPEN` (print instead of opening the browser or Finder), `GOODBYE_BG_IDLE_MS`.
+
+Tested (2026-11-22, headless Chrome 158 driven by Playwright, `test/app-test.mjs`, 32 checks, all pass, against the
+checkout and against the one-file binary with no Node on the PATH):
+- 20 photos dropped: 20 thumbnails, 20 see-through PNGs at each photo's full size in a new folder.
+- Options changed: JPG turns see-through off and picks white; square 2000 with an 8% margin gives 20 white-cornered
+  2000x2000 JPGs and the settings file says so.
+- Choose folder (dialog answered by `GOODBYE_BG_PICK`): 20 cropped WebPs on a colour in `<folder> cut-outs`; the same
+  again says "Nothing new to do"; other options go to `... cut-outs 2`; Stop part way stops with no half files.
+- Show in Finder opens that folder; no request leaves 127.0.0.1; no page errors; the token, origin and host checks
+  answer 403; closing the window stops the process.
+- Not tested: a real drag from Finder (Playwright's synthetic drop carries files, not folder entries, so the folder
+  walk in the page is untested), the native dialog by hand (it starts; not checked that it comes to the front),
+  Safari and Firefox, Windows and Linux, thousands of photos in one drop.
+
+    PW=<folder with node_modules/playwright-core> node test/app-test.mjs <photos> [--bin <binary>] [--shots <dir>]
+    node test/app-bench.mjs <photos> [--rounds 3] [--bin <binary>]
+
+Speed, against the folder mode (same Mac, BiRefNet on the GPU, see-through PNG at full size, photos a minute from the
+first photo to the last; the machine was busy with other work, load average 9 to 12, so read them as relative):
+
+| Photos | CLI | Window, Choose folder | Window, dropped |
+|---|---|---|---|
+| 20, median of 3 alternating rounds | 174 | 177 | 175 |
+| 100 (the quality set), 1 round | 184 | 185 | 183 |
+
+The window adds nothing measurable: the model is the limit, and sending a photo over loopback costs a few
+milliseconds. It saves the start-up on every batch after the first (the model stays warm; the CLI pays 1.1 s each run).
+
 ## Drop-in for the remove.bg API: `goodbye-bg serve`
 
     goodbye-bg serve                  # http://localhost:5000/v1.0, BiRefNet on the GPU
@@ -187,6 +258,10 @@ anything naming ISNet's model remains. `--open` keeps ISNet (an AGPL build; chec
   `<cache>/runtime-<hash>/` in 0.2 s and downloads the 93 MB model (about 11 s here); later runs start in about 2 s.
 - Runs with no Node on the PATH (`env -i PATH=/usr/bin:/bin`), WebGPU included, cut-outs byte for byte the same as the
   checkout's; `serve` works too. `goodbye-bg --licenses` prints the bundled licences.
+- The window is inside: run with no arguments (a double-click in Finder should do the same in a Terminal window; not
+  tried), it
+  serves its page from the unpacked runtime. The build checks the page files are there and name no ISNet. The window's
+  end-to-end test passes against the binary with no Node on the PATH (rebuilt 2026-11-22: 168.9 MB, 178 files).
 - Native addons, their libraries and worker threads must be real files, hence the unpacking. The LGPL libraries stay
   separate, replaceable files there.
 - Not signed (ad hoc only): see "Shipping it" in `docs/bulk-cli.md` for Gatekeeper, and for Windows and Linux.
