@@ -10,6 +10,7 @@
     "dev": "node scripts/build.mjs && node scripts/serve.mjs",
     "serve": "node scripts/serve.mjs",
     "test": "node scripts/test/smoke.mjs",
+    "test:x": "node scripts/test/xbrowser.mjs",
     "deploy": "node scripts/build.mjs && wrangler pages deploy dist --project-name goodbye-bg-git --branch main"
   },
   "devDependencies": {
@@ -18,6 +19,7 @@
     "fflate": "0.8.2",
     "libheif-js": "1.23.5",
     "onnxruntime-web": "1.31.1",
+    "playwright": "1.65.0",
     "utif2": "4.1.0",
     "wrangler": "4.157.0"
   },
