@@ -6,7 +6,7 @@ const fs = require("fs"), path = require("path"), os = require("os"), crypto = r
 const SITE = process.env.GOODBYE_BG_SITE || "https://goodbye-bg-git.pages.dev";
 const FILES = {
   birefnet: { dir: "m/birefnet-f71d1be4/", size: 93296664, sha256: "f71d1be4b31c1add65843f0bb2076f0752c1450a8c59e2fb5d12a0ae1227aac9", licence: "MIT" },
-  isnet: { dir: "m/isnet/", size: 88188479, sha256: "b6e8497ba978a6f5fbb647e419d2696cd80df5a23cb6a8ea532021911bd76acb", licence: "AGPL-3.0" },
+  isnet: { dir: "m/isnet/", size: 88188479, sha256: "b6e8497ba978a6f5fbb647e419d2696cd80df5a23cb6a8ea532021911bd76acb", licence: "AGPL-3.0" }, // AGPL-only
 };
 
 function cacheDir() {

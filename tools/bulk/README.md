@@ -2,7 +2,9 @@
 
 Removes the background from every photo in a folder, on your own computer. Photos are never uploaded. The only
 network use is a one-time download of the model from the goodbye.bg site, checked against a pinned sha256 and
-kept in your cache folder.
+kept in your cache folder. ONNX Runtime's own usage telemetry (Microsoft's, built into onnxruntime-node 1.31) is
+switched off before it loads (`ORT_DISABLE_TELEMETRY=1`); without that it kept a device ID and queued events in
+`~/Library/Application Support/Microsoft/DeveloperTools/.onnxruntime`.
 
 It uses the same model files and the same steps as the site, so a cut-out matches what the site gives for the
 same photo: the 1024 px model input, despeckle, ISNet's haze fix, the edge curve, edge colours, and the mask
@@ -172,6 +174,23 @@ reach the model's limit (about 275 ms a photo), the same as the folder mode. Pea
 folder mode. `node test/serve-test.mjs <photo>` checks 53 behaviours against a running server started with `--allow-urls` (all pass), including HEIC and background images;
 `node test/serve-bench.mjs <folder> --clients 4` measures.
 
+## One file: `scripts/build-sea.mjs`
+
+    node scripts/build-sea.mjs --node <nodejs.org node binary> --out ./goodbye-bg
+
+Makes one executable for this platform with Node's single executable applications (`node --build-sea`). Homebrew's
+`node` can't (built without SEA support); the binary from nodejs.org can. The default is the **BiRefNet-only build**:
+lines marked `// AGPL-only` (ISNet's download, settings and `--model` choice) are left out, and the build stops if
+anything naming ISNet's model remains. `--open` keeps ISNet (an AGPL build).
+
+- macOS arm64, Node 26.13.1: **169 MB** (147 MB of it is Node), 67 MB zipped. The first run unpacks 71 MB to
+  `<cache>/runtime-<hash>/` in 0.2 s and downloads the 93 MB model (about 11 s here); later runs start in about 2 s.
+- Runs with no Node on the PATH (`env -i PATH=/usr/bin:/bin`), WebGPU included, cut-outs byte for byte the same as the
+  checkout's; `serve` works too. `goodbye-bg --licenses` prints the bundled licences.
+- Native addons, their libraries and worker threads must be real files, hence the unpacking. The LGPL libraries stay
+  separate, replaceable files there.
+- Not signed (ad hoc only): see "Shipping it" in `docs/bulk-cli.md` for Gatekeeper, and for Windows and Linux.
+
 ## Licences
 
 - This tool's own code is AGPL-3.0, like the rest of the repo (`package.json` says so). Kevin wrote all of it, so he
@@ -179,7 +198,7 @@ folder mode. `node test/serve-test.mjs <photo>` checks 53 behaviours against a r
 - **BiRefNet** (the default) is MIT. A build that only ever runs BiRefNet can be closed source.
 - **ISNet** (IMG.LY, `--model isnet`) is AGPL-3.0. Shipping a program that runs it, or fetches it for the user,
   means offering that program's source under the AGPL. A closed paid build must leave ISNet out: no `--model isnet`,
-  no download of it.
+  no download of it. `scripts/build-sea.mjs` does that by default.
 - onnxruntime-node: MIT. sharp: Apache-2.0, but its prebuilt libvips binaries (`@img/sharp-libvips-*`) are LGPL-3.0.
   libheif-js: LGPL-3.0 (it contains libde265, an HEVC decoder). A closed build can use LGPL libraries if they stay
   separate files a user could replace, with their licence texts and a note on where to get the source.

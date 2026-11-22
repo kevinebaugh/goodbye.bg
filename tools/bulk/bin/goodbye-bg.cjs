@@ -7,6 +7,8 @@ const { Worker } = require("worker_threads");
 const { MODELS } = require("../lib/pipeline.cjs");
 const { startEngine } = require("../lib/engine.cjs");
 const VERSION = require("../package.json").version;
+let MODEL_HELP = "birefnet (the only model in this build)";
+if (MODELS.isnet) MODEL_HELP = "birefnet (default, MIT) or isnet (AGPL, faster on the CPU)"; // AGPL-only
 
 const HELP = `goodbye-bg ${VERSION}: remove backgrounds from photos on this computer. Nothing is uploaded.
 
@@ -19,7 +21,7 @@ Usage: goodbye-bg <photos or folders...> [options]
   --crop               crop to the subject with a little room, like the site
   --size <WxH>         put the subject in the middle of a WxH canvas, e.g. 2000x2000 (one number: square)
   --pad <n%>           room around the subject with --size, per side (default: 5%)
-  --model <m>          birefnet (default, MIT) or isnet (AGPL, faster on the CPU)
+  --model <m>          ${MODEL_HELP}
   --engine <e>         auto (default), gpu or cpu
   --jobs <n>           photos in flight at once (default: 3)
   --force              redo photos that already have a cut-out
@@ -56,7 +58,7 @@ function parseArgs(argv) {
       o.size = [+m[1], +(m[2] || m[1])]; if (o.size.some((n) => n < 1 || n > 16384)) fail("--size must be 1 to 16384 on each side");
     }
     else if (a === "--pad") { const v = parseFloat(val()); if (!(v >= 0 && v < 50)) fail("--pad takes 0% to 49%"); o.pad = v / 100; }
-    else if (a === "--model") { o.model = val().toLowerCase(); if (!MODELS[o.model]) fail("--model takes birefnet or isnet"); }
+    else if (a === "--model") { o.model = val().toLowerCase(); if (!MODELS[o.model]) fail(`--model takes ${Object.keys(MODELS).join(" or ")}`); }
     else if (a === "--engine") { o.engine = val().toLowerCase(); if (!["auto", "gpu", "cpu"].includes(o.engine)) fail("--engine takes auto, gpu or cpu"); }
     else if (a === "--jobs" || a === "-j") { o.jobs = parseInt(val(), 10); if (!(o.jobs >= 1 && o.jobs <= 32)) fail("--jobs takes 1 to 32"); }
     else if (a === "--force") o.force = true;

@@ -6,6 +6,12 @@ const os = require("os");
 const { modelPath } = require("./models.cjs");
 const { MODELS, RES, toInput } = require("./pipeline.cjs");
 
+// onnxruntime-node 1.31 (seen on macOS) has Microsoft's 1DS usage telemetry built in: unless told not to, it keeps a
+// device ID and queues session events (Mac model, macOS version, app name, timings) in ~/Library/Application Support/
+// Microsoft/DeveloperTools/.onnxruntime for upload. We promise no network use but the model download, so it is off,
+// before ORT loads. Checked: with this set, nothing is written there.
+process.env.ORT_DISABLE_TELEMETRY = "1";
+
 // o: { model, engine: auto|gpu|cpu, quiet }. say(text): progress line. Returns { infer(px) -> mask, engine, stats, release }.
 async function startEngine(o, say = () => {}) {
   const t0 = performance.now();
@@ -51,8 +57,7 @@ async function startEngine(o, say = () => {}) {
   }
   if (!session) await open("cpu");
   const stats = { readyMs: performance.now() - t0, inferMs: 0, runs: 0 };
-  if (engine === "cpu" && o.model === "birefnet")
-    warn(`Note: BiRefNet on the CPU is slow and needs a lot of memory. --model isnet is several times faster on the CPU.`);
+  if (engine === "cpu" && o.model === "birefnet" && MODELS.isnet) warn(`Note: BiRefNet on the CPU is slow and needs a lot of memory. --model isnet is several times faster on the CPU.`); // AGPL-only
 
   // One run at a time. A failed GPU run switches to the CPU for the rest (a broken GPU can return garbage).
   let chain = Promise.resolve();

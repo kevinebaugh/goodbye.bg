@@ -8,7 +8,8 @@ const MODELS = {
   // BiRefNet lite (MIT): ImageNet mean/std, output logits.
   birefnet: { mean: [123.675, 116.28, 103.53], std: [58.395, 57.12, 57.375], logits: true, harden: false },
   // ISNet medium (AGPL, IMG.LY): (x - 128) / 256, output 0..1. The page hardens its haze (ISNet only).
-  isnet: { mean: [128, 128, 128], std: [256, 256, 256], logits: false, harden: true },
+  // Lines marked AGPL-only are left out of the closed single-file build (scripts/build-sea.mjs).
+  isnet: { mean: [128, 128, 128], std: [256, 256, 256], logits: false, harden: true }, // AGPL-only
 };
 
 // A see-through image (a PNG cut-out, an SVG logo) goes to the model on white, or on black when the subject is light.

@@ -8,6 +8,8 @@ const { startEngine } = require("./engine.cjs");
 const { MODELS } = require("./pipeline.cjs");
 const { parseRequest, ApiError } = require("./api.cjs");
 const VERSION = require("../package.json").version;
+let MODEL_HELP = "birefnet (the only model in this build)";
+if (MODELS.isnet) MODEL_HELP = "birefnet (default, MIT) or isnet (AGPL)"; // AGPL-only
 
 const HELP = `goodbye-bg serve: remove.bg's API on this computer. Nothing is uploaded.
 
@@ -16,7 +18,7 @@ Usage: goodbye-bg serve [options]
   --port <n>           port (default: 5000)
   --host <addr>        address to listen on (default: 127.0.0.1, and ::1 so "localhost" works)
   --allow-urls         fetch image_url and bg_image_url (off by default; otherwise the only network use is the one-time model download)
-  --model <m>          birefnet (default, MIT) or isnet (AGPL)
+  --model <m>          ${MODEL_HELP}
   --engine <e>         auto (default), gpu or cpu
   --jobs <n>           photos prepared at once (default: 3)
   --quiet              no log line per request
@@ -36,7 +38,7 @@ function parseArgs(argv) {
     else if (a === "--port" || a === "-p") { o.port = parseInt(val(), 10); if (!(o.port >= 0 && o.port < 65536)) fail("--port takes 0 to 65535"); }
     else if (a === "--host") o.host = val();
     else if (a === "--allow-urls") o.allowUrls = true;
-    else if (a === "--model") { o.model = val().toLowerCase(); if (!MODELS[o.model]) fail("--model takes birefnet or isnet"); }
+    else if (a === "--model") { o.model = val().toLowerCase(); if (!MODELS[o.model]) fail(`--model takes ${Object.keys(MODELS).join(" or ")}`); }
     else if (a === "--engine") { o.engine = val().toLowerCase(); if (!["auto", "gpu", "cpu"].includes(o.engine)) fail("--engine takes auto, gpu or cpu"); }
     else if (a === "--jobs" || a === "-j") { o.jobs = parseInt(val(), 10); if (!(o.jobs >= 1 && o.jobs <= 32)) fail("--jobs takes 1 to 32"); }
     else if (a === "--quiet" || a === "-q") o.quiet = true;
