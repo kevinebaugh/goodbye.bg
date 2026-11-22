@@ -116,7 +116,7 @@ body.moving main, body.moving main *, body.moving .foot, body.moving .foot * { v
 .busy { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 10px; padding: 16px; text-align: center;
   background: color-mix(in srgb, var(--card) 70%, transparent); font-weight: 700; }
 .busy::before { content: none; } /* no wave on the photo: the subject is what stays, so the wave lives in the bar (.say) */
-.failed .busy { color: var(--danger); font-weight: 600; grid-template-columns: minmax(0, 1fr); }
+.failed .busy { color: var(--danger); font-weight: 600; grid-template-columns: minmax(0, 1fr); background: var(--card); } /* opaque: red text over a photo fell to 2.5:1 */
 /* The quip lives in the bar while a photo is worked on (Download takes its place when done): text never lands on the photo. */
 .say { display: none; flex: 1; min-width: 0; min-height: var(--h-md); margin: 0; align-items: center; justify-content: center; text-align: center;
   font-size: 14px; font-weight: 700; line-height: 1.2; color: var(--ink); overflow: hidden; }
@@ -187,7 +187,7 @@ body.moving main, body.moving main *, body.moving .foot, body.moving .foot * { v
 .swb .sw { width: calc(var(--d) - 8px); height: calc(var(--d) - 8px); }
 .swb[aria-pressed="true"]:not(.pcrop) { box-shadow: 0 0 0 2px var(--brand); }
 .pcrop[aria-pressed="true"] { background: color-mix(in srgb, var(--ink) 12%, transparent); }
-.swb:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+.swb:focus-visible, .swb:has(input:focus-visible) { outline: 2px solid var(--ink); outline-offset: 2px; } /* ink, offset: unlike the brand ring of the chosen swatch; the colour and photo swatches focus their hidden input */
 @media (hover: hover) { .swb:hover { transform: scale(1.12); } }
 .swb:active { transform: scale(.9); }
 @keyframes swin { from { transform: scale(.3); opacity: 0; } }
@@ -338,6 +338,7 @@ body:not(.has-work) .foot { margin: 56px auto auto; padding-bottom: max(24px, 8v
   padding: 6px 6px 6px 16px; border-radius: 999px; background: var(--ink); color: var(--paper); font-size: 15px; font-weight: 600;
   box-shadow: 0 10px 30px -12px rgb(0 0 0 / .45); animation: pop .25s cubic-bezier(.2,1.4,.4,1); }
 .undo .btn { --h: var(--h-sm); --px: 14px; --fs: 14px; gap: 6px; }
+.undo .btn:focus-visible { outline-color: var(--paper); } /* the global ink ring vanished on the ink pill */
 /* The pill sits in the footer's place (app.js measures it): the footer steps back while it is up. */
 .foot { transition: opacity .2s; }
 body.undoing .foot, body.docked .foot { opacity: 0; }
@@ -372,8 +373,8 @@ body.undoing .foot, body.docked .foot { opacity: 0; }
 
 /* The app is one screen: no page scrolling. Pinch-zoom works (accessibility); double-tap zoom does not.
    The text pages (remove.bg alternative, how-to) scroll normally. */
-html:has(body.app) { height: 100%; overflow: hidden; }
-body.app { height: 100dvh; min-height: 0; overflow: hidden; }
+html:has(body.app) { height: 100%; overflow-x: hidden; overflow-y: auto; } /* scrolls only when zoomed in far enough that the page overflows (300 to 400%: Reflow) */
+body.app { height: 100dvh; min-height: 0; overflow-x: hidden; overflow-y: auto; }
 body.app, body.app * { touch-action: manipulation; } /* pinch-zoom and pan once zoomed; no double-tap zoom */
 body.app main { flex: 1; min-height: 0; display: flex; flex-direction: column; padding-bottom: 8px; }
 body.app.has-work .grid { flex: 1; min-height: 0; grid-template-columns: repeat(var(--cols, 1), var(--p, 300px));
