@@ -808,14 +808,21 @@ let outAll = null; // after "All": photos added later in this visit get the same
 
 // Where things go on the output canvas, in its pixels: a photo pixel p lands at p * k + (tx, ty); clip is the subject's
 // box with its margin (outside it the canvas stays empty); sh is the shadow ellipse in photo pixels.
+// A subject that runs off the photo (a person cut at the waist, a bottle at its base) has a straight cut there: that
+// side gets no margin and sits on the canvas edge, so the cut never floats in mid-air, and no shadow goes under a cut.
+const CUT = 1.5 / RES; // the mask reaches the photo's edge (within a model pixel)
+const cutSides = (s) => (s ? { l: s.x0 <= CUT, t: s.y0 <= CUT, r: s.x1 >= 1 - CUT, b: s.y1 >= 1 - CUT } : {});
 function outPlan(it) {
-  const o = outOf(it), s = subject(it);
+  const o = outOf(it), s = subject(it), cut = cutSides(s);
   const b = it.crop && s ? s : { x0: 0, y0: 0, x1: 1, y1: 1 };
   let x0 = b.x0 * it.w, y0 = b.y0 * it.h, x1 = b.x1 * it.w, y1 = b.y1 * it.h;
   const pad = o.margin * Math.max(x1 - x0, y1 - y0);
-  x0 -= pad; y0 -= pad; x1 += pad; y1 += pad;
+  if (!cut.l) x0 -= pad;
+  if (!cut.t) y0 -= pad;
+  if (!cut.r) x1 += pad;
+  if (!cut.b) y1 += pad;
   let sh = null;
-  if (o.shadow && s) {
+  if (o.shadow && s && !cut.b) {
     const rx = 0.45 * (s.x1 - s.x0) * it.w, ry = Math.max(3, rx * 0.12);
     sh = { cx: ((s.x0 + s.x1) / 2) * it.w, cy: s.y1 * it.h - ry * 0.35, rx, ry };
     y1 = Math.max(y1, sh.cy + sh.ry * 1.1); // room for it under the subject
@@ -827,7 +834,9 @@ function outPlan(it) {
   else if (RATIOS[o.size]) { const r = RATIOS[o.size]; if (bw / bh > r) H = bw / r; else W = bh * r; }
   const c = Math.min(1, MAX_SIDE / Math.max(W, H), Math.sqrt(OUT_PX / (W * H)));
   W = Math.max(1, Math.round(W * c)); H = Math.max(1, Math.round(H * c)); k *= c;
-  const tx = W / 2 - ((x0 + x1) / 2) * k, ty = H / 2 - ((y0 + y1) / 2) * k;
+  // Centred, except against a cut side (cut on both sides: centred, there is nothing better).
+  const place = (lo, hi, a, z, S) => (lo && !hi ? -a * k : hi && !lo ? S - z * k : S / 2 - ((a + z) / 2) * k);
+  const tx = place(cut.l, cut.r, x0, x1, W), ty = place(cut.t, cut.b, y0, y1, H);
   return { W, H, k, tx, ty, clip: [x0 * k + tx, y0 * k + ty, bw * k, bh * k], sh };
 }
 // The shadow, then the background, behind what the canvas holds; q scales the plan (previews). T places the photo on
