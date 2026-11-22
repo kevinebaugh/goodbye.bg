@@ -139,7 +139,7 @@ const params = new URLSearchParams(location.search);
 // Test visits (a test switch in the address, or a browser driven by automation) mark what they send with t=1 / "t": 1,
 // and /go and /api/rate and /api/crash drop it, so the A/B, vote and crash data hold real visitors only. The page still
 // sends it (the smoke tests read those requests) and clicks still redirect. /api/count is left alone (Kevin: tests count).
-const TEST_SWITCHES = ["adtest", "adpartner", "adv", "engine", "gpufail", "model", "threads", "nowarm", "haze", "keepmax", "keepmb",
+const TEST_SWITCHES = ["adtest", "adpartner", "adv", "engine", "gpufail", "model", "threads", "nowarm", "haze", "pp", "keepmax", "keepmb",
   "maxbatch", "zazzlecap", "confetti", "debug", "lang"];
 const TEST = !!navigator.webdriver || TEST_SWITCHES.some((k) => params.has(k));
 
