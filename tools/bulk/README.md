@@ -181,7 +181,7 @@ folder mode. `node test/serve-test.mjs <photo>` checks 53 behaviours against a r
 Makes one executable for this platform with Node's single executable applications (`node --build-sea`). Homebrew's
 `node` can't (built without SEA support); the binary from nodejs.org can. The default is the **BiRefNet-only build**:
 lines marked `// AGPL-only` (ISNet's download, settings and `--model` choice) are left out, and the build stops if
-anything naming ISNet's model remains. `--open` keeps ISNet (an AGPL build).
+anything naming ISNet's model remains. `--open` keeps ISNet (an AGPL build; checked that it offers `--model isnet`).
 
 - macOS arm64, Node 26.13.1: **169 MB** (147 MB of it is Node), 67 MB zipped. The first run unpacks 71 MB to
   `<cache>/runtime-<hash>/` in 0.2 s and downloads the 93 MB model (about 11 s here); later runs start in about 2 s.

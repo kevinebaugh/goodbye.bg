@@ -47,7 +47,7 @@ read 2026-11-22). Details and the full list in `tools/bulk/README.md`.
 - People who ran remove.bg's API or desktop app over whole folders: shops, marketplaces, photographers. They lose it
   on 1 Dec. A CLI suits the ones who had scripts; most shop owners want a window, not a terminal.
 - Free competition is real: `rembg` (MIT, Python, has BiRefNet too) does bulk locally for free, and macOS has a
-  Remove Background quick action in Finder for several files at once (worth checking how it does on product shots).
+  Remove Background quick action in Finder for several files at once. Both measured under "Against the free options".
   What we sell is convenience: one download, no Python, a GPU used out of the box, shop sizes and backgrounds, the
   same results as the site.
 - With 69 views so far, expect next to no sales until the site has traffic. It is a small side income at best.
@@ -83,8 +83,10 @@ treat the speeds as rough. The quiet-machine numbers are in the README.
 - **Found on the way, now fixed:** onnxruntime-node 1.31 has Microsoft's usage telemetry (1DS) built in.
   - It wrote a device ID and queued session events (Mac model, macOS version, the app name "goodbye-bg", timings) to
     `~/Library/Application Support/Microsoft/DeveloperTools/.onnxruntime/`.
-  - In two short test runs nothing was sent; the queue only grew. Kevin's own profile has the folder from earlier runs,
-    with an empty queue.
+  - In two short test runs with a fresh home folder, `lsof` (polled every 0.1 s) saw no socket and the queue only grew
+    (31, then 48 events); polling can miss a short upload. Kevin's own profile has the folder (written by earlier runs,
+    including this session's before the fix), and its queue was empty right after: **likely sent to Microsoft, not
+    confirmed.**
   - `lib/engine.cjs` now sets `ORT_DISABLE_TELEMETRY=1` before ORT loads. Checked: nothing is written there now. The
     Linux and Windows builds carry the same code and the same switch.
   - The quality harness (`scripts/quality`) still runs ORT without the switch.
@@ -128,8 +130,8 @@ Checked on the binary:
   - `com.apple.security.cs.allow-jit` (V8 compiles code), and probably `allow-unsigned-executable-memory`.
   - Because the unpacked `.node` and `.dylib` files are signed by others (or ad hoc), either
     `com.apple.security.cs.disable-library-validation`, or re-signing each of them with Kevin's ID before packing.
-  - Unpacked files are written by our own process, so they carry no quarantine flag. Library validation is the only
-    hurdle for them.
+  - Unpacked files are written by our own process: checked, they carry no quarantine flag (only
+    `com.apple.provenance`). Library validation is the only hurdle for them.
 - **Notarize:** `xcrun notarytool submit goodbye-bg.zip --wait` (an app-specific password or API key). It takes
   minutes.
 - **Staple:** a bare Mach-O can't be stapled; only an app bundle, a disk image or an installer package can. A
@@ -196,6 +198,8 @@ creates (lost keys, new machines).
   wouldn't build). It needed uv and a separate Python 3.12. That is the friction we would sell against.
 - **Apple Vision** (`VNGenerateForegroundInstanceMaskRequest`, a 40-line Swift script). This is the subject-lifting
   API that Finder's Remove Background most likely uses; Finder itself can't be scripted for a measurement.
+- "Time a photo" isn't quite like for like. Ours is the model run only (the photo is decoded and encoded around it, in
+  parallel). rembg's is its whole `remove()` call. Vision's is the request plus scaling the mask.
 
 | | Mean IoU | Median | 0.95 or better | Under 0.8 | Edge (boundary IoU) | Time a photo |
 |---|---|---|---|---|---|---|
@@ -212,7 +216,7 @@ creates (lost keys, new machines).
   fp16 copy likely drops fine parts there. **Our quality is not something rembg users lack.**
 - rembg's **default** model (u2net) is clearly worse: 20 of the 40 photos at least 0.02 worse than ours, 11 under 0.8.
   Most people who try rembg without picking a model get that.
-- **Apple Vision** is free, already on every Mac, and very fast (25 ms a photo, the Neural Engine). It is as good as
+- **Apple Vision** is free, already on every Mac that has it, and very fast (25 ms a photo). It is as good as
   ours on people and pets (0.974 to 0.995 by set). It fails on objects: the ladder, kite and clothes 0.6 to 0.7, a
   tripod not found at all. Its edges are coarser (boundary IoU 0.81 against 0.92).
 
@@ -222,8 +226,8 @@ creates (lost keys, new machines).
 - On the CPU ours was slower than rembg here (7.1 s against 4.7 s). The machine was busy, so take it loosely; our fp16
   model with the GridSample rewrite is built for WebGPU, not the CPU. Not looked into.
 
-**Finder's Remove Background (Quick Action, macOS 14+):**
-- Select files > right-click > Quick Actions > Remove Background. It writes a PNG next to each one.
+**Finder's Remove Background (Quick Action; from memory, not run here):**
+- Select files > right-click > Quick Actions > Remove Background. It saves a cut-out next to each one.
 - Free, no install, fine for a few people or pet photos.
 - No folders of thousands, resume, sizes, backgrounds or JPG output, and nothing scriptable. Weak on products and thin
   objects, by the Vision numbers above.
