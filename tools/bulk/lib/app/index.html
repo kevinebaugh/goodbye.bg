@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>goodbye.bg bulk</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%91%8B%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="app.css">
+<script src="app.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <span class="mark">goodbye<span>.bg</span><i class="wave" aria-hidden="true">👋</i></span>
+  <span class="tag">bulk</span>
+</header>
+
+<main>
+  <section id="pickView" class="drop">
+    <h1>Drop photos or a folder</h1>
+    <p class="sub">Cut out hundreds at once, right on this computer.</p>
+    <div class="row">
+      <button id="pickFolder" class="big" type="button">Choose folder</button>
+      <button id="pickFiles" class="big ghost" type="button">Choose photos</button>
+    </div>
+    <p id="pickNote" class="note" role="status"></p>
+    <input type="file" id="filesIn" multiple accept="image/*,.heic,.heif,.tif,.tiff,.avif" hidden>
+    <input type="file" id="dirIn" webkitdirectory hidden>
+  </section>
+
+  <section id="setup" class="panel" hidden>
+    <div class="picked">
+      <span class="picked-name"><strong id="pickedName"></strong> <span id="pickedCount" class="muted"></span></span>
+      <button id="again" class="btn ghost" type="button">Change</button>
+    </div>
+
+    <div class="opts">
+      <fieldset>
+        <legend>Background</legend>
+        <div class="seg">
+          <label><input type="radio" name="bg" value="transparent" checked><span>See-through</span></label>
+          <label><input type="radio" name="bg" value="white"><span>White</span></label>
+          <label class="swatch"><input type="radio" name="bg" value="color"><span>Colour <input type="color" id="bgColor" value="#e1f1f0" aria-label="Background colour"></span></label>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Format</legend>
+        <div class="seg">
+          <label><input type="radio" name="format" value="png" checked><span>PNG</span></label>
+          <label><input type="radio" name="format" value="jpg"><span>JPG</span></label>
+          <label><input type="radio" name="format" value="webp"><span>WebP</span></label>
+        </div>
+        <p id="jpgNote" class="note" hidden>JPG can't be see-through, so the background is white.</p>
+      </fieldset>
+      <fieldset>
+        <legend>Size</legend>
+        <div class="seg">
+          <label><input type="radio" name="size" value="original" checked><span>Original</span></label>
+          <label><input type="radio" name="size" value="crop"><span>Crop to subject</span></label>
+          <label><input type="radio" name="size" value="2000"><span>Square 2000</span></label>
+          <label><input type="radio" name="size" value="1000"><span>Square 1000</span></label>
+        </div>
+      </fieldset>
+      <fieldset id="marginSet" hidden>
+        <legend>Margin</legend>
+        <div class="range"><input type="range" id="pad" min="0" max="30" step="1" value="5" aria-label="Margin on each side"><output id="padOut" for="pad">5%</output></div>
+      </fieldset>
+    </div>
+
+    <div class="saveto">
+      <span class="saveto-text">Saves to <code id="outPath"></code></span>
+      <button id="changeOut" class="btn" type="button">Change</button>
+    </div>
+    <div class="row left"><button id="start" class="big" type="button">Start</button></div>
+  </section>
+
+  <section id="runView" hidden>
+    <div class="status panel">
+      <div class="meter" role="progressbar" aria-valuemin="0" id="meter"><i id="meterFill"></i></div>
+      <div class="status-row">
+        <p id="statusText" class="status-text" role="status"></p>
+        <button id="stop" class="btn" type="button">Stop</button>
+      </div>
+      <div id="doneRow" class="done-row" hidden>
+        <span class="saveto-text">In <code id="donePath"></code></span>
+        <div class="row left">
+          <button id="reveal" class="big" type="button">Show in Finder</button>
+          <button id="newBatch" class="big ghost" type="button">New batch</button>
+        </div>
+      </div>
+    </div>
+    <div id="grid" class="grid"></div>
+  </section>
+</main>
+
+<footer class="foot"><span id="engine">Getting ready...</span><span class="dot" aria-hidden="true">·</span><span>Nothing leaves this computer.</span></footer>
+<div id="dropHint" class="drop-hint" hidden><span>Drop to add</span></div>
+</body>
+</html>
