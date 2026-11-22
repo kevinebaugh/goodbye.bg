@@ -448,6 +448,97 @@ try {
     return `${w} x ${h}; ${webp}`;
   });
 
+  // A subject on hard stripes: blur has to smooth them out behind a sharp subject (a smooth gradient would pass even
+  // with no blur at all).
+  const addStriped = (p, names) => p.ev(`(async () => {
+    const dt = new DataTransfer();
+    for (const name of ${JSON.stringify(names)}) {
+      const c = document.createElement("canvas"); c.width = 900; c.height = 1200; const x = c.getContext("2d");
+      for (let i = 0; i < 900; i += 40) { x.fillStyle = (i / 40) % 2 ? "#204060" : "#e8d070"; x.fillRect(i, 0, 40, 1200); }
+      x.fillStyle = "#c0302a"; x.beginPath(); x.ellipse(450, 744, 252, 360, 0, 0, 7); x.fill();
+      x.fillStyle = "#f0c8a0"; x.beginPath(); x.arc(450, 288, 135, 0, 7); x.fill();
+      const b = await new Promise((r) => c.toBlob(r, "image/png")); dt.items.add(new File([b], name + ".png", { type: "image/png" }));
+    }
+    const i = document.getElementById("file"); i.files = dt.files; i.dispatchEvent(new Event("change", { bubbles: true }));
+    return true;
+  })()`);
+  // Pixels of a downloaded image, read back in the page: [r, g, b, a] at fractions of its size.
+  const pixels = (p, f, at) => p.ev(`(async () => {
+    const b = await createImageBitmap(new Blob([Uint8Array.from(atob(${JSON.stringify(f.bytes.toString("base64"))}), (c) => c.charCodeAt(0))]));
+    const c = new OffscreenCanvas(b.width, b.height), x = c.getContext("2d"); x.drawImage(b, 0, 0);
+    const px = (u, v) => [...x.getImageData(Math.min(b.width - 1, Math.floor(u * b.width)), Math.min(b.height - 1, Math.floor(v * b.height)), 1, 1).data];
+    return { w: b.width, h: b.height, at: ${JSON.stringify(at)}.map(([u, v]) => px(u, v)) };
+  })()`);
+
+  await check(`backgrounds: blur gives a JPG, stripes smoothed, subject sharp (${engine})`, async () => {
+    const c7 = await context(), o = await page(c7);
+    await o.go(app());
+    await addStriped(o, ["blurry"]);
+    await allDone(o, 1, 90000);
+    await click(o, "#grid > .card .bgb");
+    await click(o, "#grid > .card .bgs .blur"); // soft
+    await click(o, "#grid > .card .bgs .blur"); // strong
+    await o.until(`document.querySelector("#grid > .card .bgb").getAttribute("aria-label") === "Background: Strong blur"`, 3000, "strong blur chosen");
+    assert(await o.ev(`document.querySelector("#grid > .card .crop").getAttribute("aria-pressed") === "false"`), "blur did not switch to the whole frame");
+    const f = await download(c7, () => click(o, "#grid > .card .dl"));
+    assert(f.kind === "jpg" && f.name === "blurry-goodbye-bg.jpg", `${f.kind} ${f.name}`);
+    // A row across the background, left of the subject, 10 px apart: the 40 px stripes went from 50 to 230 in red.
+    const row = Array.from({ length: 12 }, (_, i) => [0.06 + i * 0.0111, 0.5]);
+    const r = await pixels(o, f, [...row, [0.5, 0.62], [0.01, 0.01], [0.99, 0.99]]);
+    assert(r.w === 900 && r.h === 1200, `whole frame expected, got ${r.w} x ${r.h}`);
+    const reds = r.at.slice(0, 12).map((v) => v[0]), spread = Math.max(...reds) - Math.min(...reds);
+    assert(spread < 60, `stripes not smoothed: red runs ${reds.join(",")}`);
+    const [mr, mg, mb] = r.at[12];
+    assert(mr > 150 && mg < 90 && mb < 90, `subject not sharp red: ${r.at[12]}`);
+    for (const c of r.at.slice(13)) assert(c[0] + c[1] + c[2] > 120, `a corner is black: ${c}`);
+    await o.until(`(${KEPT}).then((k) => k[0]?.bg === "blur:2")`, 10000, "blur kept");
+    o.errors.length = 0;
+    await o.reload();
+    await allDone(o, 1, 20000);
+    await o.until(`document.querySelector("#grid > .card").classList.contains("solid") && document.querySelector("#grid > .card .bgb").getAttribute("aria-label") === "Background: Strong blur"`, 10000, "blur back after the reload");
+    noErrors(o); await cspClean(o);
+    await o.close();
+    return `background red ${Math.min(...reds)}-${Math.max(...reds)} (stripes 32-232), subject ${r.at[12].slice(0, 3)}`;
+  });
+
+  await check("backgrounds: your photo, All, stored once, reload", async () => {
+    const c8 = await context(), o = await page(c8);
+    await o.go(app());
+    await addPhotos(o, ["ph1", "ph2"]);
+    await allDone(o, 2, 120000);
+    const card = (n) => `#grid > .card:nth-child(${n})`;
+    await click(o, `${card(1)} .bgb`);
+    await o.ev(`(async () => { const c = document.createElement("canvas"); c.width = 1600; c.height = 1000; const x = c.getContext("2d");
+      x.fillStyle = "#1a7f5a"; x.fillRect(0, 0, 1600, 1000);
+      const b = await new Promise((r) => c.toBlob(r, "image/jpeg", 0.9)), dt = new DataTransfer(); dt.items.add(new File([b], "green.jpg", { type: "image/jpeg" }));
+      const i = document.querySelector("${card(1)} .bgs .photo input"); i.files = dt.files; i.dispatchEvent(new Event("change", { bubbles: true })); return true; })()`);
+    await o.until(`document.querySelector("${card(1)} .bgb").getAttribute("aria-label") === "Background: Your photo"`, 10000, "the photo as background");
+    const f = await download(c8, () => click(o, `${card(1)} .dl`));
+    assert(f.kind === "jpg" && f.name === "ph1-goodbye-bg.jpg", `${f.kind} ${f.name}`);
+    const r = await pixels(o, f, [[0.01, 0.01], [0.5, 0.6]]);
+    const [g0, g1, g2] = r.at[0];
+    assert(Math.abs(g0 - 0x1a) < 25 && Math.abs(g1 - 0x7f) < 25 && Math.abs(g2 - 0x5a) < 25, `corner is not the photo: ${r.at[0]}`);
+    assert(r.at[1][0] > 150 && r.at[1][1] < 90, `subject missing: ${r.at[1]}`);
+    await click(o, `${card(1)} .bgb`);
+    await click(o, `${card(1)} .bgs .more`);
+    await click(o, `${card(1)} .oall`);
+    const backs = `indexedDB.databases().then(() => new Promise((ok) => { const r = indexedDB.open("goodbye-bg"); r.onsuccess = () => { const db = r.result; if (!db.objectStoreNames.contains("backs")) { db.close(); return ok(-1); } const q = db.transaction("backs").objectStore("backs").count(); q.onsuccess = () => { db.close(); ok(q.result); }; }; }))`;
+    await o.until(`(${KEPT}).then((k) => k.length === 2 && k.every((s) => s.bg && s.bg === k[0].bg && s.bg.startsWith("img:")))`, 10000, "both kept with the same photo").catch(async (e) => {
+      throw new Error(e.message + ": " + JSON.stringify(await kept(o)));
+    });
+    await o.until(`(${backs}).then((n) => n === 1)`, 10000, "the photo stored once");
+    o.errors.length = 0;
+    await o.reload();
+    await allDone(o, 2, 20000);
+    await o.until(`[...document.querySelectorAll("#grid > .card .bgb")].every((b) => b.getAttribute("aria-label") === "Background: Your photo")`, 10000, "both back on the photo");
+    const g = await download(c8, () => click(o, `${card(2)} .dl`));
+    const r2 = await pixels(o, g, [[0.01, 0.01]]);
+    assert(g.kind === "jpg" && Math.abs(r2.at[0][1] - 0x7f) < 25, `after the reload: ${g.kind} ${r2.at[0]}`);
+    noErrors(o); await cspClean(o);
+    await o.close();
+    return `${f.name} ${r.w} x ${r.h}, 1 stored photo for 2 cut-outs`;
+  });
+
   // Phone width, a slow connection: the case that jittered before (jitter-design: CLS 0.24 with 2 photos at 300 ms).
   await check("reload at phone width, 300 ms latency: CLS 0", async () => {
     const c5 = await context(), m = await page(c5, { w: 390, h: 844 }); // no touch: Download stays a download
