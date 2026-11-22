@@ -165,7 +165,7 @@ body.moving main, body.moving main *, body.moving .foot, body.moving .foot * { v
 .sw.none, .swb.sw0 .sw { background: repeating-conic-gradient(var(--check-a) 0 25%, var(--check-b) 0 50%) 0 0 / 8px 8px; }
 .bgb { opacity: .9; }
 .bar.picking > :not(.bgs, .opts) { visibility: hidden; }
-.bgs { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: var(--s2); padding: 0 var(--s3);
+.bgs { position: absolute; inset: 0; display: flex; align-items: center; justify-content: safe center; gap: var(--s2); padding: 0 var(--s3);
   background: var(--card); overflow-x: auto; scrollbar-width: none; }
 .swb { --d: 30px; flex: none; position: relative; width: var(--d); height: var(--d); border-radius: 50%; border: 0; padding: 0; display: grid; place-items: center;
   background: transparent; color: var(--ink); font: inherit; font-size: 18px; line-height: 1; cursor: pointer;
@@ -181,6 +181,18 @@ body.moving main, body.moving main *, body.moving .foot, body.moving .foot * { v
 .custom:not(.set) .sw::after { content: "+"; font-size: 15px; font-weight: 800; color: var(--muted); }
 .custom input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; border: 0; padding: 0; cursor: pointer; }
 .pcrop, .px { display: none; }
+/* Blur: a soft dot that spreads out for the strong blur. Your photo: its thumbnail, or a picture icon. */
+.sw.blur, .swb.blur .sw { background: radial-gradient(circle, var(--brand) 0 20%, color-mix(in srgb, var(--brand) 40%, transparent) 42%, transparent 68%), var(--card); }
+.sw.blur.b2, .swb.blur.b2 .sw { background: radial-gradient(circle, color-mix(in srgb, var(--brand) 75%, transparent) 0 6%, color-mix(in srgb, var(--brand) 28%, transparent) 48%, transparent 82%), var(--card); }
+.sw.img, .swb.photo .sw { background-size: cover !important; background-position: center !important; }
+.swb.photo .sw { display: grid; place-items: center; color: var(--muted); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 45%, transparent); }
+.swb.photo.set svg { display: none; }
+.swb.photo input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; border: 0; padding: 0; cursor: pointer; font-size: 0; }
+.swb.photo[aria-busy="true"] { animation: pulse .8s ease-in-out infinite alternate; }
+@keyframes pulse { to { opacity: .35; } }
+/* A picture dragged over a card's background row or button: that row lights up (it becomes the background). */
+.bar.backdrop { background: color-mix(in srgb, var(--accent) 30%, var(--card)); }
+.bar.backdrop .bgb { box-shadow: 0 0 0 2px var(--brand); }
 /* Size, margin, shadow: the picker's second row, same place and height. Native selects (a phone shows its own wheel).
    Narrow cards scroll it sideways. */
 .opts { position: absolute; inset: 0; display: flex; align-items: center; gap: var(--s2); padding: 0 var(--s3);
@@ -381,6 +393,14 @@ body.app:not(.has-work) main { flex: none; margin-top: auto; }
 @container (min-width: 148px) and (max-width: 183px) { .picky .bar > .x { display: none; } .bgs .px { display: grid; } }
 @container (max-width: 147px) { .rates { display: none; } .bgs .sw2 { display: none; } }
 @container (max-width: 119px) { .picky .bar > .x { display: none; } .bgs .px { display: grid; } .bgs .pcrop, .bgs .sw2, .bgs .custom { display: none; } .bgs { padding: 0 4px; } }
+/* Blur and your photo need room in the picker: the extra palette colours go first, then any colour (phones in
+   portrait, 165 px: crop, see-through, white, blur, your photo, size, remove), the crop toggle, then size. */
+@container (max-width: 356px) { .bgs .sw4 { display: none; } }
+@container (max-width: 260px) { .bgs .sw3 { display: none; } }
+@container (max-width: 215px) { .bgs .sw2 { display: none; } }
+@container (max-width: 205px) { .bgs .custom { display: none; } }
+@container (max-width: 130px) { .bgs .pcrop { display: none; } }
+@container (max-width: 119px) { .bgs .photo, .bgs .more { display: none; } }
 /* The quip stays two lines at the bar's height: phone cards hide remove while their photo is worked on;
    the smallest (a dozen photos) show only the wave. */
 @container (max-width: 183px) { .working .bar > .x { display: none; } }

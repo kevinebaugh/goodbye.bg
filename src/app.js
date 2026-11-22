@@ -639,9 +639,9 @@ function drawCard(it) {
   x.clearRect(0, 0, W, H);
   if (!it.mask) return x.drawImage(it.bmp, 0, 0, W, H);
   if (!plainOut(it)) return drawPlanned(it);
-  if (it.bg && !it.anim) { x.fillStyle = it.bg; x.fillRect(0, 0, W, H); }
   const full = render(it, Math.max(1, Math.round(it.w * k)), Math.max(1, Math.round(it.h * k)));
   x.drawImage(full, f.x * k, f.y * k, f.w * k, f.h * k, 0, 0, W, H);
+  underlay(x, null, 1, it, bgOf(it), { k, tx: -f.x * k, ty: -f.y * k });
   still(it);
 }
 
@@ -684,7 +684,7 @@ function reveal(it) {
   const c = it.el.canvas, x = c.getContext("2d");
   const K = Math.min(1, PREVIEW_SIDE / Math.max(it.w, it.h)), W = Math.round(it.w * K), H = Math.round(it.h * K);
   c.width = W; c.height = H;
-  const cut = render(it, W, H), slant = H * 0.4, D = 450, Z = 420, f = frame(it);
+  const cut = render(it, W, H), slant = H * 0.4, D = 450, Z = 420, f = frame(it), bg = bgOf(it);
   const zoom = plainOut(it) && (f.w !== it.w || f.h !== it.h); // with a size, margin or shadow set, drawCard draws that at the end
   let t0 = performance.now();
   const wipe = (now) => {
@@ -694,7 +694,7 @@ function reveal(it) {
     x.drawImage(it.bmp, 0, 0, W, H);
     x.save();
     x.beginPath(); x.moveTo(0, 0); x.lineTo(edge, 0); x.lineTo(edge - slant, H); x.lineTo(0, H); x.closePath(); x.clip();
-    x.clearRect(0, 0, W, H); if (it.bg) { x.fillStyle = it.bg; x.fillRect(0, 0, W, H); } x.drawImage(cut, 0, 0);
+    x.clearRect(0, 0, W, H); x.drawImage(cut, 0, 0); underlay(x, null, 1, it, bg, { k: K, tx: 0, ty: 0 });
     x.restore();
     if (t < 1) requestAnimationFrame(wipe);
     else if (zoom) { t0 = performance.now(); requestAnimationFrame(ease); }
@@ -711,9 +711,10 @@ function reveal(it) {
     const t = 1 - (1 - Math.min(1, (now - t0) / Z)) ** 3, l = (a, b) => a + (b - a) * t;
     const rx = l(0, f.x) * K, ry = l(0, f.y) * K, rw = l(it.w, f.w) * K, rh = l(it.h, f.h) * K;
     const s = Math.min(cw / rw, ch / rh), dw = rw * s, dh = rh * s;
+    const ox = (cw - dw) / 2, oy = (ch - dh) / 2;
     x.clearRect(0, 0, cw, ch);
-    if (it.bg) { x.fillStyle = it.bg; x.fillRect((cw - dw) / 2, (ch - dh) / 2, dw, dh); }
-    x.drawImage(cut, rx, ry, rw, rh, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
+    x.drawImage(cut, rx, ry, rw, rh, ox, oy, dw, dh);
+    if (bg) { x.save(); x.beginPath(); x.rect(ox, oy, dw, dh); x.clip(); underlay(x, null, 1, it, bg, { k: K * s, tx: ox - rx * s, ty: oy - ry * s }); x.restore(); }
     if (t < 1) requestAnimationFrame(ease); else drawCard(it);
   };
   requestAnimationFrame(wipe);
@@ -726,7 +727,7 @@ const fullBitmap = (it) => decode(it.blob);
 
 // raw: the plain see-through PNG of the crop, whatever the card's options (the cut-out sent to Zazzle).
 async function fullBlob(it, raw = false) {
-  const bg = raw ? null : it.bg, webp = !raw && outOf(it).fmt === "webp" && WEBP;
+  const bg = raw ? null : bgOf(it), webp = !raw && outOf(it).fmt === "webp" && WEBP;
   dbg("png", { w: it.w, h: it.h });
   working("png", it); pngBusy++;
   // One canvas at the saved size: the photo is drawn shifted so the crop lands at 0,0 (the canvas clips the
@@ -750,7 +751,7 @@ async function fullBlob(it, raw = false) {
     x.globalCompositeOperation = "destination-in"; // keep the photo only where the mask is opaque
     x.drawImage(it.mask, mx, my, mw, mh);
     if (p) x.restore();
-    underlay(x, p, 1, bg); // the shadow and the chosen background go behind the cut-out
+    underlay(x, p, 1, it, bg, p || { k: 1, tx: -f.x, ty: -f.y }); // the shadow and the chosen background go behind the cut-out
     if (webp) return await out.convertToBlob({ type: "image/webp", quality: 0.9 });
     if (!bg) return await out.convertToBlob({ type: "image/png" });
     return await out.convertToBlob({ type: "image/jpeg", quality: 0.92 });
@@ -770,7 +771,7 @@ function png(it) {
   }
   return it.png;
 }
-const ext = (it) => (it.anim ? "gif" : outOf(it).fmt === "webp" && WEBP ? "webp" : it.bg ? "jpg" : "png");
+const ext = (it) => (it.anim ? "gif" : outOf(it).fmt === "webp" && WEBP ? "webp" : bgOf(it) ? "jpg" : "png");
 const outName = (it) => `${it.name}-goodbye-bg.${ext(it)}`;
 
 /* ---------- output: size, margin, shadow, format ----------
@@ -812,8 +813,9 @@ function outPlan(it) {
   const tx = W / 2 - ((x0 + x1) / 2) * k, ty = H / 2 - ((y0 + y1) / 2) * k;
   return { W, H, k, tx, ty, clip: [x0 * k + tx, y0 * k + ty, bw * k, bh * k], sh };
 }
-// The shadow, then the background, behind what the canvas holds; q scales the plan (previews).
-function underlay(x, p, q, bg) {
+// The shadow, then the background, behind what the canvas holds; q scales the plan (previews). T places the photo on
+// this canvas (a photo pixel lands at p * T.k + T.tx, T.ty): the blurred photo lines up with the cut-out.
+function underlay(x, p, q, it, bg, T) {
   x.globalCompositeOperation = "destination-over";
   if (p?.sh) {
     const { cx, cy, rx, ry } = p.sh, R = rx * p.k * q;
@@ -822,7 +824,7 @@ function underlay(x, p, q, bg) {
     g.addColorStop(0, "rgba(0,0,0,.34)"); g.addColorStop(0.5, "rgba(0,0,0,.16)"); g.addColorStop(1, "rgba(0,0,0,0)");
     x.fillStyle = g; x.beginPath(); x.arc(0, 0, R, 0, 2 * Math.PI); x.fill(); x.restore();
   }
-  if (bg) { x.fillStyle = bg; x.fillRect(0, 0, x.canvas.width, x.canvas.height); }
+  backdrop(x, it, bg, T);
   x.globalCompositeOperation = "source-over";
 }
 // The card with options set: the plan at preview size, never sharper than the preview bitmap.
@@ -835,8 +837,110 @@ function drawPlanned(it) {
   x.save(); x.beginPath(); x.rect(...p.clip.map((v) => v * q)); x.clip();
   x.drawImage(full, p.tx * q, p.ty * q);
   x.restore();
-  underlay(x, p, q, it.bg);
+  underlay(x, p, q, it, bgOf(it), { k: p.k * q, tx: p.tx * q, ty: p.ty * q });
   still(it);
+}
+
+/* ---------- backgrounds: blur and your own photo ----------
+   it.bg is null (see-through), a colour "#rrggbb", "blur:1" or "blur:2" (the photo's own background, blurred; the
+   subject stays sharp), or "img:<id>" (a picture the visitor picked, cover-fit behind the subject; see backs).
+   Everything that draws a background goes through backdrop(): canvas silently ignores a fillStyle it can't read. */
+const backs = new Map(); // id -> { c: the picture (a canvas, at most BACK_SIDE), blob: it as a JPEG, thumb: a small URL }
+const bgKind = (v) => (!v ? null : v.startsWith("blur:") ? "blur" : v.startsWith("img:") ? "img" : "color");
+// What is drawn: GIFs never get one, and a picture that is gone (storage cleared) leaves the cut-out see-through.
+const bgOf = (it) => (it.anim || !it.bg || (bgKind(it.bg) === "img" && !backs.get(it.bg.slice(4))) ? null : it.bg);
+// Draws behind what the canvas holds (the caller has set destination-over).
+function backdrop(x, it, bg, T) {
+  const kind = bgKind(bg), W = x.canvas.width, H = x.canvas.height;
+  if (!kind) return;
+  if (kind === "color") { x.fillStyle = bg; x.fillRect(0, 0, W, H); return; }
+  const src = kind === "blur" ? blurOf(it, +bg.slice(5) || 1) : backs.get(bg.slice(4))?.c;
+  if (!src) return;
+  x.imageSmoothingEnabled = true; x.imageSmoothingQuality = "high";
+  if (kind === "blur") {
+    const w = it.w * T.k, h = it.h * T.k;
+    x.drawImage(src, T.tx, T.ty, w, h);
+    if (T.tx <= 0.5 && T.ty <= 0.5 && T.tx + w >= W - 0.5 && T.ty + h >= H - 0.5) return; // the photo covers the canvas
+  }
+  // Cover-fit: the picture, or (a size wider than the photo) the blur again behind it, so nothing is left see-through.
+  const k = Math.max(W / src.width, H / src.height), dw = src.width * k, dh = src.height * k;
+  x.drawImage(src, (W - dw) / 2, (H - dh) / 2, dw, dh);
+}
+
+// Blur: made once per photo and strength from the preview bitmap at BLUR_SIDE px (never full size: iPhone memory),
+// then scaled up wherever it is drawn. The subject is taken out first (each pixel weighted by how much it is
+// background), so its colours don't smear into a halo around the cut-out. Box blur, two passes: no canvas filter
+// (Safari has none).
+const BLUR_SIDE = 480, BLUR_R = [0, 0.012, 0.03]; // radius as a share of the long side: soft, strong
+function blurOf(it, lv) {
+  const b = it.blurC;
+  if (b && b.m === it.mask && b.r === it.maskRect && b.lv === lv) return b.c;
+  if (!it.bmp || !it.mask) return null;
+  const s = Math.min(1, BLUR_SIDE / Math.max(it.w, it.h)), w = Math.max(1, Math.round(it.w * s)), h = Math.max(1, Math.round(it.h * s)), n = w * h;
+  const c = new OffscreenCanvas(w, h), x = c.getContext("2d", { willReadFrequently: true });
+  x.imageSmoothingQuality = "high";
+  x.drawImage(it.bmp, 0, 0, w, h);
+  const id = x.getImageData(0, 0, w, h), px = id.data;
+  x.clearRect(0, 0, w, h);
+  const r = it.maskRect || FULL;
+  x.drawImage(it.mask, r.x * w, r.y * h, r.w * w, r.h * h);
+  const ma = x.getImageData(0, 0, w, h).data;
+  const R = Math.max(1, Math.round(BLUR_R[lv] * Math.max(w, h))), E = 0.01;
+  const ch = [0, 1, 2, 3, 4, 5, 6].map(() => new Float32Array(n)), t = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const wt = Math.max(0, 1 - (3 * ma[i * 4 + 3]) / 255); // edge pixels count as subject too
+    for (let k = 0; k < 3; k++) { const v = px[i * 4 + k]; ch[k][i] = v * wt; ch[k + 3][i] = v; }
+    ch[6][i] = wt;
+  }
+  const blur = (a) => { // separable running sums, edges clamped
+    for (let y = 0; y < h; y++) {
+      const o = y * w; let sum = a[o] * (R + 1);
+      for (let q = 1; q <= R; q++) sum += a[o + Math.min(q, w - 1)];
+      for (let q = 0; q < w; q++) { t[o + q] = sum / (2 * R + 1); sum += a[o + Math.min(q + R + 1, w - 1)] - a[o + Math.max(q - R, 0)]; }
+    }
+    for (let q = 0; q < w; q++) {
+      let sum = t[q] * (R + 1);
+      for (let y = 1; y <= R; y++) sum += t[Math.min(y, h - 1) * w + q];
+      for (let y = 0; y < h; y++) { a[y * w + q] = sum / (2 * R + 1); sum += t[Math.min(y + R + 1, h - 1) * w + q] - t[Math.max(y - R, 0) * w + q]; }
+    }
+  };
+  for (const a of ch) { blur(a); blur(a); }
+  for (let i = 0; i < n; i++) {
+    const d = ch[6][i] + E;
+    for (let k = 0; k < 3; k++) px[i * 4 + k] = (ch[k][i] + E * ch[k + 3][i]) / d;
+    px[i * 4 + 3] = 255;
+  }
+  x.putImageData(id, 0, 0);
+  it.blurC = { m: it.mask, r: it.maskRect, lv, c };
+  return c;
+}
+
+// Your own photo: decoded once, scaled to at most BACK_SIDE px (an iPhone holds 16 MB for it, not a 48 MP decode),
+// and shared by every photo that uses it ("All"). Kept on the device once, as a JPEG, in its own store (backs).
+const BACK_SIDE = IOS ? 2048 : 4096;
+async function addBack(file) {
+  while (IOS && (running || retrying)) await new Promise((r) => setTimeout(r, 400)); // a full decode next to a busy engine: no
+  const full = await decode(file);
+  const k = Math.min(1, BACK_SIDE / Math.max(full.width, full.height)), w = Math.max(1, Math.round(full.width * k)), h = Math.max(1, Math.round(full.height * k));
+  const c = new OffscreenCanvas(w, h), x = c.getContext("2d");
+  x.fillStyle = "#fff"; x.fillRect(0, 0, w, h); // a see-through picture sits on white
+  x.imageSmoothingQuality = "high";
+  try { x.drawImage(full, 0, 0, w, h); } finally { full.close(); }
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  backs.set(id, await backEntry(c, await c.convertToBlob({ type: "image/jpeg", quality: 0.9 })));
+  dbg("back", { w, h });
+  return id;
+}
+async function backEntry(c, blob, kept = false) {
+  const k = Math.min(1, 96 / Math.max(c.width, c.height)), t = new OffscreenCanvas(Math.max(1, Math.round(c.width * k)), Math.max(1, Math.round(c.height * k)));
+  t.getContext("2d").drawImage(c, 0, 0, t.width, t.height);
+  return { c, blob, kept, thumb: URL.createObjectURL(await t.convertToBlob({ type: "image/jpeg", quality: 0.8 })) };
+}
+async function useBack(it, file) {
+  const ph = it.el.pick.querySelector(".photo"); ph.setAttribute("aria-busy", "true");
+  try { setBg(it, "img:" + (await addBack(file))); }
+  catch (e) { console.warn(e); tell("Could not open that picture. Try a JPG or PNG.", it.el.bgb); }
+  finally { ph.removeAttribute("aria-busy"); if (picking === it) closePick(); }
 }
 
 /* ---------- animated GIFs ----------
@@ -908,7 +1012,7 @@ async function addSources(list, origin = "") {
   // All cards appear at once, so the layout settles once instead of jumping with every photo.
   const cards = document.createDocumentFragment(); // the batch goes on top, in the order it was picked
   const batch = list.map((src, i) => {
-    const it = { id: ++uid, key: top + i, name: "image", bmp: null, blob: null, w: 0, h: 0, mask: null, crop: true, bg: outAll?.bg || null, out: outAll?.out ? { ...outAll.out } : null };
+    const it = { id: ++uid, key: top + i, name: "image", bmp: null, blob: null, w: 0, h: 0, mask: null, crop: bgKind(outAll?.bg) !== "blur", bg: outAll?.bg || null, out: outAll?.out ? { ...outAll.out } : null };
     items.push(it);
     cards.append(makeCard(it));
     named(it, baseName(src instanceof Blob ? src.name : String(src).startsWith("data:") ? "pasted" : String(src)));
@@ -1120,6 +1224,11 @@ function bgPicker(it, crop, x) {
     b.addEventListener("click", () => { setBg(it, v); closePick(); });
     pick.append(b);
   });
+  // Blur: the first tap blurs the photo's own background, the next ones switch soft and strong. The row stays open,
+  // so the card above shows each step.
+  const blur = document.createElement("button"); blur.type = "button"; blur.className = "swb blur";
+  blur.innerHTML = '<span class="sw"></span>';
+  blur.addEventListener("click", () => setBg(it, it.bg === "blur:1" ? "blur:2" : "blur:1"));
   const own = document.createElement("label"); own.className = "swb custom"; own.title = "Any colour";
   own.innerHTML = '<span class="sw"></span><input type="color" value="#69d2e7" aria-label="Any colour">';
   const input = own.querySelector("input");
@@ -1129,7 +1238,12 @@ function bgPicker(it, crop, x) {
     cancelAnimationFrame(raf); raf = requestAnimationFrame(() => drawCard(it));
   });
   input.addEventListener("change", () => { cancelAnimationFrame(raf); setBg(it, input.value, true); closePick(); });
-  pick.append(own);
+  // Your own picture behind the subject: picked here or dropped on the row (see the drop handler). Never uploaded.
+  const photo = document.createElement("label"); photo.className = "swb photo"; photo.title = "Your photo";
+  photo.innerHTML = '<span class="sw"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 16 5-5 4 4 3-3 6 6"/></svg></span><input type="file" accept="image/*" aria-label="Your photo as the background">';
+  const file = photo.querySelector("input");
+  file.addEventListener("change", () => { const f = file.files[0]; file.value = ""; if (f) useBack(it, f); });
+  pick.append(own, blur, photo);
   const more = document.createElement("button"); more.type = "button"; more.className = "swb more";
   more.setAttribute("aria-label", "Size, margin, shadow"); more.title = "Size, margin, shadow";
   more.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>';
@@ -1163,22 +1277,37 @@ document.addEventListener("pointerdown", (e) => { if (picking && !picking.el.bar
 function setBg(it, v, force = false) {
   tick();
   if (!force && (v || null) === (it.bg || null)) return;
+  wholeForBlur(it, v);
   it.bg = v || null;
   paintBg(it);
   it.png = null; drawCard(it); if (PHONE && !running && !retrying) png(it); keep(it); // not next to a busy engine (iPhone memory)
 }
+// Blur is the portrait-mode look: the whole frame, not a tight crop around the subject (the crop button puts it back).
+function wholeForBlur(it, v) {
+  if (bgKind(v) !== "blur" || bgKind(it.bg) === "blur" || !it.crop || it.anim) return;
+  it.crop = false;
+  for (const b of it.el?.card.querySelectorAll(".crop") || []) b.setAttribute("aria-pressed", "false");
+}
+const bgName = (v) => { const k = bgKind(v); return k === "blur" ? (v === "blur:2" ? "Strong blur" : "Blur") : k === "img" ? "Your photo" : BGS.find(([c]) => c === (v || null))?.[1] || v; };
 // The trigger shows the current background; the picker marks it.
 function paintBg(it) {
-  const { bgb, pick } = it.el, v = it.bg || null, own = v && !BGS.some(([c]) => c === v);
-  const sw = bgb.firstChild;
-  sw.style.background = v || ""; sw.classList.toggle("none", !v);
-  it.el.card.classList.toggle("solid", !!v && !it.anim); // a solid background downloads as a plain JPG: no checkerboard around it
+  const { bgb, pick } = it.el, v = it.bg || null, kind = bgKind(v), own = kind === "color" && !BGS.some(([c]) => c === v);
+  const sw = bgb.firstChild, back = kind === "img" ? backs.get(v.slice(4)) : null;
+  sw.className = "sw" + (!v ? " none" : kind === "blur" ? ` blur b${v.slice(5)}` : kind === "img" ? " img" : "");
+  sw.style.background = kind === "color" ? v : ""; sw.style.backgroundImage = back?.thumb ? `url("${back.thumb}")` : "";
+  it.el.card.classList.toggle("solid", !!bgOf(it)); // a solid background downloads as a plain JPG: no checkerboard around it
   for (const b of pick.querySelectorAll("[data-bg]")) b.setAttribute("aria-pressed", String((b.dataset.bg || null) === v));
   const c = pick.querySelector(".custom");
   c.classList.toggle("set", !!own); c.setAttribute("aria-pressed", String(!!own));
   c.firstChild.style.background = own ? v : "";
   if (own) c.querySelector("input").value = v;
-  bgb.setAttribute("aria-label", `Background: ${own ? v : BGS.find(([c]) => c === v)[1]}`);
+  const bl = pick.querySelector(".blur"), blabel = v === "blur:1" ? "More blur" : v === "blur:2" ? "Less blur" : "Blur the background";
+  bl.setAttribute("aria-pressed", String(kind === "blur")); bl.classList.toggle("b2", v === "blur:2");
+  bl.setAttribute("aria-label", blabel); bl.title = blabel;
+  const ph = pick.querySelector(".photo"), psw = ph.firstChild;
+  ph.setAttribute("aria-pressed", String(kind === "img")); ph.classList.toggle("set", !!back?.thumb);
+  psw.style.backgroundImage = back?.thumb ? `url("${back.thumb}")` : "";
+  bgb.setAttribute("aria-label", `Background: ${bgName(v)}`);
 }
 
 /* The second row: size, margin, shadow, WebP, and "All", which gives every photo this one's background and options.
@@ -1251,7 +1380,7 @@ function useForAll(from) {
   outAll = { bg: from.bg || null, out: from.out ? { ...from.out } : null };
   for (const it of items) {
     if (it === from || it.anim || it.failed) continue;
-    it.bg = outAll.bg; it.out = outAll.out && { ...outAll.out }; it.png = null;
+    wholeForBlur(it, outAll.bg); it.bg = outAll.bg; it.out = outAll.out && { ...outAll.out }; it.png = null;
     if (it.mask && it.el) { paintBg(it); drawCard(it); keep(it); }
   }
   preparePngs(); // phones: one at a time, after a pause, never next to a busy engine
@@ -2040,8 +2169,8 @@ const keyBase = () => -(lastStamp = Math.max(Date.now(), lastStamp + 1)) * 64; /
 let keepDb = null, keepChain = Promise.resolve();
 function kdb() {
   return (keepDb ||= new Promise((res, rej) => {
-    const r = indexedDB.open("goodbye-bg", 1);
-    r.onupgradeneeded = () => { r.result.createObjectStore("files", { keyPath: "id" }); r.result.createObjectStore("state", { keyPath: "id" }); };
+    const r = indexedDB.open("goodbye-bg", 2); // 2: backs (your own background photos)
+    r.onupgradeneeded = () => { for (const n of ["files", "state", "backs"]) if (!r.result.objectStoreNames.contains(n)) r.result.createObjectStore(n, { keyPath: "id" }); };
     r.onsuccess = () => { const db = r.result; db.onversionchange = () => { db.close(); keepDb = null; }; res(db); };
     r.onerror = () => rej(r.error);
     r.onblocked = () => rej(new Error("blocked"));
@@ -2083,6 +2212,11 @@ async function writeKept(it) {
     bytes: it.blob.size + it.prev.size + size(mask) + size(first?.mask) + (gif?.size || 0) };
   if (state.bytes > KEEP_BYTES) return; // never fits (see trim)
   const db = await kdb();
+  const back = bgKind(it.bg) === "img" && backs.get(it.bg.slice(4));
+  if (back && !back.kept) { // once, however many photos use it
+    await new Promise((ok, no) => { const t = db.transaction("backs", "readwrite"); t.objectStore("backs").put({ id: it.bg.slice(4), blob: back.blob }); t.oncomplete = ok; t.onerror = t.onabort = () => no(t.error); });
+    back.kept = true;
+  }
   const put = () => tx(db, "readwrite", (f, s) => { if (!it.filed) f.put({ id: it.key, blob: it.blob, prev: it.prev }); s.put(state); });
   // A full disk: make room by dropping the oldest, a few times, then give up quietly.
   for (let n = 0; ; n++) {
@@ -2125,6 +2259,14 @@ async function restore() {
     [files, states] = await tx(db, "readonly", (f, s) => { const a = f.getAll(), b = s.getAll(); return { get result() { return [a.result, b.result]; } }; });
   } catch (e) { console.info("goodbye.bg: nothing kept here", e?.name || e); unrestore(); return []; }
   const byId = new Map(files.map((f) => [f.id, f]));
+  // Background photos: the ones a kept photo uses come back (before any card is drawn); the rest are deleted.
+  const used = new Set(states.map((st) => bgKind(st.bg) === "img" && st.bg.slice(4)).filter(Boolean));
+  try {
+    const rows = await new Promise((ok, no) => { const q = db.transaction("backs").objectStore("backs").getAll(); q.onsuccess = () => ok(q.result); q.onerror = () => no(q.error); });
+    const stale = rows.filter((r) => !used.has(r.id)).map((r) => r.id);
+    for (const r of rows) if (used.has(r.id) && !backs.has(r.id)) try { backs.set(r.id, await backEntry(await canvasOf(r.blob), r.blob, true)); } catch (e) { console.warn("Background photo not restored", e); }
+    if (stale.length) { const t = db.transaction("backs", "readwrite"); for (const id of stale) t.objectStore("backs").delete(id); }
+  } catch (e) { console.info("goodbye.bg: no background photos kept", e?.name || e); }
   const list = [], orphans = [];
   for (const st of states) {
     const f = byId.get(st.id); byId.delete(st.id);
@@ -2220,12 +2362,25 @@ let depth = 0, ownDrag = false;
 addEventListener("dragstart", () => { ownDrag = true; });
 addEventListener("dragend", () => { ownDrag = false; });
 addEventListener("dragenter", (e) => { e.preventDefault(); if (ownDrag) return; depth++; document.body.classList.add("hot"); });
-addEventListener("dragover", (e) => e.preventDefault());
-addEventListener("dragleave", () => { if (--depth <= 0) { depth = 0; document.body.classList.remove("hot"); } });
+// A picture dropped on a card's background row (or its background button) becomes that photo's background instead.
+const backTarget = (el) => { const t = el?.closest?.(".bgs, .bgb"); return t ? items.find((i) => i.el && (i.el.pick === t || i.el.bgb === t) && i.mask && !i.anim) : null; };
+let backOver = null;
+function markBack(it) {
+  if (backOver === it) return;
+  backOver?.el.bar.classList.remove("backdrop"); backOver = it; it?.el.bar.classList.add("backdrop");
+  document.body.classList.toggle("hot", !it && depth > 0 && !ownDrag); // the full-window target would hide the row
+}
+addEventListener("dragover", (e) => { e.preventDefault(); if (!ownDrag) markBack(backTarget(e.target)); });
+addEventListener("dragleave", () => { if (--depth <= 0) { depth = 0; document.body.classList.remove("hot"); markBack(null); } });
 addEventListener("drop", async (e) => {
   e.preventDefault(); depth = 0; document.body.classList.remove("hot");
+  const to = backTarget(e.target); markBack(null); document.body.classList.remove("hot");
   if (ownDrag) { ownDrag = false; return; }
-  if (e.dataTransfer) addSources(await fromDataTransfer(e.dataTransfer));
+  if (!e.dataTransfer) return;
+  const got = await fromDataTransfer(e.dataTransfer);
+  if (!to) return addSources(got);
+  const f = got.find((g) => g instanceof Blob && !isZip(g));
+  if (f) useBack(to, f); else tell("Drop a picture file here.", to.el.bgb);
 });
 
 
