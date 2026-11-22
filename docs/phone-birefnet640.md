@@ -22,7 +22,8 @@ at 640x640** instead of ISNet. `?model=isnet` brings ISNet back on the same devi
   `cpu-birefnet640` (`/api/rate` and `/api/crash` accept it), also when a computer's GPU fails and the CPU takes over
   (tested with `?gpufail=init`). The haze hardening (`hardenHaze`) now runs on ISNet masks only, as for BiRefNet 1024:
   it was tuned on ISNet's half see-through areas (before the rebase the 640 masks went through it too).
-- Rebased on main at ad780d3 (2026-11-22, night), so the 640 model gets main's iPhone memory fixes for free: model and
+- Rebased on main at 56a36b5 (2026-11-22, night; measured on ad780d3, the later main commits are UI only, and a
+  640 run on 56a36b5 peaked at 1930 / 1885 / 1941 MB), so the 640 model gets main's iPhone memory fixes for free: model and
   runtime parts read into one buffer of the final size, and after the iPhone idle shutdown a new engine starts no
   sooner than 3 s later (dbg step `engine-wait`). Also: download on intent (unchanged, the model is fetched by the
   same code), the offline cache (`sw.js` list holds `/m/birefnet640-9348c64d/`, cache `gb-m-birefnet640-9348c64d`),
