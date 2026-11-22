@@ -341,14 +341,15 @@ function startEngine(name) {
   engineName = name; engineModel = "";
   const w = worker = new Worker("engine.js", { type: "module" });
   return new Promise((resolve, reject) => {
-    let timer = 0;
-    const fail = (e) => { clearTimeout(timer); reject(e instanceof Error ? e : new Error(String(e))); };
+    let timer = 0, loaded = false;
+    // Before "loaded" a failure is the download or the worker script (offline, a dropped connection), not the GPU.
+    const fail = (e) => { clearTimeout(timer); reject(Object.assign(e instanceof Error ? e : new Error(String(e)), { pre: !loaded })); };
     w.onerror = (e) => { e.preventDefault?.(); fail(e.message || "Engine worker crashed"); for (const j of jobs.values()) j.reject(new Error("Engine worker crashed")); jobs.clear(); };
     w.onmessage = ({ data }) => {
       if (data.type === "dbg") dbg("worker:" + data.step, data.data);
       else if (data.type === "progress") status(`Downloading model: ${Math.floor(data.f * 10) * 10}%`);
       else if (data.type === "loaded") {
-        status("Starting up…");
+        loaded = true; status("Starting up…");
         if (name === "gpu") {
           const hang = () => fail("GPU warm-up timed out"), h0 = hides;
           if (engineModel !== "birefnet" || params.has("model") || document.hidden) timer = setTimeout(hang, GPU_WARMUP_TIMEOUT);
@@ -388,6 +389,7 @@ function loadModel() {
           status(`Ready.`); dbg("ready", { engine: engineName });
           return;
         }
+        if (e.pre) throw e; // a download that failed says nothing about the GPU: not a step down, nothing remembered
         if (!stepDown(e.slow ? "slow-start" : "start-failed", e)) throw e;
         name = await pickEngine();
       }
