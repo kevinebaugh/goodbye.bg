@@ -62,7 +62,8 @@ cpSync(join(nm, "canvas-confetti/dist/confetti.module.mjs"), join(dist, "vendor/
 // cached forever; style.css and index.html must name the same file.
 const NUNITO = JSON.parse(readFileSync(join(nm, "@fontsource-variable/nunito/package.json"), "utf8")).version;
 const fontFile = `nunito-latin-${NUNITO}.woff2`;
-for (const f of ["style.css", "index.html"]) if (!readFileSync(join(dist, f), "utf8").includes(fontFile)) throw new Error(`${f} must use fonts/${fontFile}`);
+// The text pages preload it too: with font-display: optional, a first visit without the preload shows the fallback font.
+for (const f of ["style.css", "index.html", "404.html", "remove-bg-alternative/index.html", "how-to-remove-background/index.html"]) if (!readFileSync(join(dist, f), "utf8").includes(fontFile)) throw new Error(`${f} must use fonts/${fontFile}`);
 mkdirSync(join(dist, "fonts"));
 cpSync(join(nm, "@fontsource-variable/nunito/files/nunito-latin-wght-normal.woff2"), join(dist, "fonts", fontFile));
 
