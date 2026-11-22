@@ -7,14 +7,16 @@ Research only; no app code changed. Measured on the M5 Pro Mac in Node (ONNX Run
 
 1. **Phones: try BiRefNet lite at 640x640 on the CPU engine.** It needs the same wasm memory as ISNet, takes about 10%
    longer, and on 923 photos with real masks scores IoU 0.948 against ISNet's 0.894, with 78 bad cut-outs instead of 177.
-   Its one weakness: thin wire-frame objects (DIS set 0.859 against ISNet's 0.921). Test plan below.
+   Its weaknesses: thin wire-frame objects (DIS set 0.859 against ISNet's 0.921), and more empty masks on busy scenes
+   with small subjects (12 against 5 of 150 COCO photos). Test plan below.
 2. **Mac Safari: still untested.** My run stalled because the display was asleep. Research says it should work
    (shader-f16, 44 storage buffers a shader, buffers up to about 2 GB). A 2-minute check for Kevin is below.
 3. **Weak GPUs: gate at runtime, not on adapter limits.** Limits can't tell weak GPUs apart, and both models fit the
    WebGPU defaults. Proposed: if BiRefNet's GPU start fails or is slow, fall back to ISNet on the GPU, not straight to
    the CPU. Also send computers that report `navigator.deviceMemory` under 8 to ISNet.
-4. **Automatic zoomed second pass: not worth it as built.** Early numbers from another session's run make edges slightly
-   worse, and on phones it doubles the time. A bigger model input does more for edges.
+4. **Automatic zoomed second pass: probably not worth it.** Preliminary numbers from another session's run, still in
+   progress, make edges slightly worse; that session's result is the final word. On phones it doubles the time. A
+   bigger model input does more for edges.
 
 ## 1. A better model for phones
 
@@ -31,18 +33,22 @@ bad is under 0.85.
 | Time, 2 threads, Mac | 3.7 s | 2.4 s | **4.0 s** | 6.1 s | 8.9 s |
 | iPhone estimate (x1.35, from ISNet's 5.0 s) | 5.0 s | 3.3 s | **5.4 s** | 8 s | 12 s |
 | Download (fp16) | 88 MB | 96 MB | **96 MB** | 96 MB | 93 MB |
-| Mean IoU | 0.894 | 0.934 | **0.948** | not run | 0.960 |
+| Mean IoU | 0.894 | 0.934 | **0.948** | not run (ruled out on memory) | 0.960 |
 | Boundary IoU / edge error | 0.773 / 0.111 | 0.842 / 0.084 | **0.866 / 0.075** | | 0.904 / 0.060 |
 | Good / usable / bad / no subject | 571 / 173 / 177 / 2 | 738 / 100 / 78 / 7 | **756 / 89 / 78 / 0** | | 798 / 74 / 51 / 0 |
 | Better / worse than ISNet (IoU > 0.02) | | 299 / 96 | **314 / 77** | | 357 / 20 |
 | Portraits (P3M) / animals (AM-2k) / pets | 0.935 / 0.913 / 0.889 | 0.986 / 0.962 / 0.938 | **0.987 / 0.973 / 0.960** | | 0.990 / 0.977 / 0.952 |
 | Thin objects (DIS, 75) | 0.921, 1 under 0.5 | 0.767, 11 under 0.5 | **0.859, 4 under 0.5** | | 0.923, 1 under 0.5 |
-| Nearly empty masks (under 0.2% of the photo) | 8 | 33 | **2** | | 1 |
+| Nearly empty masks (under 0.2% of the photo), same 923 | 3 | 10 (7 of them DIS) | **2** | | 0 |
+| COCO busy scenes (150): IoU / nearly empty masks | 0.547 / 5 | 0.545 / 23 | **0.577 / 12** | | 0.597 / 1 |
 
 - **Why 640 and not 512:** 512 is faster and smaller, but it returns empty masks on thin frames (bicycle stand, rack,
   ironing board, shower). A third party saw the same with lite at 512
-  ([jiabins](https://huggingface.co/jiabins0303/birefnet-lite-1024-webgpu)). 640 fixes nearly all of them and uses
+  ([jiabins](https://huggingface.co/jiabins0303/birefnet-lite-1024-webgpu)). 640 fixes those (DIS: 0 empty) and uses
   the memory ISNet already uses on Kevin's iPhone.
+- **The caveat at 640:** on COCO's busy scenes (small subjects in a crowded frame), 640 comes back empty more often than
+  ISNet (12 against 5 of 150), even though its mean IoU there is higher. The page should treat an empty mask as "no
+  subject found" (it does today) and the iPhone test should include a few such photos.
 - **Why not 768:** 1.5 times ISNet's memory. ISNet already peaks at 1.5 to 2 GB in the Simulator.
 - **Memory is a ratio, not iPhone gigabytes.** Node measures 918 MB for ISNet; CLAUDE.md records 1.5 to 2 GB for the
   whole tab in the iOS Simulator. Read the table as "640 needs what ISNet needs". The Simulator test below has to
@@ -85,7 +91,7 @@ I found no published iPhone memory figure for any of these.
 3. **iOS Simulator:** the 3-photo test that took ISNet from 2.1 to 1.46 GB. Pass: peak no higher than ISNet's on the
    same photos.
 4. **Kevin's iPhone, `?debug=1&model=birefnet640`:** the 18.75 MP photo, then 7 to 8 photos in one tab (the case that
-   once crashed), then a 16-frame GIF. Pass: no crash, 6 s or less a photo (Kevin's limit is "a few seconds"; ISNet is 5).
+   once crashed), a few busy scenes with a small subject, then a 16-frame GIF. Pass: no crash, 6 s or less a photo (Kevin's limit is "a few seconds"; ISNet is 5).
 5. **Parity:** 20 photos through `npm run dev` against the harness, as in `docs/quality-1000.md`.
 6. **Switch:** make it the default for iPhones and the CPU fallback. Watch crash reports by engine for a week. Keep ISNet
    one switch away (`?model=isnet`) until then.
@@ -170,8 +176,8 @@ result). Its numbers so far, on the photos where the pass triggered, are not min
 - ISNet (605 photos): boundary IoU fell from 0.787 to 0.763. IoU got better on 77 photos and worse on 114.
 
 On phones it would also double the time (5 s to 10 s), against Kevin's "a few seconds". The input size table above shows
-the bigger lever: boundary IoU 0.866 at 640, 0.904 at 1024. Verdict: not worth it automatically; keep it on 👎, where
-someone asked for another try.
+the bigger lever: boundary IoU 0.866 at 640, 0.904 at 1024. Verdict, pending that session's final numbers: not worth
+it automatically; keep it on 👎, where someone asked for another try.
 
 ## Reproduce
 
