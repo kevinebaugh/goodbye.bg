@@ -231,7 +231,7 @@ body.app.has-work .foot { padding: 20px 16px 12px; transition: transform .25s ea
 /* Empty page: hero and footer stay together near the middle (main must not stretch here). */
 body.app:not(.has-work) main { flex: none; margin-top: auto; }
 
-/* Small cards (many photos on a phone): Download becomes an icon; the tiniest drop the rating icons. */
+/* Small cards (many photos on a phone): Download becomes an icon and controls drop out (widths below). */
 .card { container-type: inline-size; }
 @container (max-width: 330px) { .bar { gap: var(--s1); padding-inline: var(--s2); } .bar .dl { --px: var(--s3); } }
 @container (max-width: 240px) {
@@ -245,7 +245,9 @@ body.app:not(.has-work) main { flex: none; margin-top: auto; }
   .busy { font-size: 12px; gap: 6px; padding: 8px; }
   .busy::before { font-size: 22px; }
 }
-@container (max-width: 165px) { .rates { display: none; } }
+/* Download keeps at least ~40 px. Phone cards (1 to 3 photos in portrait, 165 px) keep 👍 👎 over the crop toggle. */
+@container (min-width: 152px) and (max-width: 184px) { .crop { display: none; } }
+@container (max-width: 151px) { .rates { display: none; } }
 @container (max-width: 130px) { .crop { display: none; } } /* the smallest cards (a dozen photos on a phone): Download keeps room for its icon */
 /* Phones with photos on screen: the grid gets the room; the privacy note is on the empty page and in the headline. */
 @media (max-width: 600px) { body.app.has-work .foot p:first-child { display: none; } }

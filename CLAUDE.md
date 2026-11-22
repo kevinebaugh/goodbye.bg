@@ -128,8 +128,9 @@ for GIFs (👎 is a vote only). Measured: 10 frames at 360x540 in 5.7 s on the G
 - QA pass 2026-11-21 (details in git log):
   - 👎 zooms in only when the subject's padded box is under 80% of the photo; otherwise it is a vote only and its
     label says "Bad result" instead of "Bad result, try again" (most phone photos fill the frame).
-  - Cards under 166 px wide drop 👍 👎; under 131 px (a dozen photos on a phone) they also drop the crop toggle, so
-    Download keeps its icon. A phone in portrait with 1 to 3 photos (2 columns, 157 px cards) has no 👍 👎: a known gap.
+  - The card bar drops controls so Download stays at least ~40 px wide (card widths): 187+ px everything; 154 to 186 px
+    no crop toggle (a phone in portrait with 1 to 3 photos is 165 px: Kevin, 2026-11-21, voting beats crop there; results
+    stay cropped to the subject); 133 to 153 px crop but no 👍 👎; 132 px and under (a dozen photos) Download and remove only.
   - Short screens (height 520 px or less, a phone on its side): the wordmark sits left of the buttons (buttons go
     right), the privacy note is hidden, spacing tightens; the empty page shrinks the headline so the footer fits.
   - Download and Download all shimmer while a big PNG or the zip is built; repeat taps don't start it again. A failed
