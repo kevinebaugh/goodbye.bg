@@ -118,8 +118,8 @@ a PNG for an hour. Mitigations:
 
 ## 3. Copy (changed 2026-11-21)
 
-The promise is now "Photos are cut out on your device." (always true), and that is the whole footer line (Kevin:
-concise, no vendor name). The button says what the click does ("Put it on a mug"). The remove.bg page's FAQ "Are my
+The promise is now "cut out on your device" (always true), in the hero and the remove.bg page. The footer has no
+privacy line any more (Kevin: by then people are already using it). The button says what the click does ("Put it on a mug"). The remove.bg page's FAQ "Are my
 photos uploaded?" gives the details: clicking a product ad takes that cut-out to Zazzle, and our server holds it
 until Zazzle has it, an hour at most. Also changed: `src/index.html` meta, og, JSON-LD and hero;
 `src/remove-bg-alternative/index.html` meta, lede and table; `README.md`, `package.json`, the `src/_headers` and
