@@ -30,7 +30,11 @@ Actions. The old upload-only project `goodbye-bg` can be deleted.
   `render3d.js` (3D ad products), `sw.js` (offline caches, Android share target), `manifest.webmanifest`, `_headers`
   (security headers, also used by local dev), `_redirects` (`/share` to `/` when the service worker missed it),
   `404.html` (no scripts), `ad.html` (sandboxed ad slot, ads off), `remove-bg-alternative/` and
-  `how-to-remove-background/` (SEO pages, `docs/seo.md`), the same two under `de/ es/ fr/ pt-br/ id/`, `i18n.js` (UI
+  `how-to-remove-background/` (SEO pages, `docs/seo.md`), the same two under `de/ es/ fr/ pt-br/ id/`,
+  `bulk-background-remover/`, `remove-background-from-gif/` and `white-background-product-photo/` (SEO pages, English
+  only so far; a text page is any folder whose index.html holds `<!--%HREFLANG%-->`, and it needs its CSP line in
+  `_headers`, a sitemap entry and a place in the smoke test's lists; the build minifies the page's own scripts and
+  styles, `NO_MINIFY=1` keeps them readable), `i18n.js` (UI
   strings in other languages, inlined into early.js by the build; see Languages).
 - `functions/` Cloudflare Pages Functions: `api/fetch.js` (image for a pasted link: same-origin only, 30 MB cap, follows
   og:image), `api/rate.js`, `api/crash.js`, `api/count.js`, `api/diag.js`, `api/cap/[key].js` and `cap/[file].js`

@@ -238,6 +238,8 @@ const click = (p, sel) => p.ev(`(() => { const el = document.querySelector(${JSO
 
 /* ---------- the checks ---------- */
 const TRANSLATED = ["de", "es", "fr", "pt-br", "id"].flatMap((l) => [`/${l}/remove-bg-alternative/`, `/${l}/how-to-remove-background/`]);
+// Text pages in English only (so far): no hreflang, same rules otherwise.
+const ENGLISH_ONLY = ["/bulk-background-remover/", "/remove-background-from-gif/", "/white-background-product-photo/"];
 let base, engine;
 try {
   if (!process.argv.includes("--no-build")) {
@@ -718,7 +720,7 @@ try {
     assert(r.status === 303 && r.headers.get("location") === "/", "/share does not send to the app");
   });
   await check("pages: SEO and 404 pages load clean, in Nunito", async () => {
-    for (const path of ["/remove-bg-alternative/", "/how-to-remove-background/", ...TRANSLATED, "/no-such-page", "/"]) {
+    for (const path of ["/remove-bg-alternative/", "/how-to-remove-background/", ...ENGLISH_ONLY, ...TRANSLATED, "/no-such-page", "/"]) {
       const r = await fetch(base + path);
       assert(r.status === (path === "/no-such-page" ? 404 : 200), `${path}: status ${r.status}`);
       if (/\/.+\/$/.test(path)) assert(/script-src 'none'/.test(r.headers.get("content-security-policy") || ""), `${path}: CSP missing`);
@@ -745,11 +747,14 @@ try {
   });
   await check("pages: translations link each other (hreflang, canonical, sitemap)", async () => {
     const sitemap = await (await fetch(base + "/sitemap.xml")).text();
-    for (const path of ["/remove-bg-alternative/", "/how-to-remove-background/", ...TRANSLATED]) {
+    for (const path of ["/remove-bg-alternative/", "/how-to-remove-background/", ...ENGLISH_ONLY, ...TRANSLATED]) {
       const t = await (await fetch(base + path)).text();
       const canon = t.match(/<link rel="canonical" href="([^"]+)"/)?.[1] || "";
       assert(canon.endsWith(path), `${path}: canonical ${canon}`);
+      assert(!t.includes("%HREFLANG%") && !t.includes("%SITE%"), `${path}: a build placeholder is left`);
+      assert(sitemap.includes(path + "</loc>"), `${path}: not in the sitemap`);
       const alts = [...t.matchAll(/<link rel="alternate" hreflang="([^"]+)" href="([^"]+)"/g)].map((m) => [m[1], new URL(m[2]).pathname]);
+      if (ENGLISH_ONLY.includes(path)) { assert(!alts.length, `${path}: hreflang for translations that don't exist`); continue; }
       const slug = path.split("/").at(-2);
       assert(alts.length === 7 && alts.find(([l]) => l === "x-default")?.[1] === `/${slug}/`, `${path}: hreflang ${JSON.stringify(alts)}`);
       const lang = t.match(/<html lang="([^"]+)"/)[1];
