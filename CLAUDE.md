@@ -163,9 +163,12 @@ Tested: headless Chrome (reload in a restarted browser, Back still from bfcache)
 - QA pass 2026-11-21 (details in git log):
   - 👎 zooms in only when the subject's padded box is under 80% of the photo; otherwise it is a vote only and its
     label says "Bad result" instead of "Bad result, try again" (most phone photos fill the frame).
-  - The card bar drops controls so Download stays at least ~40 px wide (card widths): 187+ px everything; 154 to 186 px
-    no crop toggle (a phone in portrait with 1 to 3 photos is 165 px: Kevin, 2026-11-21, voting beats crop there; results
-    stay cropped to the subject); 133 to 153 px crop but no 👍 👎; 132 px and under (a dozen photos) Download and remove only.
+  - The card bar drops controls so Download stays at least ~40 px wide (measured: 50+ px at every width). Bar order:
+    crop, background, Download, 👍 👎, remove. What the bar has no room for moves into the background picker, so crop
+    and remove are never lost (card widths): 218+ px everything; 186 to 217 no crop; 150 to 185 (a phone in portrait with
+    1 to 3 photos, 165 px) no crop and no remove, 👍 👎 stay (Kevin, 2026-11-21: voting beats crop; moving remove into the
+    picker was an overnight call on 2026-11-22, easy to reverse); 122 to 149 background, Download, remove; under 122
+    background and Download. The picker drops swatches as it narrows (sage under 218, light aqua under 186, black under 122).
   - Short screens (height 520 px or less, a phone on its side): the wordmark sits left of the buttons (buttons go
     right), the privacy note is hidden, spacing tightens; the empty page shrinks the headline so the footer fits.
   - Download and Download all shimmer while a big PNG or the zip is built; repeat taps don't start it again. A failed
@@ -173,6 +176,13 @@ Tested: headless Chrome (reload in a restarted browser, Back still from bfcache)
   - See-through inputs (PNG cut-outs, SVG logos) reach the model on white, or on black when the subject is light.
     SVGs are drawn at least 2048 px on their longest side.
   - Drags that start on the page (a cut-out dragged out) are ignored if dropped back on it.
+  - Background (2026-11-22, remove.bg parity): a round button in the bar shows the cut-out's background (checkerboard =
+    see-through, the default). Tapping it swaps the bar for a row of swatches at the same height (never over the photo,
+    cards never resize): see-through, white, black, light aqua, sage, any colour (`<input type=color>`, live on the card).
+    A tap on a swatch, outside the bar or Escape closes it. The card, Download, long press, Download all and the
+    partner-ad save follow it; a solid background downloads as a JPG (0.92), see-through stays PNG. Ad card art and the
+    cut-out sent to Zazzle stay see-through. Not for animated GIFs (no button). Kept in IndexedDB (`bg` in the state record).
+    Your own photo as a background: not built (a second full-size image is the iPhone memory problem again).
   - Removing a photo frees its bitmap and moves any ad card showing it to another cut-out; focus goes to the next card.
 - Buttons follow one small system in style.css (Kevin, 2026-11-21: "a mature design system"): spacing tokens
   `--s1..--s5` (4 px scale), heights `--h-sm/md/lg` (32/40/48), every button a size plus a variant (`.primary`,
@@ -191,7 +201,9 @@ locally at that pace with random gaps, no more requests (Kevin: "one accurate-is
 it can drift ahead of the real total). A visitor's own cut-out counts at once. Its line is always reserved, so it never moves
 the cards. Shown from the first cut-out (Kevin, 2026-11-20); tapping it throws confetti. Kevin: tests count toward the total, never reset it.
 Haptics: a light tick on result, crop, 👍/👎 and Download (Android vibrate; iOS 18+ hidden switch control).
-iPhones shut the engine down once idle (its ~1.8 GB never shrinks; 7 to 8 photos in one tab crashed Safari).
+iPhone 16 MP PNG crash (crash step "png", one report): a full-size PNG built on iOS now first stops the engine if it is
+up and nothing is waiting for it (`fullBlob`, debug step `engine-png`); the export stays full size (the pages promise the
+photo's own resolution). Untested on a real iPhone. iPhones shut the engine down once idle (its ~1.8 GB never shrinks; 7 to 8 photos in one tab crashed Safari).
 
 Crash reports carry the page's last 20 steps (blob6; the same step names as `?debug=1`, kept in memory and in the
 localStorage note, never sent unless something fails). Page views: the page's first GET `/api/count?view=1&from=<host>`
@@ -247,6 +259,11 @@ Reading the ad A/B test (blob5 = variant): `SELECT blob1 AS kind, blob2 AS partn
 FROM goodbye_bg_ratings WHERE blob1 IN ('adseen','adclick') GROUP BY kind, partner, variant` (clicks / shows per variant;
 expect a few hundred clicks per variant before trusting a difference). Label test, independent of the variant:
 blob6 = 'ad' or 'sponsored' (the card's label, picked at random per visit); group by blob6 the same way.
+
+Referrers (2026-11-22): blob3 was empty because the visits had none (typed, bookmarked, apps); a cross-site click does
+send its host (tested). Launch links can carry `?ref=<tag>` (or `utm_source`): the page sends it as `from=ref.<tag>`
+(a-z 0-9 . - only, 40 chars) and takes `ref`/`utm_*` out of the address bar so a shared link doesn't count again.
+E.g. `https://goodbye.bg/?ref=hn` shows up as blob3 `ref.hn`. No change to functions/.
 
 Reading views: `SELECT toDate(timestamp) AS day, blob2 AS device, blob3 AS from_site, count() AS views
 FROM goodbye_bg_ratings WHERE blob1 = 'view' GROUP BY day, device, from_site ORDER BY day DESC`
