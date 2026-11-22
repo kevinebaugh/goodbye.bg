@@ -1,4 +1,5 @@
 {
+  "id": "/",
   "name": "goodbye.bg",
   "short_name": "goodbye.bg",
   "description": "Say goodbye to the background. Runs on your device.",
@@ -7,6 +8,7 @@
   "display": "standalone",
   "background_color": "#f7f8f0",
   "theme_color": "#69d2e7",
+  "categories": ["photo", "graphics", "productivity", "utilities"],
   "icons": [
     {
       "src": "/favicon.svg",
@@ -17,12 +19,43 @@
     {
       "src": "/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/wide-batch.jpg",
+      "sizes": "1270x760",
+      "type": "image/jpeg",
+      "form_factor": "wide",
+      "label": "Four photos cut out at once, ready to download"
+    },
+    {
+      "src": "/screenshots/wide-before-after.jpg",
+      "sizes": "1270x760",
+      "type": "image/jpeg",
+      "form_factor": "wide",
+      "label": "One photo before and after"
+    },
+    {
+      "src": "/screenshots/narrow-batch.jpg",
+      "sizes": "780x1688",
+      "type": "image/jpeg",
+      "form_factor": "narrow",
+      "label": "Three cut-outs on a phone"
     }
   ],
   "share_target": {
