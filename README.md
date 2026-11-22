@@ -21,7 +21,9 @@ I built it because remove.bg stops removing backgrounds on 1 December 2026.
 - Up to 100 photos per drop on computers (50 on phones, tablets and computers that report less than 8 GB of memory),
   or a ZIP or folder. Download all gives a zip.
 - Reads JPG, PNG, WebP, AVIF, SVG, HEIC, TIFF, camera RAW (its embedded JPEG preview), ZIPs and animated GIFs.
-- Not there: an API, an edge brush.
+- Fix a cut by hand: the pencil under a photo opens an editor to drop or bring back pieces, or erase and restore with
+  a brush.
+- Not there: an API.
 
 ## Why it is different
 

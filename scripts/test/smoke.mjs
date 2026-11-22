@@ -227,7 +227,7 @@ const names = (p) => p.ev(`${CARDS}.map((c) => c.getAttribute("aria-label"))`);
 // Never opens a database the app hasn't made (that would create an empty one the app can't upgrade).
 const KEPT = `indexedDB.databases().then((l) => l.some((d) => d.name === "goodbye-bg")).then((has) => !has ? [] : new Promise((ok) => { const r = indexedDB.open("goodbye-bg"); r.onerror = () => ok([]);
   r.onsuccess = () => { const db = r.result; if (!db.objectStoreNames.contains("state")) return ok([]);
-    const q = db.transaction("state").objectStore("state").getAll(); q.onsuccess = () => { db.close(); ok(q.result.map((s) => ({ name: s.name, bg: s.bg, out: s.out || null, mask: !!s.mask, anim: s.anim }))); }; q.onerror = () => ok([]); }; }))`;
+    const q = db.transaction("state").objectStore("state").getAll(); q.onsuccess = () => { db.close(); ok(q.result.map((s) => ({ name: s.name, bg: s.bg, out: s.out || null, mask: !!s.mask, anim: s.anim, edited: !!s.edited }))); }; q.onerror = () => ok([]); }; }))`;
 const kept = (p) => p.ev(KEPT);
 const noErrors = (p, allow = []) => {
   const bad = p.errors.filter((e) => !allow.some((a) => a.test(e)));
@@ -265,7 +265,7 @@ try {
   // after its English changed (src/i18n.js is keyed by the English text; a missing key shows English).
   await check("i18n: every string translated, none stale", async () => {
     const { LANGS } = await import(join(root, "src/i18n.js"));
-    const app = readFileSync(join(root, "src/app.js"), "utf8"), idx = readFileSync(join(root, "src/index.html"), "utf8");
+    const app = ["src/app.js", "src/edit.js"].map((f) => readFileSync(join(root, f), "utf8")).join("\n"), idx = readFileSync(join(root, "src/index.html"), "utf8");
     const { PARTNERS } = await import(join(root, "lib/partners.mjs"));
     const said = (f) => [...readFileSync(join(root, f), "utf8").matchAll(/(?:fail\(\d+, |new Error\()"([^"]+)"/g)].map((m) => m[1]);
     const used = new Set([
@@ -644,6 +644,119 @@ try {
     noErrors(o); await cspClean(o);
     await o.close();
     return `${f.name} ${r.w} x ${r.h}, 1 stored photo for 2 cut-outs`;
+  });
+
+  // Mask editing (src/edit.js): a real click on the cut-out opens the editor, an Erase stroke goes across the head, Done.
+  // The edit reaches the downloads (whole frame, on white, Square), the kept record and a reload. A click that only
+  // closes an open background picker doesn't open the editor; Enter on the focused cut-out does, Escape closes it.
+  await check(`editing: erase, Done, the edit in downloads and after a reload (${engine})`, async () => {
+    const c9 = await context(), o = await page(c9), C = "#grid > .card";
+    await o.go(app("&debug=1"));
+    await addPhotos(o, ["edit", "other"]); // the first is 900 x 1200: head centred at 450, 260, radius 150; body below
+    await allDone(o, 2, 120000);
+    await o.until(`document.querySelector("${C} .pic").classList.contains("still")`, 10000, "the cut-out shown");
+    const mouse = async (x, y) => {
+      await o.s("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", buttons: 1, clickCount: 1 });
+      await o.s("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", buttons: 0, clickCount: 1 });
+    };
+    const key = async (k, code) => { for (const type of ["keyDown", "keyUp"]) await o.s("Input.dispatchKeyEvent", { type, key: k, code: k, windowsVirtualKeyCode: code }); };
+    // An element's centre once the grid holds still: a short last row is centred until the ads fill it, then moves.
+    const mid = async (sel) => {
+      const at = `(() => { const r = document.querySelector("${sel}").getBoundingClientRect(); return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) }; })()`;
+      for (let i = 0, a = await o.ev(at); ; i++) { await sleep(300); const b = await o.ev(at); if ((b.x === a.x && b.y === a.y) || i > 20) return b; a = b; }
+    };
+    // A click on the cut-out is main's "put it on the product cards", never the editor.
+    let m0 = await mid(`${C} .pic`);
+    await mouse(m0.x, m0.y);
+    await sleep(400);
+    assert(await o.ev(`!document.querySelector(".editor")`), "a click on the cut-out opened the editor");
+    // The pencil in the bar opens it (a real click).
+    m0 = await mid(`${C} .bar > .edit`);
+    await mouse(m0.x, m0.y);
+    await o.until(`document.querySelector(".estage canvas")?.width > 0 && document.querySelector("#grid").offsetParent === null`, 10000, "the editor in the grid's place");
+    assert(!(await o.ev(`document.activeElement?.classList.contains("edone")`)), "a click opened it as if from the keyboard (Done focused)");
+    await key(" ", 32); // space-drag pans: it must not press a focused button
+    assert(await o.ev(`!!document.querySelector(".editor")`), "Space closed the editor");
+    await click(o, `.editor .emode[data-m="erase"]`);
+    // Where the photo sits on the stage: fitted with 12 px room and centred (fit() in edit.js).
+    const st = await o.ev(`(() => { const r = document.querySelector(".estage canvas").getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; })()`);
+    const s = Math.min((st.w - 24) / 900, (st.h - 24) / 1200), ox = st.x + (st.w - 900 * s) / 2, oy = st.y + (st.h - 1200 * s) / 2;
+    const at = (u, v) => ({ x: ox + u * 900 * s, y: oy + v * 1200 * s });
+    for (const v of [0.2, 0.217, 0.234]) { // three strokes across the head, a brush 36 px wide
+      const a = at(0.36, v), b = at(0.64, v);
+      await o.s("Input.dispatchMouseEvent", { type: "mousePressed", x: a.x, y: a.y, button: "left", buttons: 1, clickCount: 1 });
+      for (let i = 1; i <= 10; i++) await o.s("Input.dispatchMouseEvent", { type: "mouseMoved", x: a.x + ((b.x - a.x) * i) / 10, y: a.y, button: "left", buttons: 1 });
+      await o.s("Input.dispatchMouseEvent", { type: "mouseReleased", x: b.x, y: b.y, button: "left", buttons: 0, clickCount: 1 });
+    }
+    assert(!(await o.ev(`document.querySelector(".editor .eundo").disabled`)), "the strokes left nothing to undo");
+    await click(o, ".editor .edone");
+    await o.until(`!document.querySelector(".editor") && document.querySelector("#grid").offsetParent !== null`, 5000, "the grid back");
+    await o.until(`(${KEPT}).then((k) => k[0]?.edited)`, 10000, "the edit kept");
+    // Whole frame, see-through: the erased spot is clear, the body is not.
+    await click(o, `${C} .crop`);
+    const f = await download(c9, () => click(o, `${C} .dl`));
+    const r = await pixels(o, f, [[0.5, 0.217], [0.5, 0.6]]);
+    assert(f.kind === "png" && r.w === 900 && r.h === 1200, `${f.kind} ${r.w} x ${r.h}`);
+    assert(r.at[0][3] < 40 && r.at[1][3] > 200, `erased spot alpha ${r.at[0][3]}, body alpha ${r.at[1][3]}`);
+    // On white: a JPG, white where erased.
+    await click(o, `${C} .bgb`);
+    await click(o, `${C} .bgs [data-bg="#ffffff"]`);
+    const g = await download(c9, () => click(o, `${C} .dl`));
+    const r2 = await pixels(o, g, [[0.5, 0.217], [0.5, 0.6]]);
+    assert(g.kind === "jpg" && r2.at[0].slice(0, 3).every((v) => v > 230) && r2.at[1][0] > 150 && r2.at[1][1] < 90, `${g.kind}: erased ${r2.at[0]}, body ${r2.at[1]}`);
+    // Download all (streamed zip) carries the edit too.
+    let all = "";
+    {
+      await o.until(`!document.getElementById("tools").hidden`, 5000, "Download all shown");
+      const z = await download(c9, () => click(o, "#all"), 60000);
+      const e = Object.entries(unzipSync(new Uint8Array(z.bytes))).find(([n]) => n.startsWith("edit-"));
+      assert(z.kind === "zip" && e, `Download all: ${z.kind}`);
+      const ra = await pixels(o, { bytes: Buffer.from(e[1]) }, [[0.5, 0.217]]);
+      assert(ra.at[0].slice(0, 3).every((v) => v > 230), `Download all (${e[0]}): erased spot ${ra.at[0]}`);
+      all = `Download all ${e[0]} white at the spot`;
+    }
+    // A reload keeps the edit.
+    o.errors.length = 0;
+    await o.reload();
+    await allDone(o, 2, 20000);
+    const h = await download(c9, () => click(o, `${C} .dl`));
+    const r3 = await pixels(o, h, [[0.5, 0.217], [0.5, 0.6]]);
+    assert(h.kind === "jpg" && r3.at[0].slice(0, 3).every((v) => v > 230) && r3.at[1][0] > 150, `after the reload: ${h.kind} erased ${r3.at[0]}, body ${r3.at[1]}`);
+    // Square follows the edited mask.
+    await click(o, `${C} .bgb`);
+    await click(o, `${C} .bgs .more`);
+    await o.ev(`(() => { const s = document.querySelector("${C} .osize select"); s.value = "1:1"; s.dispatchEvent(new Event("change", { bubbles: true })); return true; })()`);
+    const q = await download(c9, () => click(o, `${C} .dl`));
+    const r4 = await pixels(o, q, [[0.5, 0.5]]);
+    assert(q.kind === "jpg" && r4.w === r4.h, `Square: ${q.kind} ${r4.w} x ${r4.h}`);
+    // The keyboard way in: Enter on the focused cut-out, Escape back to it.
+    await o.ev(`(() => { document.activeElement?.blur(); document.querySelector("${C} .pic").focus(); return document.activeElement.classList.contains("pic"); })()`);
+    await key("Enter", 13);
+    await o.until(`document.activeElement?.classList.contains("edone")`, 10000, "Enter opens the editor with Done focused");
+    await key("Escape", 27);
+    await o.until(`!document.querySelector(".editor") && document.activeElement?.classList.contains("pic")`, 5000, "Escape closes it, focus back on the cut-out");
+    // Enter on the pencil: Done focused, and Escape puts focus back on the pencil.
+    await mouse(4, 4); // a tap outside closes the options row Square left open (it hides the bar's buttons)
+    assert(await o.ev(`(() => { document.querySelector("${C} .bar > .edit").focus(); return document.activeElement.classList.contains("edit"); })()`), "the pencil can't take focus: " + await o.ev(`(() => { const e = document.querySelector("${C} .bar > .edit"), cs = getComputedStyle(e); return [cs.display, cs.visibility, e.closest(".card").getBoundingClientRect().width, e.parentElement.className, document.activeElement?.className].join(" "); })()`));
+    for (const type of ["keyDown", "keyUp"]) await o.s("Input.dispatchKeyEvent", { type, key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, ...(type === "keyDown" && { text: "\r" }) }); // a button needs the text to activate
+    await o.until(`document.activeElement?.classList.contains("edone")`, 10000, "Enter on the pencil opens the editor with Done focused");
+    // The page blocks pinch (touch-action pan-x pan-y), the stage pinches itself: two fingers zoom the photo.
+    const ta = await o.ev(`getComputedStyle(document.querySelector(".estage canvas")).touchAction + " / " + getComputedStyle(document.querySelector(".estage")).touchAction`);
+    assert(ta === "none / none", "stage touch-action: " + ta);
+    await o.s("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
+    const s0 = await o.ev("window.goodbyeEdit.view().s"), cv = await mid(".estage canvas");
+    const fingers = (d) => [{ x: cv.x - d, y: cv.y, id: 1 }, { x: cv.x + d, y: cv.y, id: 2 }];
+    await o.s("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: fingers(30) });
+    for (let d = 40; d <= 150; d += 10) await o.s("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: fingers(d) });
+    await o.s("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await o.s("Emulation.setTouchEmulationEnabled", { enabled: false });
+    const s1 = await o.ev("window.goodbyeEdit.view().s"), vv = await o.ev("visualViewport.scale");
+    assert(s1 > s0 * 2 && vv === 1, `pinch: stage scale ${s0.toFixed(3)} to ${s1.toFixed(3)}, page scale ${vv}`);
+    await key("Escape", 27);
+    await o.until(`!document.querySelector(".editor") && document.activeElement?.classList.contains("edit")`, 5000, "Escape closes it, focus back on the pencil").catch(async (e) => { throw new Error(e.message + " " + await o.ev(`(() => { const e = document.querySelector("${C} .bar > .edit"), cs = getComputedStyle(e); return [document.activeElement?.className, cs.display, cs.visibility, e.closest(".card").getBoundingClientRect().width, e.closest(".card").className, e.parentElement.className].join(" | "); })()`)); });
+    noErrors(o); await cspClean(o);
+    await o.close();
+    return `erased spot alpha ${r.at[0][3]}, on white ${r2.at[0].slice(0, 3)}, Square ${r4.w} x ${r4.h}; ${all}; pinch ${(s1 / s0).toFixed(1)}x`;
   });
 
   // Phone width, a slow connection: the case that jittered before (jitter-design: CLS 0.24 with 2 photos at 300 ms).

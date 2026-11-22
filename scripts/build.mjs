@@ -156,7 +156,7 @@ const fileHash = (f) => createHash("sha256").update(readFileSync(join(dist, f)))
 const shellFiles = { "/": "index.html" };
 for (const f of ["app.js", "style.css", "early.js", "engine.js", "favicon.svg", "manifest.webmanifest", "icon-192.png", "icon-512.png",
   "icon-maskable-512.png", "apple-touch-icon.png", `fonts/${fontFile}`, "vendor/fflate.mjs", "vendor/confetti.mjs", "partners.json",
-  "gif.mjs", "formats.mjs", "libheif.wasm", "render3d.mjs"]) shellFiles["/" + f] = f;
+  "gif.mjs", "formats.mjs", "libheif.wasm", "render3d.mjs", "edit.js", "edit.css"]) shellFiles["/" + f] = f;
 const shell = Object.fromEntries(Object.entries(shellFiles).map(([p, f]) => [p, fileHash(f)]));
 const eager = ["/", "/app.js", "/style.css", "/early.js", `/fonts/${fontFile}`, "/favicon.svg", "/manifest.webmanifest"];
 const big = {};

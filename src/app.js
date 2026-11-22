@@ -5,7 +5,9 @@
 
 // fflate (ZIPs in and out) loads on first use: a static import sat in front of everything else on a first visit.
 let zipLib = null;
-const loadZip = () => (zipLib ||= import("./vendor/fflate.mjs"));
+// fz: the loaded module, for the few sync callers that only run after a photo was cut out (segment loads it).
+let fz = null;
+const loadZip = () => (zipLib ||= import("./vendor/fflate.mjs").then((m) => (fz = m)));
 
 const RES = 1024;            // model input size
 const MAX_SIDE = 8192;       // larger images are scaled down to fit in memory
@@ -468,7 +470,8 @@ function infer(input) {
   });
 }
 
-async function segment(bitmap, edge = true, want = "") { // edge: false skips refineEdge (GIF frames); want: see loadModel
+async function segment(bitmap, edge = true, want = "") { // edge: false skips refineEdge and the raw output (GIF frames); want: see loadModel
+  const keepRaw = edge;
   await loadModel(want);
   dbg("segment", { w: bitmap.width, h: bitmap.height, coi: self.crossOriginIsolated, threads: THREADS });
   const c = new OffscreenCanvas(RES, RES), x = c.getContext("2d");
@@ -499,6 +502,10 @@ async function segment(bitmap, edge = true, want = "") { // edge: false skips re
     id.data[k] = id.data[k + 1] = id.data[k + 2] = 255;
     id.data[k + 3] = Math.max(0, Math.min(255, m[i] * 255));
   }
+  // The model's own output, before despeck and the edge curve: what it was unsure about. The editor brings back a
+  // tapped faded or dropped piece from it (see edit.js). 1 byte a pixel, deflated (mostly zeros: 13 to 51 KB in tests).
+  const raw = keepRaw ? new Uint8Array(n) : null;
+  if (raw) for (let i = 0; i < n; i++) raw[i] = id.data[i * 4 + 3];
   despeck(id);
   if (engineModel === "isnet" && params.get("haze") !== "0") hardenHaze(id); // ISNet only (tuned on its masks); ?haze=0 shows it without
   let box = subjectBox(id);
@@ -510,6 +517,7 @@ async function segment(bitmap, edge = true, want = "") { // edge: false skips re
   const mask = new OffscreenCanvas(RES, RES);
   mask.getContext("2d").putImageData(id, 0, 0);
   mask.box = box;
+  if (keepRaw) try { const { deflateSync } = await loadZip(); mask.raw = { w: RES, h: RES, z: deflateSync(raw, { level: 6 }) }; } catch {}
   try { mask.fix = edgeColors(px, id.data); dbg("edges"); } catch (e) { console.warn("Edge colors skipped", e); }
   return mask;
 }
@@ -1161,7 +1169,7 @@ async function animate(it) {
     if (!items.includes(it)) return;
     say(it, t("Frame {i} of {n}", { i: i + 1, n: frames.length }));
     working("gif", it);
-    const m = await segment(frames[i].canvas, false);
+    const m = await segment(frames[i].canvas, false); // GIF frames: no filter, and never edited, so no raw output
     out.push({ rgba: cut(m, frames[i].canvas), delay: frames[i].delay });
     frames[i].canvas = null; // done with it (memory)
   }
@@ -1379,6 +1387,7 @@ async function fromDataTransfer(dt) {
 }
 
 /* ---------- cards ---------- */
+const PENCIL = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"/><path d="m14.5 5.5 3 3"/></svg>';
 function makeCard(it) {
   const card = document.createElement("article"); card.className = "card";
   const pic = document.createElement("div"); pic.className = "pic";
@@ -1396,6 +1405,13 @@ function makeCard(it) {
   img.addEventListener("contextmenu", () => holdFull(it));
   pic.addEventListener("click", () => { if (adEls.length && it.mask) { tick(); showArt(it); } });
   pic.append(canvas, img, busy);
+  // The editor: the pencil in the bar (or in the picker when the bar has no room), or Enter or Space on the focused
+  // cut-out (it is in the tab order once finished, see ready). A tap on the cut-out stays "put it on the product cards".
+  pic.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target === pic) { e.preventDefault(); edit(it, pic); } });
+  const ed = document.createElement("button"); ed.type = "button"; ed.className = "ico edit"; ed.style.visibility = "hidden";
+  ed.setAttribute("aria-label", t("Edit cut-out")); ed.title = t("Edit cut-out");
+  ed.innerHTML = PENCIL;
+  ed.addEventListener("click", (e) => edit(it, e.detail === 0 ? ed : null)); // detail 0: Enter or Space, so focus comes back here
   const bar = document.createElement("div"); bar.className = "bar";
   const dl = document.createElement("button"); dl.type = "button"; dl.className = "btn primary dl"; dl.disabled = true;
   dl.setAttribute("aria-label", t("Download")); dl.title = t("Download");
@@ -1412,9 +1428,9 @@ function makeCard(it) {
   const bgb = document.createElement("button"); bgb.type = "button"; bgb.className = "ico bgb"; bgb.style.visibility = "hidden";
   bgb.setAttribute("aria-label", t("Background")); bgb.title = t("Background"); bgb.setAttribute("aria-expanded", "false");
   bgb.innerHTML = '<span class="sw"></span>';
-  const pick = bgPicker(it, crop, x), opts = optsRow(it);
+  const pick = bgPicker(it, crop, x, ed), opts = optsRow(it);
   const say = document.createElement("p"); say.className = "say"; // the quip while this photo is worked on: in the bar, never on the photo
-  bar.append(crop, bgb, dl, rates, say, x, pick, opts);
+  bar.append(crop, ed, bgb, dl, rates, say, x, pick, opts);
   card.append(pic, bar);
   bgb.addEventListener("click", () => { tick(); if (picking === it) closePick(); else openPick(it); });
 
@@ -1444,7 +1460,7 @@ function makeCard(it) {
     finally { clearTimeout(slow); dl.removeAttribute("aria-busy"); it.saving = false; }
   });
 
-  it.el = { card, pic, canvas, img, busy, dl, crop, up, down, bar, bgb, pick, opts, say };
+  it.el = { card, pic, canvas, img, busy, dl, crop, edit: ed, up, down, bar, bgb, pick, opts, say };
   return card;
 }
 
@@ -1459,13 +1475,15 @@ const BLURS = [["blur:1", "Soft blur"], ["blur:2", "Strong blur"]];
 const CHEV = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>';
 let picking = null;
 // Every swatch is one tap: it sets the background and closes the row (your photo once the picture is picked).
-function bgPicker(it, crop, x) {
+function bgPicker(it, crop, x, ed) {
   const pick = document.createElement("div"); pick.className = "bgs"; pick.hidden = true;
   pick.setAttribute("role", "group"); pick.setAttribute("aria-label", t("Background"));
   // Pages break between groups (pageRow): the colours, then blur soft + strong (never split) and your photo, then crop
   // and remove when the bar has no room for them. Size, margin, shadow (sliders) is pinned next to ›, on every page.
   const pcrop = crop.cloneNode(true); pcrop.className = "swb crop pcrop pg"; pcrop.style.visibility = ""; pcrop.dataset.g = "ctl";
   pcrop.addEventListener("click", () => crop.click());
+  const ped = ed.cloneNode(true); ped.className = "swb pedit pg"; ped.style.visibility = ""; ped.dataset.g = "ctl";
+  ped.addEventListener("click", (e) => { closePick(); edit(it, e.detail === 0 ? it.el.bgb : null); });
   const swatch = (v, label, cls) => {
     const b = document.createElement("button"); b.type = "button"; b.className = `swb pg ${cls}`; b.dataset.bg = v || "";
     b.dataset.g = String(v).startsWith("blur") ? "back" : "colour"; if (String(v).startsWith("blur")) b.dataset.u = "blur";
@@ -1507,7 +1525,7 @@ function bgPicker(it, crop, x) {
     b.addEventListener("click", () => { const o = it.el[v]; closePick(); if (!o.disabled) o.click(); });
     return b;
   });
-  pick.prepend(...prates); pick.append(pcrop, px, more, pager(pick));
+  pick.prepend(...prates); pick.append(pcrop, ped, px, more, pager(pick));
   [...pick.children].forEach((c, i) => c.style.setProperty("--i", i));
   pick.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); closePick(true); } });
   leaveCloses(it, pick);
@@ -1601,6 +1619,7 @@ function openPick(it) {
   paintBg(it);
   // What the bar has no room for (crop, remove) rides along in the picker.
   pick.classList.toggle("wantcrop", getComputedStyle(it.el.crop).display === "none");
+  pick.classList.toggle("wantedit", getComputedStyle(it.el.edit).display === "none");
   pick.classList.toggle("wantx", getComputedStyle(it.el.bar.querySelector(":scope > .x")).display === "none");
   const wantRate = !!it.mask && !it.el.up.disabled && getComputedStyle(it.el.bar.querySelector(".rates")).display === "none";
   pick.classList.toggle("wantrate", wantRate); // unvoted only: a vote already given shows on the card
@@ -1896,8 +1915,10 @@ function unshow(it) {
 function ready(it) {
   clearInterval(it.quip); it.el.card.classList.remove("queued", "working"); it.el.card.removeAttribute("aria-busy");
   it.el.busy.hidden = true; it.el.dl.disabled = false;
-  for (const b of [it.anim ? null : it.el.crop, it.anim ? null : it.el.bgb, it.el.up, it.el.down]) if (b) b.style.visibility = "";
+  for (const b of [it.anim ? null : it.el.crop, it.anim ? null : it.el.edit, it.anim ? null : it.el.bgb, it.el.up, it.el.down]) if (b) b.style.visibility = "";
   it.el.card.classList.toggle("picky", !it.anim); // has a background picker, so narrow bars may move remove into it
+  it.el.card.classList.toggle("editable", !it.anim); // the pencil opens the editor
+  if (!it.anim) { const p = it.el.pic; p.tabIndex = 0; p.setAttribute("role", "button"); p.setAttribute("aria-label", t("Edit cut-out")); } // Enter or Space
   if (!it.anim) hintBg(it);
   paintCrop(it);
   paintBg(it);
@@ -1909,6 +1930,7 @@ function fail(it, msg) {
   it.el.card.classList.remove("queued");
   clearInterval(it.quip);
   it.failed = true;
+  for (const k of ["tabindex", "role", "aria-label"]) it.el.pic.removeAttribute(k); // nothing to edit
   it.el.card.classList.remove("working");
   it.el.card.classList.add("failed"); it.el.card.removeAttribute("aria-busy");
   it.el.busy.textContent = msg;
@@ -1979,6 +2001,36 @@ function landing(change) {
   if (!document.startViewTransition || document.hidden || matchMedia("(prefers-reduced-motion: reduce)").matches) return swap();
   return document.startViewTransition(swap).updateCallbackDone.catch((e) => { console.warn(e); if (!b.classList.contains("has-work")) swap(); });
 }
+/* ---------- mask editing (docs/mask-edit.md) ----------
+   The pencil (or Enter on a finished cut-out) opens the editor (edit.js, loaded the first time): it takes the grid's place, and Done
+   hands back a new mask. A new mask object, because the stored PNG and the ad art are cached by mask. */
+let editMod = null, editing = null;
+async function edit(it, back = null) { // back: opened from the keyboard on this element, so focus goes into the editor, and back to it after
+  const kbd = !!back;
+  if (editing || !items.includes(it) || !it.mask || it.anim || it.failed || it.el.card.classList.contains("working") || !it.bmp) return;
+  editing = it; tick(); dbg("edit");
+  closePick();
+  try {
+    editMod ||= import("./edit.js");
+    const { inflateSync } = await loadZip();
+    await (await editMod).openEditor(it, { RES, subjectBox, inflateSync, tick, kbd, dbg, t, debug: DEBUG, small: IOS || PHONE,
+      done: (mask) => { if (mask && items.includes(it)) applyEdit(it, mask); },
+      // Focus once the grid is laid out again (a control hidden at that moment can't take it), on the first one in sight.
+      closed: () => { editing = null; requestAnimationFrame(() => { layout(); requestAnimationFrame(() => [back, it.el.bgb, it.el.dl].find((e) => e?.checkVisibility?.({ visibilityProperty: true }) ?? e)?.focus({ preventScroll: true })); }); } });
+  } catch (e) { editing = null; editMod = null; console.error(e); report("edit-failed", e, it); }
+}
+function applyEdit(it, mask) {
+  Object.assign(it, { mask, maskRect: null, first: null, edited: true, png: null });
+  dbg("edited", { box: !!mask.box });
+  drawCard(it); downLabel(it); keep(it); sync();
+  if (!mask.box) swapAds(it); // nothing kept: its ads move to another cut-out
+  else for (const a of adEls) { // ads showing this photo show the edit
+    const c = a.querySelector(".adart");
+    if (a.artIt === it && a.art && c) try { a.art.src = artOf(it); Promise.resolve(a.art.draw(c, a.art.src)).catch(() => {}); } catch {}
+  }
+  if (PHONE && !running && !retrying) png(it);
+}
+
 /* ---------- ratings ----------
    👍 and 👎 send an anonymous count to /api/rate: the vote, the engine, the run time and the photo's
    megapixels. Never the photo. 👎 then runs the model again, zoomed in on the subject, which gives
@@ -2005,6 +2057,7 @@ async function rate(it, vote) {
   showVote(it, (it.vote = vote));
   sendRating(it, vote); keep(it);
   if (vote !== "down") return;
+  if (it.edited) return; // edits win: a retry, or putting the first result back, would throw them away (docs/mask-edit.md)
   if (!it.retried && !it.anim) return retry(it); // a GIF's 👎 is a vote only
   if (it.first) { // 👎 on the retry: put the first result back, so a retry never leaves things worse
     Object.assign(it, { mask: it.first.mask, maskRect: it.first.rect, png: null });
@@ -2044,7 +2097,21 @@ function mergeRetry(first, m, rect) {
   const small = new OffscreenCanvas(RES, RES), sx = small.getContext("2d");
   sx.drawImage(out, 0, 0, RES, RES);
   out.box = subjectBox(sx.getImageData(0, 0, RES, RES));
+  try { out.raw = mergeRaw(first, m, rect); } catch {}
   return out;
+}
+// The model's raw output for a merged retry: full frame at RES, the zoomed part from the retry, the rest from the first run.
+function mergeRaw(first, m, rect) {
+  if (!m.raw) return null;
+  const { inflateSync, deflateSync } = fz;
+  const f = !first.rect && first.mask.raw, a = f ? inflateSync(f.z) : null, b = inflateSync(m.raw.z), out = new Uint8Array(RES * RES);
+  for (let y = 0; y < RES; y++) for (let x = 0; x < RES; x++) {
+    const u = (x + 0.5) / RES, v = (y + 0.5) / RES, i = y * RES + x;
+    if (u >= rect.x && u < rect.x + rect.w && v >= rect.y && v < rect.y + rect.h)
+      out[i] = b[Math.min(m.raw.h - 1, (((v - rect.y) / rect.h) * m.raw.h) | 0) * m.raw.w + Math.min(m.raw.w - 1, (((u - rect.x) / rect.w) * m.raw.w) | 0)];
+    else if (a) out[i] = a[Math.min(f.h - 1, (v * f.h) | 0) * f.w + Math.min(f.w - 1, (u * f.w) | 0)];
+  }
+  return { w: RES, h: RES, z: deflateSync(out, { level: 6 }) };
 }
 
 // Where a retry zooms in: the subject with generous room. null when that is most of the photo anyway (then 👎 is a vote only).
@@ -2063,7 +2130,7 @@ function retryModel(it) {
 }
 // The 👎 label says what it will do.
 function downLabel(it) {
-  const label = t(!it.retried && (zoomRect(it) || retryModel(it)) ? "Bad result, try again" : "Bad result");
+  const label = t(!it.retried && !it.edited && (zoomRect(it) || retryModel(it)) ? "Bad result, try again" : "Bad result");
   it.el.down.setAttribute("aria-label", label); it.el.down.title = label;
 }
 
@@ -2724,7 +2791,7 @@ async function saveAll() {
 let lastTap = 0;
 document.addEventListener("touchend", (e) => {
   const now = e.timeStamp;
-  if (now - lastTap < 350 && e.changedTouches.length === 1) e.preventDefault();
+  if (now - lastTap < 350 && e.changedTouches.length === 1 && e.cancelable) e.preventDefault(); // not cancelable: the end of a pinch (the editor's stage), nothing to stop
   lastTap = now;
 }, { passive: false });
 document.addEventListener("dblclick", (e) => e.preventDefault(), { passive: false });
@@ -2767,7 +2834,7 @@ const maskBlobs = new WeakMap(); // mask -> its PNGs, so a vote or a crop doesn'
 function maskRec(m) {
   if (!m) return null;
   let r = maskBlobs.get(m);
-  if (!r) maskBlobs.set(m, (r = (async () => ({ png: await m.convertToBlob({ type: "image/png" }), fix: m.fix ? await m.fix.convertToBlob({ type: "image/png" }) : null, box: m.box }))()));
+  if (!r) maskBlobs.set(m, (r = (async () => ({ png: await m.convertToBlob({ type: "image/png" }), fix: m.fix ? await m.fix.convertToBlob({ type: "image/png" }) : null, box: m.box, raw: m.raw || null }))()));
   return r;
 }
 const seeThrough = (b) => /png|webp|gif|svg|avif|tiff|icon|bmp/i.test(b.type) || /\.(png|webp|gif|svg|avif|tiff?|ico|bmp)$/i.test(b.name || "");
@@ -2784,8 +2851,8 @@ async function writeKept(it) {
   }
   const mask = await maskRec(it.mask), first = it.first ? { rect: it.first.rect || null, mask: await maskRec(it.first.mask) } : null;
   const gif = it.anim && it.gifUrl ? await it.png : null;
-  const size = (r) => (r ? r.png.size + (r.fix?.size || 0) : 0);
-  const state = { id: it.key, name: it.name, w: it.w, h: it.h, crop: it.crop, cropBack: !!it.cropBack, rect: it.maskRect || null, mask, first, retried: !!it.retried,
+  const size = (r) => (r ? r.png.size + (r.fix?.size || 0) + (r.raw?.z.length || 0) : 0);
+  const state = { id: it.key, name: it.name, w: it.w, h: it.h, crop: it.crop, cropBack: !!it.cropBack, rect: it.maskRect || null, mask, first, retried: !!it.retried, edited: !!it.edited,
     vote: it.vote || null, bg: it.bg || null, out: it.out || null, anim: !!it.anim, gif, ms: it.ms || 0, engine: it.engine || null,
     bytes: it.blob.size + it.prev.size + size(mask) + size(first?.mask) + (gif?.size || 0) };
   if (state.bytes > KEEP_BYTES) return; // never fits (see trim)
@@ -2823,7 +2890,7 @@ async function canvasOf(blob) {
 }
 async function maskFrom(r) {
   if (!r) return null;
-  const m = await canvasOf(r.png); m.box = r.box;
+  const m = await canvasOf(r.png); m.box = r.box; m.raw = r.raw || null;
   if (r.fix) m.fix = await canvasOf(r.fix);
   maskBlobs.set(m, Promise.resolve(r));
   return m;
@@ -2850,7 +2917,7 @@ async function restore() {
     const f = byId.get(st.id); byId.delete(st.id);
     if (!f?.blob || !f.prev) { orphans.push(st.id); continue; }
     const it = { id: ++uid, key: st.id, name: st.name, bmp: null, blob: f.blob, prev: f.prev, w: st.w, h: st.h, mask: null, crop: st.crop, cropBack: !!st.cropBack,
-      maskRect: st.rect, retried: st.retried, vote: st.vote, bg: st.bg || null, out: st.out || null, ms: st.ms, engine: st.engine || "", filed: true, st };
+      maskRect: st.rect, retried: st.retried, edited: !!st.edited, vote: st.vote, bg: st.bg || null, out: st.out || null, ms: st.ms, engine: st.engine || "", filed: true, st };
     items.push(it); list.push(it);
   }
   orphans.push(...byId.keys());
@@ -2988,7 +3055,7 @@ if ("launchQueue" in window) {
 }
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
-if (DEBUG) window.goodbye = { items, png, frame, PRODUCTS, artSource, mugArt }; // ?debug=1: for checking results by hand
+if (DEBUG) window.goodbye = { items, png, frame, PRODUCTS, artSource, mugArt, edit, adEls }; // ?debug=1: for checking results by hand
 // The frame gets its src only when ads are on, so nothing loads from the ad network otherwise.
 if (ADS) { $("ad").querySelector("iframe").src = AD_SRC; $("ad").hidden = false; }
 
