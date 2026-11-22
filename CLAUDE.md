@@ -255,12 +255,12 @@ Tested: headless Chrome (reload in a restarted browser, Back still from bfcache)
   - Output options (2026-11-22, sellers, parity items 5 and 7): the picker's last button (sliders) swaps the swatches
     for a second row at the bar's height: Size (native select: Original, Square, 4:5, 16:9, Custom W x H up to 5000 px,
     4096 on iPhones), Margin (0, 4%, 10%, 20% of the subject's longer side; 4% is the old crop), a ground shadow toggle,
-    All, WebP. Narrow cards scroll the row sideways with a fade at the end (most used first). All off by default, and then
+    All, WebP. Phones build the PNG ahead when the row closes, not per change; controls are 16 px on touch (iOS focus zoom). Narrow cards scroll the row sideways with a fade at the end (most used first). All off by default, and then
     the output is byte-for-byte the old one. Original never goes past the photo's edges; a ratio grows the canvas around
     the subject at the photo's own resolution (no resampling); Custom scales into exactly W x H; centred; the margin is
     see-through or the background colour (the cut-out is clipped to the subject's box). The shadow is a radial-gradient
     ellipse under the subject's bottom edge (no canvas filter: Safari). Output capped at 16 MP on iPhones, 64 elsewhere.
-    WebP only where the browser encodes it (a 1x1 test at load; Safari doesn't, so it isn't offered there), quality 0.9,
+    WebP only where the browser encodes it (a 1x1 test at load; not tested in Safari), quality 0.9,
     keeps transparency. Card, Download, long press, Download all and the partner-ad save follow; the Zazzle upload and ad
     art stay the plain see-through crop (`fullBlob(it, true)`). All copies this photo's background and options to every
     other photo (not GIFs) and to photos added later in this visit (memory only, not across visits). Kept in IndexedDB
