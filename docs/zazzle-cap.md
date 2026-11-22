@@ -124,8 +124,10 @@ photos uploaded?" gives the details: clicking a product ad takes that cut-out to
 until Zazzle has it, an hour at most. Also changed: `src/index.html` meta, og, JSON-LD and hero;
 `src/remove-bg-alternative/index.html` meta, lede and table; `README.md`, `package.json`, the `src/_headers` and
 `src/app.js` comments, and `CLAUDE.md`. The how-to page is unchanged: "without uploading it" and "the photo stays on
-your device" describe removing the background, which stays true. "An hour at most" must match `TTL_MS`. "Until Zazzle
-has it" holds because the GET deletes our copy 20 s after the first fetch.
+your device" describe removing the background, which stays true. "Until Zazzle
+has it" holds because the GET deletes our copy 20 s after the first fetch. 2026-11-22: "an hour at most" was
+not true for a cut-out Zazzle never fetches (unreadable after `TTL_MS`, but only deleted on the next send or by the
+one-day lifecycle rule); the FAQ now says "no one can open it after an hour and it is deleted within a day".
 
 ## 4. Zazzle setup (done 2026-11-21, in Kevin's account, with his OK)
 
