@@ -91,6 +91,7 @@ body.has-work .hero h1, body.has-work .sub { display: none; }
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 16px; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; display: flex; flex-direction: column; animation: pop .35s cubic-bezier(.2,1.4,.4,1); }
+@media (prefers-reduced-motion: reduce) { .swb { animation: none; } }
 @keyframes pop { from { transform: scale(.92); opacity: 0; } }
 .pic { position: relative; aspect-ratio: 4 / 3; min-height: 0; overflow: hidden; display: grid; place-items: center; padding: 12px; user-select: none; -webkit-user-select: none;
   background: repeating-conic-gradient(var(--check-a) 0 25%, var(--check-b) 0 50%) 0 0 / 16px 16px; }
@@ -109,7 +110,7 @@ body.has-work .hero h1, body.has-work .sub { display: none; }
 .pic.still img { display: block; }
 .pic.still canvas { display: none; }
 /* Nothing sits on the image. Its controls live in the bar below: crop, Download, 👍 👎, remove. */
-.bar { display: flex; align-items: center; gap: var(--s2); padding: var(--s2) var(--s3); border-top: 1px solid var(--line); }
+.bar { position: relative; display: flex; align-items: center; gap: var(--s2); padding: var(--s2) var(--s3); border-top: 1px solid var(--line); }
 .bar .dl { flex: 1; min-width: 0; }
 .dl svg { display: none; }
 .rates { display: flex; gap: var(--s1); }
@@ -121,6 +122,29 @@ body.has-work .hero h1, body.has-work .sub { display: none; }
 .ico:focus-visible { opacity: 1; }
 @media (hover: hover) { .ico:hover:not(:disabled) { opacity: 1; filter: none; background: color-mix(in srgb, var(--ink) 8%, transparent); } }
 .rate:disabled { cursor: default; }
+/* Background: the trigger shows the current one (a checkerboard for see-through). The picker takes the bar's place,
+   at the bar's height, so nothing covers the photo and the cards never resize. */
+.sw { width: 18px; height: 18px; border-radius: 50%; display: block; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 30%, transparent); }
+.sw.none, .swb.sw0 .sw { background: repeating-conic-gradient(var(--check-a) 0 25%, var(--check-b) 0 50%) 0 0 / 8px 8px; }
+.bgb { opacity: .9; }
+.bar.picking > :not(.bgs) { visibility: hidden; }
+.bgs { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: var(--s2); padding: 0 var(--s3);
+  background: var(--card); overflow-x: auto; scrollbar-width: none; }
+.swb { --d: 30px; flex: none; position: relative; width: var(--d); height: var(--d); border-radius: 50%; border: 0; padding: 0; display: grid; place-items: center;
+  background: transparent; color: var(--ink); font: inherit; font-size: 18px; line-height: 1; cursor: pointer;
+  animation: swin .28s cubic-bezier(.2,1.5,.4,1) backwards; animation-delay: calc(var(--i, 0) * 25ms); transition: transform .15s; }
+.swb .sw { width: calc(var(--d) - 8px); height: calc(var(--d) - 8px); }
+.swb[aria-pressed="true"]:not(.pcrop) { box-shadow: 0 0 0 2px var(--brand); }
+.pcrop[aria-pressed="true"] { background: color-mix(in srgb, var(--ink) 12%, transparent); }
+.swb:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+@media (hover: hover) { .swb:hover { transform: scale(1.12); } }
+.swb:active { transform: scale(.9); }
+@keyframes swin { from { transform: scale(.3); opacity: 0; } }
+.custom .sw { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 45%, transparent); display: grid; place-items: center; }
+.custom:not(.set) .sw::after { content: "+"; font-size: 15px; font-weight: 800; color: var(--muted); }
+.custom input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; border: 0; padding: 0; cursor: pointer; }
+.pcrop, .px { display: none; }
+.pcrop svg { width: 15px; height: 15px; }
 .rate.chosen { opacity: 1; filter: none; transform: scale(1.1); }
 
 /* The ad card: fills an otherwise empty grid cell. Same size as a photo card, but no checkerboard, a tinted
@@ -246,10 +270,16 @@ body.app:not(.has-work) main { flex: none; margin-top: auto; }
   .busy { font-size: 12px; gap: 6px; padding: 8px; }
   .busy::before { font-size: 22px; }
 }
-/* Download keeps at least ~40 px. Phone cards (1 to 3 photos in portrait, 165 px) keep 👍 👎 over the crop toggle. */
-@container (min-width: 152px) and (max-width: 184px) { .crop { display: none; } }
-@container (max-width: 151px) { .rates { display: none; } }
-@container (max-width: 130px) { .crop { display: none; } } /* the smallest cards (a dozen photos on a phone): Download keeps room for its icon */
+/* Download keeps at least ~40 px. What the bar has no room for moves into the background picker (crop first, then
+   remove); 👍 👎 stay longest (phone cards, 1 to 3 photos in portrait, are 165 px). Bar by card width:
+   218+ crop, background, Download, 👍 👎, remove | 186-217 no crop | 150-185 no crop, no remove |
+   122-149 background, Download, remove | under 122 background, Download (card widths; the queries see 2 px less). */
+@container (max-width: 240px) { .sw { width: 16px; height: 16px; } .swb { --d: 24px; font-size: 15px; } .bgs { gap: var(--s1); padding: 0 6px; } }
+@container (max-width: 215px) { .bar > .crop { display: none; } .bgs .pcrop { display: grid; } .bgs .sw4 { display: none; } }
+@container (max-width: 183px) { .bgs .sw3 { display: none; } .swb { --d: 20px; font-size: 13px; } .bgs { gap: 2px; } .pcrop svg { width: 12px; height: 12px; } }
+@container (min-width: 148px) and (max-width: 183px) { .bar > .x { display: none; } .bgs .px { display: grid; } }
+@container (max-width: 147px) { .rates { display: none; } }
+@container (max-width: 119px) { .bar > .x { display: none; } .bgs .px { display: grid; } .bgs .pcrop, .bgs .sw2 { display: none; } .bgs { padding: 0 4px; } }
 /* Short screens (a phone on its side): the wordmark moves beside the buttons and the spacing tightens, so the
    cards get the height. */
 @media (max-height: 520px) {

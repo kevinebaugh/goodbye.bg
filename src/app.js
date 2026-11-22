@@ -154,8 +154,20 @@ function growCount() { // waits like a random arrival at the recent pace, then a
 function ownCount(n) { renderCount(Math.max(countShown + 1, n || 0)); }
 // That one request also counts the visit: just that it happened, and the site the visitor came from (hostname
 // only). The server adds device kind and country; nothing identifies the person.
+// Many visits arrive without a referrer (apps, typed links, chat), so a launch link can carry its own tag:
+// ?ref=hn (or utm_source) is sent as "ref.hn" instead, and then taken out of the address bar, so a shared or
+// bookmarked link doesn't count again as that launch.
 (async () => {
   let from = ""; try { from = document.referrer ? new URL(document.referrer).hostname : ""; } catch {}
+  const tag = (params.get("ref") || params.get("utm_source") || "").toLowerCase().replace(/[^a-z0-9.-]/g, "").slice(0, 40);
+  if (tag) {
+    from = `ref.${tag}`;
+    try {
+      const u = new URL(location.href);
+      for (const k of [...u.searchParams.keys()]) if (k === "ref" || k.startsWith("utm_")) u.searchParams.delete(k);
+      history.replaceState(history.state, "", u.pathname + u.search + u.hash);
+    } catch {}
+  }
   try {
     const r = await (await fetch(`/api/count?view=1&from=${encodeURIComponent(from === location.hostname ? "" : from)}`)).json();
     if (r.n >= 0) renderCount(Math.max(countShown, r.n));
@@ -247,7 +259,7 @@ function startEngine(name) {
         status("Starting up…");
         if (name === "gpu") timer = setTimeout(() => fail("GPU warm-up timed out"), GPU_WARMUP_TIMEOUT);
       } else if (data.type === "model") engineModel = data.name;
-      else if (data.type === "ready") { clearTimeout(timer); resolve(); }
+      else if (data.type === "ready") { clearTimeout(timer); w.up = true; resolve(); }
       else if (data.type === "failed") fail(data.error);
       else if (data.type === "result" || data.type === "error") {
         const j = jobs.get(data.id); if (!j) return;
@@ -478,6 +490,7 @@ function drawCard(it) {
   const x = c.getContext("2d");
   x.clearRect(0, 0, W, H);
   if (!it.mask) return x.drawImage(it.bmp, 0, 0, W, H);
+  if (it.bg && !it.anim) { x.fillStyle = it.bg; x.fillRect(0, 0, W, H); }
   const full = render(it, Math.max(1, Math.round(it.w * k)), Math.max(1, Math.round(it.h * k)));
   x.drawImage(full, f.x * k, f.y * k, f.w * k, f.h * k, 0, 0, W, H);
   still(it);
@@ -532,7 +545,7 @@ function reveal(it) {
     x.drawImage(it.bmp, 0, 0, W, H);
     x.save();
     x.beginPath(); x.moveTo(0, 0); x.lineTo(edge, 0); x.lineTo(edge - slant, H); x.lineTo(0, H); x.closePath(); x.clip();
-    x.clearRect(0, 0, W, H); x.drawImage(cut, 0, 0);
+    x.clearRect(0, 0, W, H); if (it.bg) { x.fillStyle = it.bg; x.fillRect(0, 0, W, H); } x.drawImage(cut, 0, 0);
     x.restore();
     if (t < 1) requestAnimationFrame(wipe);
     else if (zoom) { t0 = performance.now(); requestAnimationFrame(ease); }
@@ -550,6 +563,7 @@ function reveal(it) {
     const rx = l(0, f.x) * K, ry = l(0, f.y) * K, rw = l(it.w, f.w) * K, rh = l(it.h, f.h) * K;
     const s = Math.min(cw / rw, ch / rh), dw = rw * s, dh = rh * s;
     x.clearRect(0, 0, cw, ch);
+    if (it.bg) { x.fillStyle = it.bg; x.fillRect((cw - dw) / 2, (ch - dh) / 2, dw, dh); }
     x.drawImage(cut, rx, ry, rw, rh, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
     if (t < 1) requestAnimationFrame(ease); else drawCard(it);
   };
@@ -561,12 +575,15 @@ function reveal(it) {
 // each) were enough, next to the engine, to crash an iPhone.
 const fullBitmap = (it) => decode(it.blob);
 
-async function fullBlob(it) {
+async function fullBlob(it, bg = it.bg) {
   dbg("png", { w: it.w, h: it.h });
   working("png", it); pngBusy++;
   // One canvas at the saved size: the photo is drawn shifted so the crop lands at 0,0 (the canvas clips the
   // rest), the full photo is freed, then the mask cuts it out. A 16 MP photo on an iPhone crashed with the
   // old way (full-frame canvas plus a cropped copy plus the decoded photo).
+  // iPhone: a 16 MP PNG built next to a live engine (about 1.8 GB) crashed Safari (crash step "png"). When no photo
+  // is waiting for it, the engine goes first; the next photo starts a new one from the cached model.
+  if (IOS && worker?.up && !running && !retrying && !jobs.size) { stopEngine("png"); dbg("engine-png"); await nextFrame(); }
   const f = frame(it), out = new OffscreenCanvas(f.w, f.h), x = out.getContext("2d");
   try {
     const big = await fullBitmap(it);
@@ -577,7 +594,10 @@ async function fullBlob(it) {
     if (it.mask.fix) x.drawImage(it.mask.fix, r.x * it.w - f.x, r.y * it.h - f.y, r.w * it.w, r.h * it.h);
     x.globalCompositeOperation = "destination-in"; // keep the photo only where the mask is opaque
     x.drawImage(it.mask, r.x * it.w - f.x, r.y * it.h - f.y, r.w * it.w, r.h * it.h);
-    return await out.convertToBlob({ type: "image/png" });
+    if (!bg) return await out.convertToBlob({ type: "image/png" });
+    x.globalCompositeOperation = "destination-over"; // the chosen background goes behind the cut-out
+    x.fillStyle = bg; x.fillRect(0, 0, f.w, f.h);
+    return await out.convertToBlob({ type: "image/jpeg", quality: 0.92 });
   } finally { pngBusy--; rested(); }
 }
 
@@ -594,7 +614,7 @@ function png(it) {
   }
   return it.png;
 }
-const ext = (it) => (it.anim ? "gif" : "png");
+const ext = (it) => (it.anim ? "gif" : it.bg ? "jpg" : "png");
 const outName = (it) => `${it.name}-goodbye-bg.${ext(it)}`;
 
 /* ---------- animated GIFs ----------
@@ -818,11 +838,17 @@ function makeCard(it) {
   down.addEventListener("click", () => { tick(); rate(it, "down"); });
   const rates = document.createElement("div"); rates.className = "rates"; rates.append(up, down);
   x.classList.add("ico"); crop.classList.add("ico");
-  bar.append(crop, dl, rates, x);
+  const bgb = document.createElement("button"); bgb.type = "button"; bgb.className = "ico bgb"; bgb.style.visibility = "hidden";
+  bgb.setAttribute("aria-label", "Background"); bgb.title = "Background"; bgb.setAttribute("aria-expanded", "false");
+  bgb.innerHTML = '<span class="sw"></span>';
+  const pick = bgPicker(it, crop, x);
+  bar.append(crop, bgb, dl, rates, x, pick);
   card.append(pic, bar);
+  bgb.addEventListener("click", () => { tick(); if (bar.classList.contains("picking")) closePick(); else openPick(it); });
 
   crop.addEventListener("click", () => {
-    it.crop = !it.crop; crop.setAttribute("aria-pressed", String(it.crop)); tick();
+    it.crop = !it.crop; tick();
+    for (const b of card.querySelectorAll(".crop")) b.setAttribute("aria-pressed", String(it.crop));
     it.png = null; drawCard(it); if (PHONE) png(it); keep(it);
   });
   x.addEventListener("click", () => { dbg("removed"); clearInterval(it.quip); it.gen = -1;
@@ -841,8 +867,83 @@ function makeCard(it) {
     finally { clearTimeout(slow); dl.removeAttribute("aria-busy"); it.saving = false; }
   });
 
-  it.el = { card, pic, canvas, img, busy, dl, crop, up, down };
+  it.el = { card, pic, canvas, img, busy, dl, crop, up, down, bar, bgb, pick };
   return card;
+}
+
+/* ---------- background ----------
+   A finished cut-out stays see-through unless the person picks a background: white, black, two from the palette
+   or any colour. The card, Download (a JPG then: smaller, and nothing to see through), a long press and Download all
+   follow it. Ad cards and the cut-out sent to Zazzle stay see-through (a product looks wrong on a white square).
+   The picker takes the bar's place, so it never covers the photo; on narrow cards it also holds the controls the
+   bar had no room for (crop, remove). */
+const BGS = [[null, "See-through"], ["#ffffff", "White"], ["#000000", "Black"], ["#a7dbd8", "Light aqua"], ["#e0e4cc", "Sage"]];
+let picking = null;
+function bgPicker(it, crop, x) {
+  const pick = document.createElement("div"); pick.className = "bgs"; pick.hidden = true;
+  pick.setAttribute("role", "group"); pick.setAttribute("aria-label", "Background");
+  const pcrop = crop.cloneNode(true); pcrop.className = "swb crop pcrop"; pcrop.style.visibility = "";
+  pcrop.addEventListener("click", () => crop.click());
+  pick.append(pcrop);
+  BGS.forEach(([v, label], i) => {
+    const b = document.createElement("button"); b.type = "button"; b.className = `swb sw${i}`; b.dataset.bg = v || "";
+    b.setAttribute("aria-label", label); b.title = label;
+    b.innerHTML = '<span class="sw"></span>';
+    if (v) b.firstChild.style.background = v;
+    b.addEventListener("click", () => { setBg(it, v); closePick(); });
+    pick.append(b);
+  });
+  const own = document.createElement("label"); own.className = "swb custom"; own.title = "Any colour";
+  own.innerHTML = '<span class="sw"></span><input type="color" value="#69d2e7" aria-label="Any colour">';
+  const input = own.querySelector("input");
+  let raf = 0;
+  input.addEventListener("input", () => { // live on the card while the colour picker is open
+    it.bg = input.value; it.png = null; paintBg(it);
+    cancelAnimationFrame(raf); raf = requestAnimationFrame(() => drawCard(it));
+  });
+  input.addEventListener("change", () => { cancelAnimationFrame(raf); setBg(it, input.value, true); closePick(); });
+  pick.append(own);
+  const px = x.cloneNode(true); px.className = "swb px"; px.addEventListener("click", () => x.click());
+  pick.append(px);
+  [...pick.children].forEach((c, i) => c.style.setProperty("--i", i));
+  pick.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); closePick(true); } });
+  return pick;
+}
+function openPick(it) {
+  closePick();
+  picking = it;
+  const { bar, bgb, pick } = it.el;
+  paintBg(it);
+  bar.classList.add("picking"); pick.hidden = false; bgb.setAttribute("aria-expanded", "true");
+  (pick.querySelector('[aria-pressed="true"]:not(.pcrop)') || pick.querySelector(".swb:not(.pcrop)"))?.focus({ preventScroll: true });
+}
+function closePick(refocus = false) {
+  const it = picking; picking = null;
+  if (!it) return;
+  const { bar, bgb, pick } = it.el;
+  bar.classList.remove("picking"); pick.hidden = true; bgb.setAttribute("aria-expanded", "false");
+  if (refocus || pick.contains(document.activeElement)) bgb.focus({ preventScroll: true });
+}
+// A tap anywhere else puts the bar back.
+document.addEventListener("pointerdown", (e) => { if (picking && !picking.el.bar.contains(e.target)) closePick(); }, true);
+function setBg(it, v, force = false) {
+  tick();
+  if (!force && (v || null) === (it.bg || null)) return;
+  it.bg = v || null;
+  paintBg(it);
+  it.png = null; drawCard(it); if (PHONE) png(it); keep(it);
+}
+// The trigger shows the current background; the picker marks it.
+function paintBg(it) {
+  const { bgb, pick } = it.el, v = it.bg || null, own = v && !BGS.some(([c]) => c === v);
+  const sw = bgb.firstChild;
+  sw.style.background = v || ""; sw.classList.toggle("none", !v);
+  for (const b of pick.querySelectorAll("[data-bg]")) b.setAttribute("aria-pressed", String((b.dataset.bg || null) === v));
+  const c = pick.querySelector(".custom");
+  c.classList.toggle("set", !!own); c.setAttribute("aria-pressed", String(!!own));
+  c.firstChild.style.background = own ? v : "";
+  if (own) c.querySelector("input").value = v;
+  bgb.setAttribute("aria-label", `Background: ${own ? v : BGS.find(([c]) => c === v)[1]}`);
 }
 
 // The file name tells screen readers which photo a card (and its Download, Remove…) belongs to.
@@ -868,8 +969,9 @@ function unshow(it) {
 function ready(it) {
   clearInterval(it.quip); it.el.card.classList.remove("queued");
   it.el.busy.hidden = true; it.el.dl.disabled = false;
-  for (const b of [it.anim ? null : it.el.crop, it.el.up, it.el.down]) if (b) b.style.visibility = "";
-  it.el.crop.setAttribute("aria-pressed", String(it.crop));
+  for (const b of [it.anim ? null : it.el.crop, it.anim ? null : it.el.bgb, it.el.up, it.el.down]) if (b) b.style.visibility = "";
+  for (const b of it.el.card.querySelectorAll(".crop")) b.setAttribute("aria-pressed", String(it.crop));
+  paintBg(it);
   downLabel(it);
 }
 
@@ -1217,9 +1319,9 @@ async function capSend(a, it) {
   a.capBusy = false;
   if (!w) location.href = href; // pop-up blocked: go in this tab
 }
-// The cut-out as Download gives it (cropped to the subject unless the card shows the whole frame), at most CAP_MAX px.
+// The cut-out as Download gives it, but always see-through (cropped to the subject unless the card shows the whole frame), at most CAP_MAX px.
 async function capBlob(it) {
-  const full = await png(it);
+  const full = it.bg ? await (pngChain = pngChain.then(() => fullBlob(it, null), () => fullBlob(it, null))) : await png(it);
   const bm = await createImageBitmap(full);
   try {
     const k = Math.min(1, CAP_MAX / Math.max(bm.width, bm.height));
@@ -1587,7 +1689,7 @@ async function writeKept(it) {
   const gif = it.anim && it.gifUrl ? await it.png : null;
   const size = (r) => (r ? r.png.size + (r.fix?.size || 0) : 0);
   const state = { id: it.key, name: it.name, w: it.w, h: it.h, crop: it.crop, rect: it.maskRect || null, mask, first, retried: !!it.retried,
-    vote: it.vote || null, anim: !!it.anim, gif, ms: it.ms || 0,
+    vote: it.vote || null, bg: it.bg || null, anim: !!it.anim, gif, ms: it.ms || 0,
     bytes: it.blob.size + it.prev.size + size(mask) + size(first?.mask) + (gif?.size || 0) };
   if (state.bytes > KEEP_BYTES) return; // never fits (see trim)
   const db = await kdb();
@@ -1638,7 +1740,7 @@ async function restore() {
     const f = byId.get(st.id); byId.delete(st.id);
     if (!f?.blob || !f.prev) { orphans.push(st.id); continue; }
     const it = { id: ++uid, key: st.id, name: st.name, bmp: null, blob: f.blob, prev: f.prev, w: st.w, h: st.h, mask: null, crop: st.crop,
-      maskRect: st.rect, retried: st.retried, vote: st.vote, ms: st.ms, filed: true, st };
+      maskRect: st.rect, retried: st.retried, vote: st.vote, bg: st.bg || null, ms: st.ms, filed: true, st };
     items.push(it); list.push(it);
   }
   orphans.push(...byId.keys());
