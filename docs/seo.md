@@ -34,7 +34,7 @@ left for whoever owns that file. Recommended:
 2. **done** `/how-to-remove-background/`: three steps, transparent vs white, what works well and what doesn't.
 3. Later, only if Search Console shows the queries: `/transparent-background/`, `/remove-background-iphone/`,
    `/remove-background-android/`. Each needs real, distinct content. Thin near-duplicates hurt.
-4. **done** 2026-11-21: the alternative page has an honest comparison (what we don't do: new background, brush, API), what to do with credits, past images and API keys, and an "Updated" date.
+4. **done** 2026-11-21: the alternative page has an honest comparison (what we don't do: on 2026-11-21 new background, brush and API; backgrounds and the brush shipped on 2026-11-22 and the page says so, which leaves the API), what to do with credits, past images and API keys, and an "Updated" date.
 5. Update the alternative page on 1 December 2026 ("remove.bg has shut down") and set `dateModified`.
 
 ## 4. Technical

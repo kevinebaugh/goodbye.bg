@@ -119,7 +119,10 @@ Test switches: `?engine=gpu|cpu` (a forced gpu never falls back to the CPU; BiRe
 `?model=isnet|birefnet` (`birefnet` turns the gate off), `?threads=N`, `?nowarm=1`,
 `?gpufail=init|run|hang` (every GPU tier) or `birefnet-init|birefnet-oom|birefnet-slow|birefnet-slowrun` (BiRefNet only),
 `?haze=0`, `?pp=0`, `?keepmax=N`, `?keepmb=N`, `?maxbatch=N`, `?adtest=1`, `?adpartner=zazzle|printful|printify`, `?adv=<v>`,
-`?zazzlecap=0`, `?confetti=1`, `?debug=1`.
+`?zazzlecap=0`, `?confetti=1`, `?debug=1`, `?ads=0` (no ad cards, for screenshots; `?adtest=0` no longer counts as on).
+Reports to `/api/crash` start their trail with the GPU's maker and family as the browser names them (`gpu apple metal-3`),
+when the page asked for a GPU: tells hardware apart in GPU failures, names no device.
+The hero's second line has a phone version without "Drop" (`.sub.touch`, shown for `pointer: coarse`).
 
 Debugging on phones: `?debug=1` sends step names and numbers (never photo data) to `/api/diag`, which
 only writes to the Functions log. Read it with `npx wrangler pages deployment tail <deployment-id>
@@ -341,7 +344,7 @@ and redirects; a POST there counts the card being shown ('adseen').
 - Ad blockers hide the card and block `/go/` beacons; that is the visitor's choice, so we don't work around it. A
   failing card is reported as 'ad-failed' or 'mug-failed'. EthicalAds: see `docs/ads.md`.
 
-## Languages (branch i18n, 2026-11-22, not yet reviewed by native speakers)
+## Languages (on main since 2026-11-22, not yet reviewed by native speakers)
 
 German, Spanish, French, Brazilian Portuguese and Indonesian (`docs/i18n.md`: why these, sources, open questions).
 The app page follows the browser's language list (English first stays English; `?lang=xx` to test, a test switch); no
@@ -419,5 +422,6 @@ a difference.
   `docs/domain-cutover.md` (check nameservers on the zone, add goodbye.bg as a custom domain on `goodbye-bg-git`).
 - Git email: repo uses the GitHub noreply address. The first commit (aa3d4bd) still has the work email;
   fix with `git commit --amend --reset-author --no-edit && git push --force-with-lease` if wanted.
-- License: repo is AGPL-3.0 because the ISNet model is AGPL. BiRefNet (MIT) only replaces it on computer GPUs;
-  the CPU engine (iPhones, fallback) still needs ISNet, so the AGPL reason stays.
+- License: repo is AGPL-3.0 because the ISNet model is AGPL. BiRefNet (MIT) runs on computer GPUs
+  and, since 2026-11-22, on the CPU engine, but the site still ships ISNet (the 👎 retry on the CPU engine, the GPU
+  step-down), so the AGPL reason stays until every ISNet path goes.

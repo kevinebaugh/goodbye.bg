@@ -38,11 +38,11 @@ and what the vendors' posts say users depend on. Nothing here is user research.
 | Fix a bad cut by hand (erase/restore) | Editor (unverified) | Pencil under the cut-out: tap a piece, erase/restore brush, undo (2026-11-22) | None |
 | Solid background colour | Yes | Yes (new tonight), JPG download | None |
 | Background image / blur | Yes (API `bg_image`, editor) | Yes (2026-11-22): blur (soft, strong) and your own photo | None |
-| Drop shadow | Yes (`shadow_type`) | No | Medium, products |
-| Output size, padding, position, marketplace presets | Yes (`scale`, `position`, `crop_margin`) | Crop to subject or whole frame only | Medium, sellers |
+| Drop shadow | Yes (`shadow_type`) | Ground shadow (2026-11-22); no drop shadow | Small |
+| Output size, padding, position, marketplace presets | Yes (`scale`, `position`, `crop_margin`) | Size (Original, Square, 4:5, 16:9, Custom) and Margin (2026-11-22); no position, no named marketplace presets | Small |
 | Batch | Desktop app, API | Up to 100 per drop on computers (50 on phones), All for settings, ZIPs in, streamed zip out; 50 kept | Small: cap 100 per drop |
 | Formats in | JPG, PNG, WebP, 22 MB | Plus HEIC, TIFF, RAW preview, GIF, SVG, ZIP, links | We win |
-| Formats out | PNG, JPG, WebP, ZIP | PNG, JPG (with colour), GIF | WebP missing, small |
+| Formats out | PNG, JPG, WebP, ZIP | PNG, JPG (with a background), WebP (2026-11-22), GIF, ZIP | None |
 | Animated GIF | No (video product instead) | Yes | We win |
 | Video | Yes | No | Skip |
 | Photoshop plugin | Yes, ends 1 Dec | No | Large, high pain, small crowd |
