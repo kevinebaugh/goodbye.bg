@@ -250,7 +250,8 @@ body.app:not(.has-work) main { flex: none; margin-top: auto; }
 @container (max-width: 151px) { .rates { display: none; } }
 @container (max-width: 130px) { .crop { display: none; } } /* the smallest cards (a dozen photos on a phone): Download keeps room for its icon */
 /* Phones with photos on screen: the grid gets the room; the privacy note is on the empty page and in the headline. */
-@media (max-width: 600px) { body.app.has-work .foot p:first-child { display: none; } }
+/* Phones with photos on screen: only what a product click does stays (the ads sit right above it). */
+@media (max-width: 600px) { body.app.has-work .foot .pv-long { display: none; } }
 /* Short screens (a phone on its side): the wordmark moves beside the buttons, the privacy note goes (it is on the
    empty page), and the spacing tightens, so the cards get the height. */
 @media (max-height: 520px) {
@@ -258,7 +259,7 @@ body.app:not(.has-work) main { flex: none; margin-top: auto; }
   body.app:not(.has-work) .hero { gap: 12px; }
   body.app:not(.has-work) .hero h1 { font-size: 36px; }
   body.app:not(.has-work) .foot { margin-top: 12px; padding-block: 8px; }
-  body.app.has-work .foot p:first-child { display: none; }
+  body.app.has-work .foot .pv-long { display: none; }
   body.app.has-work .foot { padding: 6px 16px; }
   body.app.has-work .grid { padding-top: 12px; }
 }

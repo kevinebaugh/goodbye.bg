@@ -124,7 +124,8 @@ it until Zazzle has it, an hour at most. If you paste a link, …". Changed: `sr
 footer), `src/remove-bg-alternative/index.html` (meta, lede, table, FAQ in JSON-LD and on the page), `README.md`,
 `package.json`, `src/_headers` and `src/app.js` comments, `CLAUDE.md`. The how-to page is unchanged ("without
 uploading it" and "the photo stays on your device" describe removing the background, which stays true).
-"An hour at most" must match `TTL_MS`; "until Zazzle has it" holds because the GET deletes our copy 20 s after the
+On phones with photos on screen the footer keeps only "Clicking a product takes that cut-out to Zazzle." (the rest
+is hidden for space). "An hour at most" must match `TTL_MS`; "until Zazzle has it" holds because the GET deletes our copy 20 s after the
 first fetch.
 
 ## 4. Zazzle setup (done 2026-11-21, in Kevin's account, with his OK)
