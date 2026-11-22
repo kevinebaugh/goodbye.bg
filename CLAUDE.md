@@ -62,7 +62,7 @@ even with no warm-up run (one try in two); the CPU engine never crashed: 7.3 s a
 Debugging on phones: `?debug=1` sends step names and numbers (never photo data) to `/api/diag`, which
 only writes to the Functions log. Read it with `npx wrangler pages deployment tail <deployment-id>
 --project-name goodbye-bg-git --format json` (find the ID with `wrangler pages deployment list`).
-Other test switches: `?keepmax=N`, `?keepmb=N` (kept-photo limits), `?engine=gpu|cpu`, `?model=isnet|birefnet`, `?threads=N`, `?nowarm=1`, `?gpufail=init|run|hang`, `?haze=0` (ISNet without haze hardening), `?adpartner=zazzle|printful|printify` (with `?adtest=1`).
+Other test switches: `?keepmax=N`, `?keepmb=N` (kept-photo limits), `?engine=gpu|cpu`, `?model=isnet|birefnet`, `?threads=N`, `?nowarm=1`, `?gpufail=init|run|hang|birefnet-init|birefnet-oom|birefnet-slow|birefnet-slowrun`, `?haze=0` (ISNet without haze hardening), `?adpartner=zazzle|printful|printify` (with `?adtest=1`).
 
 Memory on phones (measured in the iOS Simulator, CPU engine): ISNet at 1024x1024 needs about 1.5 to
 2 GB of wasm heap, mostly activations; it can't run smaller (a Concat inside is fixed to 1024). Asking
@@ -75,14 +75,33 @@ starts it with WebGPU when the adapter has `shader-f16`, else with WebAssembly (
 - GPU on computers (`any-pointer: fine`): **BiRefNet lite** (MIT, fp16, 93 MB after the rewrite below).
 - CPU, and GPU on phones/tablets: IMG.LY **ISNet medium** (fp16, AGPL, 88 MB). BiRefNet on the CPU is 10 s
   and 6.7 GB (Node, 64-bit): no.
-- Votes and crash reports call the engines `gpu-birefnet`, `gpu` (ISNet) and `cpu` (ISNet).
+- Votes and crash reports call the engines `gpu-birefnet`, `gpu` (ISNet) and `cpu` (ISNet). A vote names the engine
+  that made that photo's mask, even after a fallback.
 
 The GPU worker does a warm-up run before "Ready", which compiles the shaders and proves the GPU works. If the GPU fails to start, fails a run, hangs (30 s warm-up, 15 s per run), or
-returns NaN, the page terminates that worker and a CPU worker redoes the same photo. A separate worker is
+returns NaN, the page terminates that worker and the next tier redoes the same photo. A separate worker is
 required: a failed WebGPU run aborts ORT's wasm instance for the whole realm.
 
-- `?engine=gpu` or `?engine=cpu` forces one (a forced gpu never falls back). `?gpufail=init|run|hang`
-  simulates a broken GPU.
+GPU gate (2026-11-22, for weak GPUs; the proposal in `docs/platforms-and-phone-model.md`, decision 3). Three tiers:
+BiRefNet on the GPU, then ISNet on the GPU (a third of the GPU memory), then the CPU.
+- BiRefNet steps down to ISNet on the GPU when its start fails, a run fails or its worker dies (out of GPU memory
+  shows up as one of these), its start (session and warm-up, after the download) takes over 10 s, or its first
+  photo over 2 s (M5 Pro: about 2 s and 0.3 s). A slow first photo keeps its BiRefNet result. ISNet on the GPU
+  steps down to the CPU on a failure or a hang.
+- Computers that report `navigator.deviceMemory` under 8 (Chrome only, capped at 8) start on ISNet on the GPU.
+- The outcome is kept in localStorage `gb-gpu` (tier, user agent, runtime/model version, date), so later visits skip
+  the try that failed. A browser update, a new runtime or BiRefNet export, or 30 days start over. Never written
+  under `?engine=`, `?model=` or `?gpufail=`.
+- Each step down is sent at once to `/api/crash` with the engine that failed: `birefnet-start-failed`,
+  `birefnet-run-failed`, `birefnet-slow-start`, `birefnet-slow-run`, `gpu-start-failed`, `gpu-run-failed`
+  (the same names in `?debug=1`, plus `gpu-lowmem` and `gpu-remembered`).
+- Tested in headless Chrome (M5 Pro): every case below, a photo added while ISNet starts after a failed BiRefNet,
+  a kept tier (and a stale one ignored), deviceMemory 4. Not tested on a real weak GPU.
+
+- `?engine=gpu` or `?engine=cpu` forces one (a forced gpu never falls back to the CPU; BiRefNet can still step down
+  to ISNet on the GPU). `?model=birefnet` turns the gate off. `?gpufail=init|run|hang` simulates a broken GPU (every
+  GPU tier); `?gpufail=birefnet-init|birefnet-oom|birefnet-slow|birefnet-slowrun` a GPU too weak for BiRefNet only
+  (start fails after 3 s, worker dies on the first photo, start hangs, first photo takes 2.5 s).
 - ISNet: input (x-128)/256, output 0..1. BiRefNet: ImageNet mean/std, output logits (the worker applies the
   sigmoid). Both fixed 1024x1024; the page sends RGBA pixels and the worker builds its model's input.
 - Runtime is served from `rt/<version>/` (cached forever, so upgrades get new URLs). Its 28.7 MB wasm is split
