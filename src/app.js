@@ -784,7 +784,8 @@ async function fullBlob(it, raw = false) {
 
 // Phones save through the share sheet ("Save Image" puts it in Photos) instead of downloading to Files.
 // The share sheet only opens straight from a tap, so phones make each PNG as soon as the cut is done.
-const PHONE = matchMedia("(pointer: coarse)").matches && "canShare" in navigator;
+const COARSE = matchMedia("(pointer: coarse)"); // touch: roomy bars and the dock (layout, seat)
+const PHONE = COARSE.matches && "canShare" in navigator;
 let pngChain = Promise.resolve();
 // One full-size PNG at a time: several at once can run a phone out of memory.
 // A failed one is forgotten, so the next tap tries again instead of failing forever.
@@ -1028,8 +1029,34 @@ async function unzipImages(zip) {
 const mimeOf = (n) => ({ jpg: "image/jpeg", jpeg: "image/jpeg", jfif: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif", avif: "image/avif",
   bmp: "image/bmp", svg: "image/svg+xml", ico: "image/x-icon", heic: "image/heic", heif: "image/heif", tif: "image/tiff", tiff: "image/tiff" })[n.split(".").pop().toLowerCase()] || "";
 
+// A file that can't be opened never becomes a card (a card for it reflowed a batch that fitted, opened ad cells and
+// made a phone's grid scroll): it is skipped, and one bubble at Choose photos names it. Obvious non-images (a .txt,
+// a PDF) are skipped before any card exists; a picture that fails to decode loses its card once it fails.
+const isPicture = (f) => !(f instanceof Blob) || !f.type || f.type.startsWith("image/") || IMG_EXT.test(f.name || "") || isZip(f);
+function skipped(bad) {
+  if (!bad.length) return;
+  const msg = bad.length === 1 ? (bad[0].msg ? `${bad[0].name}: ${bad[0].msg}` : `${bad[0].name} isn’t an image goodbye.bg can open.`)
+    : `Skipped ${bad.length} files goodbye.bg can’t open: ${bad.map((b) => b.name).join(", ")}.`;
+  tell(msg, $("pick").parentElement, 8000);
+  announce(msg);
+}
+function unopened(it) {
+  const at = items.indexOf(it);
+  if (at < 0) return;
+  items.splice(at, 1); clearInterval(it.quip);
+  if (picking === it) closePick();
+  it.el.card.remove(); forget(it); sync();
+}
+// "Paste was blocked" and other bubbles about adding photos are done once photos arrive.
+function closeAddTell() {
+  const t = $("tell");
+  if (!t.hidden && t.at && $("pick").parentElement.contains(t.at)) { t.hidden = true; clearTimeout(t.timer); }
+}
 async function addSources(list, origin = "") {
   list = list.filter(Boolean);
+  if (list.length) closeAddTell();
+  const bad = list.filter((f) => !isPicture(f)).map((f) => ({ name: f.name || "That file" }));
+  list = list.filter(isPicture);
   if (list.length) startModel(); // now, not after the decode (or a link's fetch): the download is the long part
   let zipFailed = false;
   if (list.some(isZip)) {
@@ -1040,9 +1067,9 @@ async function addSources(list, origin = "") {
     }
     list = out;
   }
-  if (list.length > MAX_BATCH) tell(`Added the first ${MAX_BATCH}. Add the rest once these are done.`);
+  const over = list.length > MAX_BATCH;
   list = list.slice(0, MAX_BATCH);
-  if (!list.length) { if (!zipFailed) tell("No image found there. Try a photo file, a copied image, or an image link."); return; } // a broken ZIP already said so
+  if (!list.length) { if (bad.length) skipped(bad); else if (!zipFailed) tell("No image found there. Try a photo file, a copied image, or an image link."); return; } // a broken ZIP already said so
   await restoring; // kept photos go in first, so this batch lands on top of them
   adsStraight = adsQuiet = false; // a new batch's ads wait for its reveal, as usual
   const top = keyBase();
@@ -1056,10 +1083,15 @@ async function addSources(list, origin = "") {
     return [it, src];
   });
   await landing(() => { show(); $("grid").prepend(cards); sync(); });
+  if (over) tell(`Added the first ${MAX_BATCH}. Add the rest once these are done.`);
+  else skipped(bad);
+  const broken = [];
   for (const [it, src] of batch) { // one decode at a time: a full-size decode is big
     if (!items.includes(it)) { it.src = src; continue; } // removed before its turn: Undo opens it (undoRemove)
-    await openOne(it, src);
+    const e = await openOne(it, src);
+    if (e) broken.push({ name: src instanceof Blob && src.name ? src.name : it.name, msg: e });
   }
+  if (!over && broken.length) skipped([...bad, ...broken]); // one bubble names everything this batch skipped
   sync();
 }
 
@@ -1087,7 +1119,9 @@ async function openOne(it, src) {
     keep(it);
   } catch (e) {
     console.warn(e);
-    fail(it, e.message || "Could not open this image.");
+    unopened(it); // no card for a file that can't be opened (addSources names it)
+    run();
+    return e.message || "Could not open this image.";
   }
   run();
 }
@@ -1218,8 +1252,8 @@ function makeCard(it) {
   bgb.addEventListener("click", () => { tick(); if (picking === it) closePick(); else openPick(it); });
 
   crop.addEventListener("click", () => {
-    it.crop = !it.crop; tick();
-    for (const b of card.querySelectorAll(".crop")) b.setAttribute("aria-pressed", String(it.crop));
+    it.crop = !it.crop; it.cropBack = false; tick();
+    paintCrop(it);
     it.png = null; drawCard(it); if (PHONE && !running && !retrying) png(it); keep(it); paintOpts(it);
   });
   x.addEventListener("click", () => { dbg("removed"); clearInterval(it.quip);
@@ -1261,23 +1295,25 @@ let picking = null;
 function bgPicker(it, crop, x) {
   const pick = document.createElement("div"); pick.className = "bgs"; pick.hidden = true;
   pick.setAttribute("role", "group"); pick.setAttribute("aria-label", "Background");
-  const pcrop = crop.cloneNode(true); pcrop.className = "swb crop pcrop pg"; pcrop.style.visibility = "";
+  // Pages break between groups (pageRow): the colours, then blur soft + strong (never split) and your photo, then crop
+  // and remove when the bar has no room for them. Size, margin, shadow (sliders) is pinned next to ›, on every page.
+  const pcrop = crop.cloneNode(true); pcrop.className = "swb crop pcrop pg"; pcrop.style.visibility = ""; pcrop.dataset.g = "ctl";
   pcrop.addEventListener("click", () => crop.click());
-  pick.append(pcrop);
   const swatch = (v, label, cls) => {
     const b = document.createElement("button"); b.type = "button"; b.className = `swb pg ${cls}`; b.dataset.bg = v || "";
+    b.dataset.g = String(v).startsWith("blur") ? "back" : "colour"; if (String(v).startsWith("blur")) b.dataset.u = "blur";
     b.setAttribute("aria-label", label); b.title = label;
     b.innerHTML = '<span class="sw"></span>';
     b.addEventListener("click", () => { setBg(it, v); closePick(); });
     return b;
   };
   BGS.forEach(([v, label], i) => { const b = swatch(v, label, `sw${i}`); if (v) b.firstChild.style.background = v; pick.append(b); });
-  const own = document.createElement("label"); own.className = "swb custom pg"; own.title = "Any colour";
+  const own = document.createElement("label"); own.className = "swb custom pg"; own.title = "Any colour"; own.dataset.g = "colour";
   own.innerHTML = '<span class="sw"></span><input type="color" value="#69d2e7" aria-label="Any colour">';
   const input = own.querySelector("input");
   let raf = 0;
   input.addEventListener("input", () => { // live on the card while the colour picker is open
-    it.bg = input.value; it.png = null; paintBg(it);
+    wholeForBlur(it, input.value); it.bg = input.value; it.png = null; paintBg(it);
     cancelAnimationFrame(raf); raf = requestAnimationFrame(() => drawCard(it));
   });
   input.addEventListener("change", () => { cancelAnimationFrame(raf); setBg(it, input.value, true); closePick(); });
@@ -1285,18 +1321,17 @@ function bgPicker(it, crop, x) {
   // Blur: the photo's own background, soft or strong (the subject stays sharp).
   BLURS.forEach(([v, label], i) => pick.append(swatch(v, label, `blur b${i + 1}`)));
   // Your own picture behind the subject: picked here or dropped on the row (see the drop handler). Never uploaded.
-  const photo = document.createElement("label"); photo.className = "swb photo pg"; photo.title = "Your photo";
+  const photo = document.createElement("label"); photo.className = "swb photo pg"; photo.title = "Your photo"; photo.dataset.g = "back";
   photo.innerHTML = '<span class="sw"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 16 5-5 4 4 3-3 6 6"/></svg></span><input type="file" accept="image/*" aria-label="Your photo as the background">';
   const file = photo.querySelector("input");
   file.addEventListener("change", () => { const f = file.files[0]; file.value = ""; if (f) useBack(it, f); });
   pick.append(photo);
-  const more = document.createElement("button"); more.type = "button"; more.className = "swb more pg";
+  const more = document.createElement("button"); more.type = "button"; more.className = "swb more";
   more.setAttribute("aria-label", "Size, margin, shadow"); more.title = "Size, margin, shadow";
   more.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>';
   more.addEventListener("click", () => { tick(); openOpts(it); });
-  pick.append(more);
-  const px = x.cloneNode(true); px.className = "swb px pg"; px.addEventListener("click", () => x.click());
-  pick.append(px, pager(pick));
+  const px = x.cloneNode(true); px.className = "swb px pg"; px.dataset.g = "ctl"; px.addEventListener("click", () => x.click());
+  pick.append(pcrop, px, more, pager(pick));
   [...pick.children].forEach((c, i) => c.style.setProperty("--i", i));
   pick.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); closePick(true); } });
   leaveCloses(it, pick);
@@ -1327,11 +1362,29 @@ function pageRow(row, at = 0) {
     if (overflows(row)) {
       next.hidden = false; pages = [];
       for (const e of shown) e.classList.add("off");
-      let cur = [];
+      // Units (the blur pair) never split; groups (data-g) start a new page rather than straddle one, unless a whole
+      // group can't fit on a page of its own.
+      const groups = [];
       for (const e of shown) {
-        e.classList.remove("off");
-        if (cur.length && overflows(row)) { for (const o of cur) o.classList.add("off"); pages.push(cur); cur = []; }
-        cur.push(e);
+        const g = groups.at(-1), u = g?.at(-1);
+        if (u && e.dataset.u && u.u === e.dataset.u) u.els.push(e);
+        else if (g && e.dataset.g && g.g === e.dataset.g) g.push({ u: e.dataset.u, els: [e] });
+        else groups.push(Object.assign([{ u: e.dataset.u, els: [e] }], { g: e.dataset.g }));
+      }
+      const on = (els, v) => { for (const e of els) e.classList.toggle("off", !v); };
+      let cur = [];
+      const turn = () => { on(cur, false); pages.push(cur); cur = []; };
+      for (const g of groups) {
+        const els = g.flatMap((u) => u.els);
+        on(els, true);
+        if (!cur.length || !overflows(row)) { cur.push(...els); if (!overflows(row)) continue; on(els, false); cur.length -= els.length; }
+        else on(els, false);
+        if (cur.length) turn();
+        for (const u of g) {
+          on(u.els, true);
+          if (cur.length && overflows(row)) { on(u.els, false); turn(); on(u.els, true); }
+          cur.push(...u.els);
+        }
       }
       pages.push(cur);
       for (const e of shown) e.classList.add("off");
@@ -1384,7 +1437,9 @@ function openPick(it) {
 const PAGES_MAX = 2;
 function seat(it, row, at = 0) {
   const dock = $("dock");
-  if (!dock.contains(row)) { it.el.bar.classList.add("picking"); pageRow(row, at); if (row.pages.length <= PAGES_MAX) return; }
+  // With a mouse the row always stays in the card's bar, however many pages (a dock at the bottom of a big window
+  // was far from the card); the dock is for touch screens.
+  if (!dock.contains(row)) { it.el.bar.classList.add("picking"); pageRow(row, at); if (row.pages.length <= PAGES_MAX || !COARSE.matches) return; }
   it.el.bar.classList.remove("picking"); it.el.card.classList.add("editing"); document.body.classList.add("docked");
   dock.append(it.el.pick, it.el.opts); dock.hidden = false;
   placeDock(); pageRow(row, at);
@@ -1419,11 +1474,17 @@ function setBg(it, v, force = false) {
   paintBg(it);
   it.png = null; drawCard(it); if (PHONE && !running && !retrying) png(it); keep(it); // not next to a busy engine (iPhone memory)
 }
+// The crop button and its copy in the picker (which may sit in the dock, outside the card).
+function paintCrop(it) { for (const b of [it.el.crop, it.el.pick?.querySelector(".pcrop")]) b?.setAttribute("aria-pressed", String(it.crop)); }
 // Blur is the portrait-mode look: the whole frame, not a tight crop around the subject (the crop button puts it back).
+// Leaving blur for anything else puts back the crop blur took away (cropBack), unless crop was toggled meanwhile.
 function wholeForBlur(it, v) {
-  if (bgKind(v) !== "blur" || bgKind(it.bg) === "blur" || !it.crop || it.anim) return;
-  it.crop = false;
-  for (const b of it.el?.card.querySelectorAll(".crop") || []) b.setAttribute("aria-pressed", "false");
+  if (it.anim) return;
+  const toBlur = bgKind(v) === "blur";
+  if (toBlur && bgKind(it.bg) !== "blur" && it.crop) { it.crop = false; it.cropBack = true; }
+  else if (!toBlur && it.cropBack) { it.crop = true; it.cropBack = false; }
+  else return;
+  if (it.el) paintCrop(it);
 }
 const bgName = (v) => { const k = bgKind(v); return k === "blur" ? (v === "blur:2" ? "Strong blur" : "Soft blur") : k === "img" ? "Your photo" : BGS.find(([c]) => c === (v || null))?.[1] || v; };
 // The trigger shows the current background; the picker marks it.
@@ -1468,7 +1529,14 @@ function optsRow(it) {
   };
   const size = sel("osize", "Size", SIZES), margin = sel("omargin", "Margin around the subject", MARGINS);
   size.firstChild.addEventListener("change", (e) => setOut(it, { size: e.target.value }));
-  margin.firstChild.addEventListener("change", (e) => setOut(it, { margin: +e.target.value }));
+  margin.firstChild.addEventListener("change", (e) => {
+    const v = +e.target.value;
+    if (v && !it.crop && outOf(it).size === "orig" && !it.anim) { // a margin needs the crop: turn it on
+      it.crop = true; it.cropBack = false;
+      paintCrop(it);
+    }
+    setOut(it, { margin: v });
+  });
   const num = (cls, label, key) => {
     const n = document.createElement("input"); n.type = "number"; n.inputMode = "numeric"; n.min = "16"; n.max = String(OUT_MAX); n.step = "1";
     n.className = "onum " + cls; n.setAttribute("aria-label", label); n.title = label;
@@ -1512,8 +1580,11 @@ function paintOpts(it) {
   const o = outOf(it), el = it.el.opts; if (!el) return;
   const q = (s) => el.querySelector(s), custom = o.size === "custom", dimWas = !q(".odim").hidden;
   q(".osize select").value = o.size;
-  q(".omargin select").value = String(MARGINS.some(([v]) => v === o.margin) ? o.margin : OUT0.margin);
-  q(".omargin select").disabled = o.size === "orig" && !it.crop; // the whole photo: nothing to add room around
+  // The whole frame at its own size has no room around the subject: the select shows 0%, and picking a margin turns the
+  // crop on (it used to grey out with no reason given).
+  const whole = o.size === "orig" && !it.crop;
+  q(".omargin select").value = whole ? "0" : String(MARGINS.some(([v]) => v === o.margin) ? o.margin : OUT0.margin);
+  q(".omargin").title = whole ? "Margin around the subject (turns the crop on)" : "Margin around the subject";
   q(".ocw").value = o.cw; q(".och").value = o.ch;
   q(".odim").hidden = !custom;
   q(".oshadow").setAttribute("aria-pressed", String(!!o.shadow));
@@ -1641,7 +1712,7 @@ function ready(it) {
   for (const b of [it.anim ? null : it.el.crop, it.anim ? null : it.el.bgb, it.el.up, it.el.down]) if (b) b.style.visibility = "";
   it.el.card.classList.toggle("picky", !it.anim); // has a background picker, so narrow bars may move remove into it
   if (!it.anim) hintBg(it);
-  for (const b of it.el.card.querySelectorAll(".crop")) b.setAttribute("aria-pressed", String(it.crop));
+  paintCrop(it);
   paintBg(it);
   downLabel(it);
 }
@@ -1845,7 +1916,6 @@ const GAP = 12, MIN_PIC = 84, MAX_PIC = 640;
 // roomy bar adds (32 px controls and a 4 px gap). FULL_BAR: the card width from which one row holds every control.
 const BAR_SM = 49, BAR_MD = 57, ROW2 = 36, FULL_BAR = 242, ROOMY_MIN = 154;
 const barFor = (p) => (p <= FULL_BAR ? BAR_SM : BAR_MD);
-const COARSE = matchMedia("(pointer: coarse)");
 COARSE.addEventListener?.("change", () => requestAnimationFrame(layout));
 function layout() {
   const g = $("grid"), n = g.querySelectorAll(".card").length, all = $("tools");
@@ -2461,7 +2531,7 @@ async function writeKept(it) {
   const mask = await maskRec(it.mask), first = it.first ? { rect: it.first.rect || null, mask: await maskRec(it.first.mask) } : null;
   const gif = it.anim && it.gifUrl ? await it.png : null;
   const size = (r) => (r ? r.png.size + (r.fix?.size || 0) : 0);
-  const state = { id: it.key, name: it.name, w: it.w, h: it.h, crop: it.crop, rect: it.maskRect || null, mask, first, retried: !!it.retried,
+  const state = { id: it.key, name: it.name, w: it.w, h: it.h, crop: it.crop, cropBack: !!it.cropBack, rect: it.maskRect || null, mask, first, retried: !!it.retried,
     vote: it.vote || null, bg: it.bg || null, out: it.out || null, anim: !!it.anim, gif, ms: it.ms || 0, engine: it.engine || null,
     bytes: it.blob.size + it.prev.size + size(mask) + size(first?.mask) + (gif?.size || 0) };
   if (state.bytes > KEEP_BYTES) return; // never fits (see trim)
@@ -2525,7 +2595,7 @@ async function restore() {
   for (const st of states) {
     const f = byId.get(st.id); byId.delete(st.id);
     if (!f?.blob || !f.prev) { orphans.push(st.id); continue; }
-    const it = { id: ++uid, key: st.id, name: st.name, bmp: null, blob: f.blob, prev: f.prev, w: st.w, h: st.h, mask: null, crop: st.crop,
+    const it = { id: ++uid, key: st.id, name: st.name, bmp: null, blob: f.blob, prev: f.prev, w: st.w, h: st.h, mask: null, crop: st.crop, cropBack: !!st.cropBack,
       maskRect: st.rect, retried: st.retried, vote: st.vote, bg: st.bg || null, out: st.out || null, ms: st.ms, engine: st.engine || "", filed: true, st };
     items.push(it); list.push(it);
   }

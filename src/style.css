@@ -196,6 +196,9 @@ body.moving main, body.moving main *, body.moving .foot, body.moving .foot * { v
 .swb:active { transform: scale(.9); }
 @keyframes swin { from { transform: scale(.3); opacity: 0; } }
 .pgnext { margin-left: auto; order: 99; color: var(--muted); background: color-mix(in srgb, var(--ink) 7%, transparent); }
+/* Size, margin, shadow: pinned at the end of every swatch page, next to ›, so it is always one tap from the bar. */
+.bgs .more { order: 98; margin-left: auto; background: color-mix(in srgb, var(--ink) 7%, transparent); }
+.bgs .more + .pgnext { margin-left: 0; }
 .pgnext.back svg { transform: rotate(180deg); }
 .custom .sw { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 45%, transparent); display: grid; place-items: center; }
 .custom:not(.set) .sw::after { content: "+"; font-size: 15px; font-weight: 800; color: var(--muted); }
