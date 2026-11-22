@@ -33,7 +33,7 @@ const dist = new URL("../dist/", import.meta.url).pathname;
 const port = Number(process.env.PORT) || 8788;
 const types = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css",
   ".json": "application/json", ".wasm": "application/wasm", ".svg": "image/svg+xml", ".png": "image/png", ".bin": "application/octet-stream", ".webmanifest": "application/manifest+json",
-  ".txt": "text/plain; charset=utf-8", ".xml": "application/xml" };
+  ".txt": "text/plain; charset=utf-8", ".xml": "application/xml", ".woff2": "font/woff2", ".gif": "image/gif", ".jpg": "image/jpeg", ".ico": "image/x-icon" };
 
 // Parse Cloudflare Pages' _headers format: a path line, then indented "Name: value" lines.
 const rules = [];
@@ -42,6 +42,14 @@ for (const line of readFileSync(join(dist, "_headers"), "utf8").split("\n")) {
   if (!/^\s/.test(line)) rules.push({ path: line.trim(), headers: {} });
   else { const i = line.indexOf(":"); rules.at(-1).headers[line.slice(0, i).trim()] = line.slice(i + 1).trim(); }
 }
+// _redirects: "from to [status]" lines (exact paths only; that is all the site uses).
+const redirects = [];
+try {
+  for (const line of readFileSync(join(dist, "_redirects"), "utf8").split("\n")) {
+    const [from, to, status] = line.trim().split(/\s+/);
+    if (from && !from.startsWith("#") && to) redirects.push({ from, to, status: Number(status) || 302 });
+  }
+} catch {}
 const match = (pattern, path) => pattern.endsWith("*") ? path.startsWith(pattern.slice(0, -1)) : pattern === path;
 
 createServer(async (req, res) => {
@@ -85,12 +93,23 @@ createServer(async (req, res) => {
     if (r.body) for await (const chunk of r.body) res.write(chunk);
     res.end(); return;
   }
+  // Like Pages: _redirects first, then "pretty URLs" (/dir -> /dir/, /x.html -> /x, /index.html -> /).
+  const qs = new URL(req.url, "http://x").search;
+  const red = redirects.find((r) => r.from === path);
+  if (red) { res.writeHead(red.status, { Location: red.to }).end(); return; }
+  const isFile = async (f) => { try { return (await stat(f)).isFile(); } catch { return false; } };
+  if (path.endsWith(".html")) { res.writeHead(308, { Location: path.replace(/(index)?\.html$/, "") + qs }).end(); return; }
+  if (!path.endsWith("/") && !extname(path) && await isFile(join(dist, path, "index.html"))) { res.writeHead(308, { Location: path + "/" + qs }).end(); return; }
   const file = normalize(join(dist, path.endsWith("/") ? path + "index.html" : path));
   if (!file.startsWith(dist)) { res.writeHead(403).end(); return; }
-  try {
-    if (!(await stat(file)).isFile()) throw 0;
-    const headers = { "Content-Type": types[extname(file)] || "application/octet-stream" };
+  const headersFor = (f) => {
+    const headers = { "Content-Type": types[extname(f)] || "application/octet-stream" };
     for (const r of rules) if (match(r.path, path)) Object.assign(headers, r.headers);
-    res.writeHead(200, headers).end(await readFile(file));
-  } catch { res.writeHead(404).end("Not found"); }
+    return headers;
+  };
+  if (await isFile(file)) { res.writeHead(200, headersFor(file)).end(await readFile(file)); return; }
+  // Unknown path: Pages answers with 404.html and status 404.
+  const nf = join(dist, "404.html");
+  if (await isFile(nf)) res.writeHead(404, headersFor(nf)).end(await readFile(nf));
+  else res.writeHead(404).end("Not found");
 }).listen(port, () => console.log(`goodbye.bg running at http://localhost:${port}`));
