@@ -62,6 +62,7 @@ Extra usage capped at $0. Stop starting new work at 85% weekly; never pass 90%.
 | 08:00 | Kevin: "Good call on localization! Ship when ready." (read as ship) | coordinator | 48% | PR #6 merges after the native-editor review and a rebase with both suites passing. |
 | 08:10 | Phones: model download starts sooner | background agent | 48% → 49% | 2d6377b: first touch or scroll, or 3 s visible on 4g / no Network Information API (iPhones); Save-Data and hidden tabs never. Tap at 16 s, 20 Mbps: first cut-out 68.5 → 55.5 s. Leaving at 10 s now costs 16.9 MB at 20 Mbps (was 0.5). |
 | 08:15 | Kevin: pull-to-refresh and pinch-zoom are back 👎 | coordinator | 49% | 6f499b1, live: overflow hidden + overscroll-behavior none on touch screens, touch-action pan-x pan-y, Safari gesture events cancelled; computers keep scrolling at 300–400% zoom. Cause: tonight's accessibility zoom fix (2354326) made the page scroll; pinch had been allowed since 2026-11-20. CLAUDE.md updated. |
+| 08:30 | Translations shipped (Kevin: ship when ready) | coordinator | 49% | Native-editor review 94014c2 (de du, es tú, fr vous, pt-BR você, id Anda). Rebased onto main (kept both early.js changes: zoom block and language), tests 25/25 + 44/44, merged kevinebaugh/goodbye.bg#6 (f1820c3..b699a48). Production: German, Spanish and English browsers get their language with no errors; /de/, /es/, /pt-br/ pages 200. A native speaker should still read each language. |
 
 Check-in 23:46: weekly 28%, 5-hour window 6% (reset 04:30 UTC). About 4 weekly points in the first 45 min.
 
