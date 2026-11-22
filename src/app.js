@@ -968,6 +968,7 @@ function paintBg(it) {
   const { bgb, pick } = it.el, v = it.bg || null, own = v && !BGS.some(([c]) => c === v);
   const sw = bgb.firstChild;
   sw.style.background = v || ""; sw.classList.toggle("none", !v);
+  it.el.card.classList.toggle("solid", !!v && !it.anim); // a solid background downloads as a plain JPG: no checkerboard around it
   for (const b of pick.querySelectorAll("[data-bg]")) b.setAttribute("aria-pressed", String((b.dataset.bg || null) === v));
   const c = pick.querySelector(".custom");
   c.classList.toggle("set", !!own); c.setAttribute("aria-pressed", String(!!own));

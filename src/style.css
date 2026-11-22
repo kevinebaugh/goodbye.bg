@@ -118,6 +118,10 @@ body.has-work .hero h1, body.has-work .sub { display: none; }
 .pic img { display: none; -webkit-touch-callout: default; -webkit-tap-highlight-color: transparent; }
 .pic.still img { display: block; }
 .pic.still canvas { display: none; }
+/* The checkerboard means "see-through". With a colour picked the download is a plain JPG, so the card shows it as a
+   picture on a plain surface, with a soft shadow. */
+.solid .pic { background: color-mix(in srgb, var(--ink) 6%, var(--card)); }
+.solid .pic img, .solid .pic canvas { filter: drop-shadow(0 2px 6px rgb(0 0 0 / .22)); }
 /* Nothing sits on the image. Its controls live in the bar below: crop, Download, 👍 👎, remove. */
 .bar { position: relative; display: flex; align-items: center; gap: var(--s2); padding: var(--s2) var(--s3); border-top: 1px solid var(--line); }
 .bar .dl { flex: 1; min-width: 0; }
@@ -268,6 +272,8 @@ body.app:not(.has-work) main { flex: none; margin-top: auto; }
 /* Small cards (many photos on a phone): Download becomes an icon and controls drop out (widths below). */
 .card { container-type: inline-size; }
 @container (max-width: 330px) { .bar { gap: var(--s1); padding-inline: var(--s2); } .bar .dl { --px: var(--s3); } }
+/* With the background button in the bar, "Download" needs a card over 300 px; narrower cards show its icon. */
+@container (max-width: 300px) { .dl span { display: none; } .dl svg { display: block; } }
 @container (max-width: 240px) {
   .bar { padding: var(--s2) 6px; gap: var(--s1); }
   .bar .dl { --h: var(--h-sm); --px: var(--s2); }
