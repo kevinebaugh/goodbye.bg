@@ -3,7 +3,7 @@
 const fs = require("fs"), path = require("path");
 const WORK = path.resolve(process.argv[2]);
 const sharp = require(require.resolve("sharp", { paths: [path.join(WORK, "harness")] })), { cutout } = require("./sheet.cjs");
-const T = +process.env.TILE || 300, MODELS = ["isnet", "birefnet"];
+const T = +process.env.TILE || 300, MODELS = (process.env.MODELS || "isnet,birefnet").split(",");
 const rows = Object.fromEntries(fs.readFileSync(path.join(WORK, "manifest.jsonl"), "utf8").trim().split("\n").map((l) => { const r = JSON.parse(l); return [r.id, r]; }));
 const box = Object.fromEntries(fs.readFileSync(path.join(WORK, "out/birefnet/scores.jsonl"), "utf8").trim().split("\n").map((l) => { const r = JSON.parse(l); return [r.id, r.box]; }));
 (async () => {

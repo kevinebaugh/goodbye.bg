@@ -201,3 +201,4 @@ exports.score = (pred, gt, w, h, kind) => {
   s.edge = ec ? es / ec / 255 : 0; s.bandFrac = ec / n;
   return s;
 };
+exports.despeck = despeck; exports.hardenHaze = hardenHaze; exports.boxBlur = boxBlur;
