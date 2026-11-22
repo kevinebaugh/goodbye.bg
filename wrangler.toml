@@ -15,3 +15,10 @@ dataset = "goodbye_bg_ratings"
 binding = "COUNTER"
 database_name = "goodbye-bg-counter"
 database_id = "d6e817c0-752d-4c25-b85a-f781ad72da46"
+
+# Prototype (?zazzlecap=1, docs/zazzle-cap.md): a cut-out the visitor chose to send to Zazzle, stored as
+# cap/<random key>.png until Zazzle fetches it (deleted 20 s after; unreachable after an hour). A lifecycle rule
+# deletes anything left under cap/ after a day.
+[[r2_buckets]]
+binding = "CAP"
+bucket_name = "goodbye-bg-cap"
