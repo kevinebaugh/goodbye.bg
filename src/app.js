@@ -128,8 +128,8 @@ const baseName = (s) => (s || "image").split(/[\\/?#]/).filter(Boolean).pop()?.r
 
 /* ---------- model ----------
    The model runs in its own worker (engine.js). Computers whose GPU can run it use WebGPU with
-   BiRefNet (about 0.3 s a photo on a recent Mac); everyone else uses ISNet on the CPU (several seconds).
-   ?model=isnet runs ISNet on the GPU too, for comparison.
+   BiRefNet (about 0.3 s a photo on a recent Mac); everyone else uses BiRefNet at 640 on the CPU (several seconds).
+   ?model=isnet runs ISNet instead on either engine, for comparison.
    If the GPU fails to start, fails a run, hangs, or returns garbage, its worker is thrown away and the next
    tier takes over the same photo: BiRefNet steps down to ISNet on the GPU, ISNet on the GPU to the CPU (the
    GPU gate below). ?engine=gpu or ?engine=cpu forces one; ?gpufail=init|run|hang simulates a broken GPU,
@@ -164,8 +164,9 @@ function dbg(step, data = {}) {
 dbg("load", { ua: navigator.userAgent.slice(0, 160), dpr: devicePixelRatio, w: innerWidth, h: innerHeight, mem: navigator.deviceMemory, coi: self.crossOriginIsolated });
 const GPU_WARMUP_TIMEOUT = 30_000, GPU_RUN_TIMEOUT = 15_000; // longer counts as hung
 let worker = null, engineName = "", engineModel = "", engineReady = null, gpuBroken = false, jobId = 0;
-// What votes and crash reports call the engine: "gpu" and "cpu" run ISNet, "gpu-birefnet" BiRefNet.
-const engineTag = () => (engineName || "cpu") + (engineModel === "birefnet" ? "-birefnet" : "");
+// What votes and crash reports call the engine: "gpu" and "cpu" run ISNet, "gpu-birefnet" BiRefNet, "cpu-birefnet640"
+// BiRefNet at 640.
+const engineTag = () => (engineName || "cpu") + (engineModel && engineModel !== "isnet" ? "-" + engineModel : "");
 const jobs = new Map();
 
 // iPhones and iPads: WebGPU runs ISNet, but often crashes the tab (out of memory) on the first real
@@ -184,7 +185,7 @@ const MAX_BATCH = +params.get("maxbatch") || (DESKTOP && !IOS && !matchMedia("(p
 /* ---------- GPU gate ----------
    Adapter limits can't tell a weak GPU from a strong one, so the gate acts at run time. Three tiers:
    BiRefNet on the GPU (computers, GPU peak about 3 GB), ISNet on the GPU (about 1 GB, 0.1 to 0.3 s a photo),
-   the CPU (ISNet, 5 to 7 s). BiRefNet steps down to ISNet on the GPU when its start fails, a run fails or its
+   the CPU (BiRefNet at 640, about 5 s). BiRefNet steps down to ISNet on the GPU when its start fails, a run fails or its
    worker dies (running out of GPU memory looks like one of these), its start (session and warm-up, after the
    download) takes over 10 s, or its first photo over 2 s (the M5 Pro: 1.5 to 2 s and 0.3 s; the limits are the
    ones docs/platforms-and-phone-model.md proposed). A slow first photo keeps its result. ISNet on the GPU steps
@@ -411,7 +412,7 @@ async function startEngine(name) {
       }
     };
     dbg("engine-start", { name });
-    w.postMessage({ type: "init", ep: name === "gpu" ? "webgpu" : "wasm", model: params.get("model") || (DESKTOP ? gpuModel : "isnet"), fail: params.get("gpufail"), debug: DEBUG, noWarm: params.has("nowarm"),
+    w.postMessage({ type: "init", ep: name === "gpu" ? "webgpu" : "wasm", model: params.get("model") || (name === "gpu" ? gpuModel : ""), desktop: DESKTOP, fail: params.get("gpufail"), debug: DEBUG, noWarm: params.has("nowarm"),
       // ?threads=N to test. iPhone: 4 threads 3.5 s a photo, 2 threads 5.0 s, 1 thread 7.3 s. But 4 threads
       // peak at 2.1 GB and crashed a big photo half the time; 2 threads peak about 300 MB lower.
       threads: THREADS });
@@ -487,12 +488,13 @@ async function segment(bitmap, edge = true) { // edge: false skips refineEdge (G
     id.data[k + 3] = Math.max(0, Math.min(255, m[i] * 255));
   }
   despeck(id);
-  if (!birefnet && params.get("haze") !== "0") hardenHaze(id); // ISNet only; ?haze=0 shows it without
+  if (engineModel === "isnet" && params.get("haze") !== "0") hardenHaze(id); // ISNet only (tuned on its masks); ?haze=0 shows it without
   let box = subjectBox(id);
   for (let i = 3; i < id.data.length; i += 4) id.data[i] = LUT[id.data[i]]; // soften the edge once, here
-  // BiRefNet only (on ISNet it changed next to nothing): the guided filter on hair and fur. Not on GIF frames: their
-  // transparency is on/off, so the soft edge it redraws is thrown away, and a GIF has up to 100 frames.
-  if (PP && edge && birefnet) { const t = performance.now(), px1 = refineEdge(px, id); dbg("edge", { ms: Math.round(performance.now() - t), px: px1 }); if (px1) box = subjectBox(id); } // the crop follows the new mask
+  // BiRefNet only, 1024 and 640 (on ISNet it changed next to nothing; 640: 8 better, 0 worse held out): the guided filter
+  // on hair and fur. Not on GIF frames: their transparency is on/off, so the soft edge it redraws is thrown away, and a
+  // GIF has up to 100 frames.
+  if (PP && edge && engineModel.startsWith("birefnet")) { const t = performance.now(), px1 = refineEdge(px, id); dbg("edge", { ms: Math.round(performance.now() - t), px: px1 }); if (px1) box = subjectBox(id); } // the crop follows the new mask
   const mask = new OffscreenCanvas(RES, RES);
   mask.getContext("2d").putImageData(id, 0, 0);
   mask.box = box;

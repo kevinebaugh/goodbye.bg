@@ -71,15 +71,20 @@ writeParts(join(rt, "wasm"), readFileSync(join(ortDist, "ort-wasm-simd-threaded.
 const BUILD = Date.now().toString(36);
 writeFileSync(join(dist, "version.txt"), BUILD);
 writeFileSync(join(dist, "app.js"), readFileSync(join(dist, "app.js"), "utf8").replaceAll("%BUILD%", BUILD));
-// BiRefNet lite (MIT) for the GPU engine: committed as parts in weights/birefnet/ (made by scripts/birefnet.sh).
-// Without it the GPU engine runs ISNet.
-const birefnetSrc = join(root, "weights", "birefnet");
-const birefnetManifest = existsSync(join(birefnetSrc, "manifest.json")) ? JSON.parse(readFileSync(join(birefnetSrc, "manifest.json"), "utf8")) : null;
-// m/ is cached forever, so the folder is named after the model's hash: a new export never mixes with old parts.
-const birefnetDir = birefnetManifest ? "birefnet-" + birefnetManifest.sha256.slice(0, 8) : "";
-writeFileSync(join(dist, "engine.js"), readFileSync(join(dist, "engine.js"), "utf8").replaceAll("%ORT%", ORT).replaceAll("%BIREFNET%", birefnetDir));
+// BiRefNet lite (MIT), committed as parts: weights/birefnet/ for the GPU engine (1024, made by scripts/birefnet.sh) and
+// weights/birefnet640/ for the CPU engine (640, scripts/birefnet640.sh). Without them the engines run ISNet.
+// m/ is cached forever, so each folder is named after the model's hash: a new export never mixes with old parts.
+const weights = (name) => {
+  const src = join(root, "weights", name), mf = join(src, "manifest.json");
+  if (!existsSync(mf)) return { name, src, manifest: null, dir: "" };
+  const manifest = JSON.parse(readFileSync(mf, "utf8"));
+  return { name, src, manifest, dir: `${name}-${manifest.sha256.slice(0, 8)}` };
+};
+const birefnet = weights("birefnet"), birefnet640 = weights("birefnet640");
+writeFileSync(join(dist, "engine.js"), readFileSync(join(dist, "engine.js"), "utf8").replaceAll("%ORT%", ORT)
+  .replaceAll("%BIREFNET640%", birefnet640.dir).replaceAll("%BIREFNET%", birefnet.dir));
 // The page remembers per device which GPU tier worked (see the GPU gate in app.js); a new runtime or model tries again.
-writeFileSync(join(dist, "app.js"), readFileSync(join(dist, "app.js"), "utf8").replaceAll("%ENGINE%", `${ORT}/${birefnetDir}`));
+writeFileSync(join(dist, "app.js"), readFileSync(join(dist, "app.js"), "utf8").replaceAll("%ENGINE%", `${ORT}/${birefnet.dir}`));
 
 // fflate (MIT) for "Download all" zips.
 mkdirSync(join(dist, "vendor"));
@@ -133,16 +138,16 @@ writeFileSync(join(dist, "app.js"), readFileSync(join(dist, "app.js"), "utf8").r
 
 console.log("Model:");
 writeParts(join(dist, "m", "isnet"), isnet, "isnet");
-if (birefnetManifest) {
-  const out = join(dist, "m", birefnetDir), hash = createHash("sha256");
+for (const w of [birefnet, birefnet640]) {
+  if (!w.manifest) { console.log(`  ${w.name}: not built (weights/${w.name}/ is missing); that engine uses ISNet`); continue; }
+  const out = join(dist, "m", w.dir), hash = createHash("sha256");
   mkdirSync(out, { recursive: true });
-  for (const p of birefnetManifest.parts) { const b = readFileSync(join(birefnetSrc, p)); hash.update(b); writeFileSync(join(out, p), b); }
-  if (hash.digest("hex") !== birefnetManifest.sha256) throw new Error("weights/birefnet: parts don't match manifest.json");
-  cpSync(join(birefnetSrc, "manifest.json"), join(out, "manifest.json"));
+  for (const p of w.manifest.parts) { const b = readFileSync(join(w.src, p)); hash.update(b); writeFileSync(join(out, p), b); }
+  if (hash.digest("hex") !== w.manifest.sha256) throw new Error(`weights/${w.name}: parts don't match manifest.json`);
+  cpSync(join(w.src, "manifest.json"), join(out, "manifest.json"));
   cpSync(join(root, "docs/licenses/BiRefNet.txt"), join(out, "LICENSE.txt")); // MIT: the notice travels with the weights
-  console.log(`  ${birefnetDir}: ${(birefnetManifest.size / 1e6).toFixed(1)} MB in ${birefnetManifest.parts.length} parts`);
+  console.log(`  ${w.dir}: ${(w.manifest.size / 1e6).toFixed(1)} MB in ${w.manifest.parts.length} parts`);
 }
-else console.log("  birefnet: not built (run scripts/birefnet.sh); the GPU engine uses ISNet");
 
 // The service worker's version list (src/sw.js). Shell: the app page's files with a hash each, so an update keeps
 // what didn't change; eager ones are kept at install (the page loads them anyway), the rest when first used.
@@ -158,7 +163,7 @@ const big = {};
 const bigDir = (prefix, cache) => (big[prefix] = { cache, files: readdirSync(join(dist, prefix), { recursive: true }).filter((f) => statSync(join(dist, prefix, f)).isFile()).sort() });
 bigDir(`/rt/${ORT}/`, `gb-rt-${ORT}`);
 bigDir("/m/isnet/", `gb-m-isnet-${createHash("sha256").update(isnet).digest("hex").slice(0, 8)}`); // the URL has no version: the cache name does
-if (birefnetDir) bigDir(`/m/${birefnetDir}/`, `gb-m-${birefnetDir}`);
+for (const w of [birefnet, birefnet640]) if (w.dir) bigDir(`/m/${w.dir}/`, `gb-m-${w.dir}`);
 const sw = readFileSync(join(dist, "sw.js"), "utf8");
 if (!sw.includes('"%SW%"')) throw new Error("sw.js must hold the \"%SW%\" placeholder");
 writeFileSync(join(dist, "sw.js"), sw.replace('"%SW%"', () => JSON.stringify({ build: BUILD, shell, eager, big })));
