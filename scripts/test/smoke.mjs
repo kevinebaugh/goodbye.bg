@@ -247,7 +247,7 @@ try {
 
   await check("build: placeholders filled in", () => {
     const app = readFileSync(join(root, "dist/app.js"), "utf8"), eng = readFileSync(join(root, "dist/engine.js"), "utf8");
-    for (const [f, s, ph] of [["app.js", app, '"%PARTNERS%"'], ["app.js", app, "%BUILD%"], ["engine.js", eng, "%ORT%"], ["engine.js", eng, "%BIREFNET%"]]) assert(!s.includes(ph), `${ph} left in dist/${f}`);
+    for (const [f, s, ph] of [["app.js", app, '"%PARTNERS%"'], ["app.js", app, "%BUILD%"], ["app.js", app, "%ENGINE%"], ["engine.js", eng, "%ORT%"], ["engine.js", eng, "%BIREFNET%"]]) assert(!s.includes(ph), `${ph} left in dist/${f}`);
   });
 
   await check("basics: headers (CSP, COOP/COEP)", async () => {
@@ -480,6 +480,27 @@ try {
     noErrors(r);
     await r.close();
     return `${f.name}, engine ${e}`;
+  });
+
+  // The GPU gate: BiRefNet fails to start (?gpufail=birefnet-init, after a 3 s delay), ISNet on the GPU takes over, and a
+  // photo added while it starts still finishes there. Fallback reports are expected here (they go to /api/crash).
+  await check("gpu gate: BiRefNet fails to start, ISNet on the GPU finishes", async () => {
+    if (engine !== "gpu") return { skip: "no WebGPU with shader-f16 in this headless Chrome" };
+    const c5 = await context(), g = await page(c5);
+    await g.go(`${base}/?gpufail=birefnet-init&confetti=0`);
+    await addPhotos(g, ["first"]);
+    const failed = () => g.errors.find((e) => e.includes('"birefnet-start-failed"'));
+    for (let i = 0; i < 300 && !failed(); i++) await sleep(100);
+    assert(failed(), "no birefnet-start-failed report");
+    assert(failed().includes('"engine":"gpu-birefnet"'), "the report names another engine: " + failed());
+    await addPhotos(g, ["second"]); // ISNet on the GPU is starting now
+    await allDone(g, 2, 90000);
+    const e1 = await engineOf(g, '#grid > .card[aria-label^="first"]'), e2 = await engineOf(g, '#grid > .card[aria-label^="second"]');
+    assert(e1 === "gpu" && e2 === "gpu", `ran on ${e1} and ${e2}`);
+    assert(!(await g.ev(`localStorage.getItem("gb-gpu")`)), "kept the outcome under ?gpufail=");
+    noErrors(g, [/birefnet-start-failed/]);
+    await g.close();
+    return `${e1}, ${e2}`;
   });
 
   // Text pages.
