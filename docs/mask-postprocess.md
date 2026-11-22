@@ -81,15 +81,31 @@ ISNet's failures are missing or hazy parts, decided long before the edge; a 4 px
 
 **BiRefNet lite 640 (phone candidate)**
 
-BIR640_TABLE
+| Step | IoU | Boundary IoU | Edge error | Good/usable/bad | Better/worse IoU | Boundary b/w | Edge b/w | Catastrophic |
+|---|---|---|---|---|---|---|---|---|
+| Today (mask scaled 640 to 1024) | 0.9466 | 0.8663 | 0.0759 | 391/54/39 | | | | |
+| Keep components over 5% of the largest | 0.9461 | 0.8657 | 0.0762 | 390/54/40 | 0/5 | 0/7 | 0/7 | 0 |
+| Drop border components under 10% | 0.9462 | 0.8658 | 0.0762 | 390/55/39 | 0/5 | 0/7 | 0/6 | 0 |
+| Centre-weighted choice | 0.9458 | 0.8653 | 0.0763 | 390/54/40 | 0/9 | 0/11 | 0/10 | 0 |
+| Fill holes under 0.2% | 0.9462 | 0.8601 | 0.0768 | 389/56/39 | 0/0 | 3/46 | 1/24 | 0 |
+| Otsu cut-off | 0.9461 | 0.8656 | 0.0763 | 391/54/39 | 1/5 | 1/6 | 1/11 | 0 |
+| Guided filter, everywhere | 0.9509 | 0.8753 | 0.0714 | 400/49/35 | 19/0 | 27/7 | 226/66 | 0 |
+| **Guided filter, wide soft zones only** | **0.9483** | **0.8687** | **0.0708** | **394/52/38** | **8/0** | **9/7** | **169/2** | **0** |
+
+All 923, the winner: IoU 0.9478 to 0.9495, edge error 0.075 to 0.070, better/worse 15/0 (IoU) and 327/3 (edge). The
+plain filter gains more here (the 640 mask is blurrier once scaled up, so more of its edge counts as unsure) but it
+again makes 66 edges worse. If BiRefNet 640 goes to phones, `refineEdge` should go with it (change `PP && birefnet` to
+cover it; it is a BiRefNet result too). The plain filter on 640 is worth a look by eye then.
 
 ## Cost
 
 ms at 1024, one Node thread on the M5 Pro, median of 20 photos (`scripts/quality/ppbench.cjs`, which times the page's
-own `refineEdge`): TIMING. The filter works only on the box around the soft zones, so a photo with no hair or fur costs
-almost nothing. A phone CPU is several times slower than the M5 Pro, but the filter runs only after BiRefNet (computers);
-if BiRefNet 640 goes to phones, budget about 3x that. For comparison the page already spends a similar amount on
-`edgeColors`.
+own `refineEdge`; other sessions kept the load average near 7 on 18 cores): **65 ms median, 122 ms at most** on BiRefNet 1024 masks,
+85 ms median and 122 ms at most on BiRefNet 640 masks. `edgeColors`, which the page already runs on every photo, takes
+97 ms on the same photos. The filter works only on the box around the wide soft zones; a photo without any skips it after the full-frame
+checks (a few ms to 25 ms). On computers that is about a fifth of BiRefNet's 0.3 s. A phone CPU is several times slower
+than the M5 Pro (ISNet: 3.7 s here against 5.0 s on Kevin's iPhone with 2 threads, but single-thread JavaScript
+differs more); if BiRefNet 640 goes to phones, expect roughly 0.2 to 0.4 s a photo on top of about 5 s. Not measured on a phone.
 
 ## How
 
@@ -115,4 +131,8 @@ if BiRefNet 640 goes to phones, budget about 3x that. For comparison the page al
   pieces can only lose. COCO's busy scenes, where BiRefNet keeps a second car or a blanket, were left out: their truth
   is one labelled object, so dropping the rider would wrongly score as a win on the bicycle.
 - Phone camera photos at 12 MP: the mask is still 1024, so the filter works at a quarter of the photo's pixels.
-- Not looked at on a real iPhone or in Safari.
+- Not looked at on a real iPhone or in Safari. ISNet on the GPU provider was not rerun (the CPU provider is what phones
+  use; GPU and CPU masks match closely on all but hazy photos).
+- The bar asked for: better on at least 3 times as many photos as it hurts, and no catastrophic failures. The winner
+  clears it on BiRefNet 1024 (12/0 held out, 23/1 on all 923) and 640 (8/0, 15/0), but the counts are small because
+  edges rarely move IoU by 0.02; the edge error (176/1 held out) is the clearer signal. It does not clear it on ISNet.

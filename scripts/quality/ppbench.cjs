@@ -24,6 +24,7 @@ const N = 1024 * 1024;
   };
   const med = (a) => a.sort((x, y) => x - y)[a.length >> 1];
   const time = (fn) => { for (let w = 0; w < 3; w++) fn(...masks[w]); const ts = masks.map((m) => { const t = performance.now(), v = fn(...m); return typeof v === "number" ? v : performance.now() - t; }); return `median ${med([...ts]).toFixed(1)} ms, max ${Math.max(...ts).toFixed(1)} ms`; };
-  console.log("today's despeck" + (KIND === "isnet" ? " + haze" : ""), time((p) => { C.pre(p, KIND === "isnet"); }), "(reference)");
+  const P = require("./pipeline.cjs");
+  console.log("edgeColors (already on the page, for comparison)", time((pre, base, rgb, px) => { P.edgeColors(px, base); }));
   for (const k of cands) console.log(k, time(C.CANDIDATES[k]));
 })();
