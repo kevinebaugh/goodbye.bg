@@ -28,6 +28,11 @@ at 640x640** instead of ISNet. `?model=isnet` brings ISNet back on the same devi
   sooner than 3 s later (dbg step `engine-wait`). Also: download on intent (unchanged, the model is fetched by the
   same code), the offline cache (`sw.js` list holds `/m/birefnet640-9348c64d/`, cache `gb-m-birefnet640-9348c64d`),
   and the GPU gate.
+- Rebased again on main at 1b35e6c (2026-11-22, early morning: card bar, picker pages and dock, accessibility, grid
+  sizing, failed-file handling, README). No conflicts; main's memory fixes (single-buffer `fetchParts`, `engine-wait`),
+  the offline cache list and the GPU-gate step names are unchanged. Tests on that tree: `npm run test` 21/21 (the CPU
+  check names `cpu-birefnet640`), `npm run test:x` 41/41 (Firefox's first photo timed out once with other test runs
+  loading the Mac and passed 13/13 on a rerun; it runs the 640 model on the CPU), `offline.mjs` 13/13.
 - Cost on computers: when ISNet on the GPU fails, the CPU engine now downloads its own 95 MB model; before, it reused
   ISNet's files. Rare (a GPU that fails ISNet), and only once thanks to the cache.
 
