@@ -86,7 +86,8 @@ GPU gate (2026-11-22, for weak GPUs; the proposal in `docs/platforms-and-phone-m
 BiRefNet on the GPU, then ISNet on the GPU (a third of the GPU memory), then the CPU.
 - BiRefNet steps down to ISNet on the GPU when its start fails, a run fails or its worker dies (out of GPU memory
   shows up as one of these), its start (session and warm-up, after the download) takes over 10 s, or its first
-  photo over 2 s (M5 Pro: about 2 s and 0.3 s). A slow first photo keeps its BiRefNet result. ISNet on the GPU
+  photo over 2 s (M5 Pro: about 2 s and 0.3 s). The time limits count only while the page stays in view (computers
+  start the model at load, often in a background tab); hidden, only the 30 s hang counts. A slow first photo keeps its BiRefNet result. ISNet on the GPU
   steps down to the CPU on a failure or a hang.
 - Computers that report `navigator.deviceMemory` under 8 (Chrome only, capped at 8) start on ISNet on the GPU.
 - The outcome is kept in localStorage `gb-gpu` (tier, user agent, runtime/model version, date), so later visits skip
@@ -96,7 +97,8 @@ BiRefNet on the GPU, then ISNet on the GPU (a third of the GPU memory), then the
   `birefnet-run-failed`, `birefnet-slow-start`, `birefnet-slow-run`, `gpu-start-failed`, `gpu-run-failed`
   (the same names in `?debug=1`, plus `gpu-lowmem` and `gpu-remembered`).
 - Tested in headless Chrome (M5 Pro): every case below, a photo added while ISNet starts after a failed BiRefNet,
-  a kept tier (and a stale one ignored), deviceMemory 4. Not tested on a real weak GPU.
+  a kept tier (and a stale one ignored), deviceMemory 4, a hidden tab, a vote on a restored photo. Not tested on a
+  real weak GPU, Safari, Windows or Linux.
 
 - `?engine=gpu` or `?engine=cpu` forces one (a forced gpu never falls back to the CPU; BiRefNet can still step down
   to ISNet on the GPU). `?model=birefnet` turns the gate off. `?gpufail=init|run|hang` simulates a broken GPU (every

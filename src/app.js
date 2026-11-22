@@ -155,6 +155,10 @@ const THREADS = +params.get("threads") || (IOS ? 2 : 4);
    runtime or model, or 30 days later it tries again. Never stored under ?engine=, ?model= or ?gpufail=. */
 const GATE_KEY = "gb-gpu", GATE_VER = "%ENGINE%", GATE_DAYS = 30, BIREFNET_START_LIMIT = 10_000, BIREFNET_RUN_LIMIT = 2_000;
 let gpuModel = ""; // what the GPU worker is asked for: "" (BiRefNet on computers) or "isnet"
+// Time limits count only while the page stays in view: computers start the model at load, often in a background tab,
+// and a hidden tab can be slowed down. hides goes up each time the page is hidden.
+let hides = document.hidden ? 1 : 0;
+document.addEventListener("visibilitychange", () => { if (document.hidden) hides++; });
 if (!IOS && !params.has("engine") && !params.has("model")) {
   let kept = null; try { kept = JSON.parse(localStorage.getItem(GATE_KEY)); } catch {}
   if (kept?.ua === navigator.userAgent && kept.v === GATE_VER && Date.now() - kept.t < GATE_DAYS * 864e5) {
@@ -342,8 +346,11 @@ function startEngine(name) {
       else if (data.type === "loaded") {
         status("Starting up…");
         if (name === "gpu") {
-          const slow = engineModel === "birefnet" && !params.has("model");
-          timer = setTimeout(() => fail(Object.assign(new Error(slow ? "BiRefNet start too slow" : "GPU warm-up timed out"), { slow })), slow ? BIREFNET_START_LIMIT : GPU_WARMUP_TIMEOUT);
+          const hang = () => fail("GPU warm-up timed out"), h0 = hides;
+          if (engineModel !== "birefnet" || params.has("model") || document.hidden) timer = setTimeout(hang, GPU_WARMUP_TIMEOUT);
+          // Too slow only if the page stayed in view; otherwise the usual hang limit.
+          else timer = setTimeout(() => hides === h0 ? fail(Object.assign(new Error("BiRefNet start too slow"), { slow: true }))
+            : (timer = setTimeout(hang, GPU_WARMUP_TIMEOUT - BIREFNET_START_LIMIT)), BIREFNET_START_LIMIT);
         }
       } else if (data.type === "model") engineModel = data.name;
       else if (data.type === "ready") { clearTimeout(timer); w.up = true; resolve(); }
@@ -408,6 +415,7 @@ async function segment(bitmap) {
   const input = px.slice(); // RGBA; the engine turns it into its model's input. A copy: px is used again below.
   let res;
   dbg("infer");
+  const h0 = hides;
   for (;;) try { res = await infer(input); break; }
   catch (e) {
     if (engineName !== "gpu" || !stepDown("run-failed", e)) throw e;
@@ -419,7 +427,7 @@ async function segment(bitmap) {
   // BiRefNet's first photo (the warm-up already compiled the shaders) took too long: keep this result; the next
   // photos go to ISNet on the GPU. The BiRefNet worker goes first: both at once would hold about 4 GB.
   const first = worker && !worker.ran; if (worker) worker.ran = true;
-  if (first && birefnet && !params.has("model") && !params.has("nowarm") && res.ms > BIREFNET_RUN_LIMIT
+  if (first && birefnet && hides === h0 && !document.hidden && !params.has("model") && !params.has("nowarm") && res.ms > BIREFNET_RUN_LIMIT
     && stepDown("slow-run", new Error(`First photo took ${res.ms} ms`))) { stopEngine("BiRefNet too slow"); loadModel().catch(() => {}); }
   const m = res.mask;
   const id = new ImageData(RES, RES);
