@@ -163,7 +163,7 @@ function dbg(step, data = {}) {
 }
 dbg("load", { ua: navigator.userAgent.slice(0, 160), dpr: devicePixelRatio, w: innerWidth, h: innerHeight, mem: navigator.deviceMemory, coi: self.crossOriginIsolated });
 const GPU_WARMUP_TIMEOUT = 30_000, GPU_RUN_TIMEOUT = 15_000; // longer counts as hung
-let worker = null, engineName = "", engineModel = "", engineReady = null, gpuBroken = false, jobId = 0;
+let worker = null, engineName = "", engineModel = "", engineWant = "", engineReady = null, gpuBroken = false, jobId = 0;
 // What votes and crash reports call the engine: "gpu" and "cpu" run ISNet, "gpu-birefnet" BiRefNet, "cpu-birefnet640"
 // BiRefNet at 640.
 const engineTag = () => (engineName || "cpu") + (engineModel && engineModel !== "isnet" ? "-" + engineModel : "");
@@ -379,11 +379,11 @@ function idle() {
   if (IOS && worker && !jobs.size && !running) { stopEngine("idle"); engineFree = performance.now() + 3000; dbg("engine-idle"); }
 }
 
-async function startEngine(name) {
+async function startEngine(name, want = "") {
   killWorker("Engine restarted");
   const wait = engineFree - performance.now();
   if (wait > 0) { dbg("engine-wait", { ms: Math.round(wait) }); await new Promise((r) => setTimeout(r, wait)); }
-  engineName = name; engineModel = "";
+  engineName = name; engineModel = ""; engineWant = want;
   const w = worker = new Worker("engine.js", { type: "module" });
   return new Promise((resolve, reject) => {
     let timer = 0, loaded = false;
@@ -411,26 +411,38 @@ async function startEngine(name) {
         data.type === "result" ? j.resolve(data) : j.reject(new Error(data.error));
       }
     };
-    dbg("engine-start", { name });
-    w.postMessage({ type: "init", ep: name === "gpu" ? "webgpu" : "wasm", model: params.get("model") || (name === "gpu" ? gpuModel : ""), desktop: DESKTOP, fail: params.get("gpufail"), debug: DEBUG, noWarm: params.has("nowarm"),
+    dbg("engine-start", { name, want });
+    w.postMessage({ type: "init", ep: name === "gpu" ? "webgpu" : "wasm", model: params.get("model") || want || (name === "gpu" ? gpuModel : ""), desktop: DESKTOP, fail: params.get("gpufail"), debug: DEBUG, noWarm: params.has("nowarm"),
       // ?threads=N to test. iPhone: 4 threads 3.5 s a photo, 2 threads 5.0 s, 1 thread 7.3 s. But 4 threads
       // peak at 2.1 GB and crashed a big photo half the time; 2 threads peak about 300 MB lower.
       threads: THREADS });
   });
 }
 
-function loadModel() {
+// want: "" for the engine's own model, "isnet" for a 👎 on a BiRefNet 640 result (see retry). One engine at a time: a
+// different model waits for the jobs on this one, then replaces it (after the same 3 s as the idle shutdown on iPhones).
+async function switchModel(want) {
+  await engineReady.catch(() => {});
+  while (jobs.size) await new Promise((r) => setTimeout(r, 200));
+  if (engineReady && want !== engineWant) { // not stopped or switched meanwhile
+    dbg("engine-switch", { to: want || "default" });
+    stopEngine("switch"); if (IOS) engineFree = performance.now() + 3000;
+  }
+  return loadModel(want);
+}
+function loadModel(want = "") {
+  if (engineReady && want !== engineWant) return switchModel(want);
   if (!engineReady) {
     engineReady = (async () => {
       let name = await pickEngine();
-      for (;;) try { await startEngine(name); break; }
+      for (;;) try { await startEngine(name, want); break; }
       catch (e) {
         if (name !== "gpu") {
           // The CPU engine can fail to start when memory is short (a tab that just crashed, or an engine that
           // was just shut down and not yet freed). Report it, wait a moment, try once more.
           report("start-failed", e); dbg("cpu-start-failed", { error: String(e?.message || e).slice(0, 200) });
           await new Promise((r) => setTimeout(r, 3000));
-          await startEngine("cpu");
+          await startEngine("cpu", want);
           status(`Ready.`); dbg("ready", { engine: engineName });
           return;
         }
@@ -456,8 +468,8 @@ function infer(input) {
   });
 }
 
-async function segment(bitmap, edge = true) { // edge: false skips refineEdge (GIF frames)
-  await loadModel();
+async function segment(bitmap, edge = true, want = "") { // edge: false skips refineEdge (GIF frames); want: see loadModel
+  await loadModel(want);
   dbg("segment", { w: bitmap.width, h: bitmap.height, coi: self.crossOriginIsolated, threads: THREADS });
   const c = new OffscreenCanvas(RES, RES), x = c.getContext("2d");
   x.drawImage(bitmap, 0, 0, RES, RES); dbg("drawn");
@@ -1976,7 +1988,7 @@ function showVote(it, vote) {
   const { up, down, dl, card } = it.el;
   // A keyboard vote keeps focus on the card: on Download, or on the card itself while a 👎 retry runs (it used to fall to <body>).
   if (document.activeElement === up || document.activeElement === down) {
-    const retrying = vote === "down" && !it.retried && !it.anim && zoomRect(it);
+    const retrying = vote === "down" && !it.retried && !it.anim && (zoomRect(it) || retryModel(it));
     if (retrying) { card.tabIndex = -1; card.focus({ preventScroll: true }); } else dl.focus({ preventScroll: true });
   }
   up.disabled = down.disabled = true;
@@ -2038,14 +2050,20 @@ function zoomRect(it) {
   const x0 = Math.max(0, s.x0 - padX), y0 = Math.max(0, s.y0 - padY), x1 = Math.min(1, s.x1 + padX), y1 = Math.min(1, s.y1 + padY);
   return (x1 - x0) * (y1 - y0) > 0.8 ? null : { x0, y0, x1, y1 };
 }
+// BiRefNet 640 (the CPU engine) loses legs, cables and frames that ISNet keeps (docs/quality-products.md), so a 👎 on
+// its result runs ISNet 1024 on the whole photo instead of the zoomed retry: zooming on 640's box cut off the very legs
+// it had lost (thin products: IoU 0.82 zoomed, 0.92 whole; docs/phone-birefnet640.md). "" keeps the model and the zoom.
+function retryModel(it) {
+  return it.engine === "cpu-birefnet640" && !it.anim && !params.has("model") ? "isnet" : "";
+}
 // The 👎 label says what it will do.
 function downLabel(it) {
-  const label = t(!it.retried && zoomRect(it) ? "Bad result, try again" : "Bad result");
+  const label = t(!it.retried && (zoomRect(it) || retryModel(it)) ? "Bad result, try again" : "Bad result");
   it.el.down.setAttribute("aria-label", label); it.el.down.title = label;
 }
 
 async function retry(it) {
-  const z = zoomRect(it);
+  const want = retryModel(it), z = want ? { x0: 0, y0: 0, x1: 1, y1: 1 } : zoomRect(it);
   if (!z) return;
   const { x0, y0, x1, y1 } = z;
   it.retried = true;
@@ -2058,6 +2076,8 @@ async function retry(it) {
   // Never next to a PNG being built (a full photo each): wait for those, and hold back the ones not started.
   clearTimeout(pngTimer);
   await pngChain.catch(() => {});
+  // The other model replaces the engine: let the batch finish on its own model first (no swapping back and forth).
+  while (want && running) await new Promise((r) => setTimeout(r, 300));
   try {
     const sx = Math.round(x0 * it.w), sy = Math.round(y0 * it.h), sw = Math.max(1, Math.round((x1 - x0) * it.w)), sh = Math.max(1, Math.round((y1 - y0) * it.h));
     const big = await fullBitmap(it), sc = big.width / it.w; // decoded size can exceed the working size
@@ -2065,7 +2085,7 @@ async function retry(it) {
     const part = await createImageBitmap(big, Math.round(sx * sc), Math.round(sy * sc), Math.max(1, Math.round(sw * sc)), Math.max(1, Math.round(sh * sc)),
       { resizeWidth: RES, resizeHeight: RES, resizeQuality: "high" });
     big.close();
-    const m = await segment(part); part.close();
+    const m = await segment(part, true, want); part.close();
     if (m.box) { changed = true; it.mask = mergeRetry(it.first, m, { x: sx / it.w, y: sy / it.h, w: sw / it.w, h: sh / it.h }); it.maskRect = null; it.ms = lastMs; it.engine = lastEngine; it.png = null; }
   } catch (e) { console.warn("Retry failed", e); }
   retrying--; clearInterval(it.quip);

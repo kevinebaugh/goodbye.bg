@@ -30,6 +30,7 @@ const results = [];
 async function check(name, fn, needs = []) {
   const failed = needs.find((n) => results.find((r) => r.name === n && r.status !== "PASS"));
   if (failed) { report(name, "FAIL", 0, `skipped: "${failed}" did not pass`); return false; }
+  if (process.env.ONLY && !name.includes(process.env.ONLY)) return false; // ONLY=<part of a name> runs just those checks
   const s = Date.now();
   try {
     const note = await fn();
@@ -209,7 +210,7 @@ const CARDS = `[...document.querySelectorAll("#grid > .card")]`;
 async function engineOf(p, sel = "#grid > .card") {
   const n = p.votes.length;
   await click(p, `${sel} .rate`);
-  for (let i = 0; i < 50 && p.votes.length === n; i++) await sleep(50);
+  for (let i = 0; i < 100 && p.votes.length === n; i++) await sleep(50);
   assert(p.votes.length > n, "👍 sent no vote");
   return p.votes.at(-1).engine;
 }
@@ -721,6 +722,32 @@ try {
     noErrors(r);
     await r.close();
     return `${f.name}, engine ${e}`;
+  });
+
+  // 👎 on a BiRefNet 640 result (the CPU engine) retries with ISNet 1024; the next photo runs on 640 again.
+  await check("cpu 👎: the retry runs ISNet, the next photo 640 again", async () => {
+    const c4 = await context(), r = await page(c4);
+    await r.go(`${base}/?engine=cpu&confetti=0`);
+    await addPhotos(r, ["thumbs"]);
+    await allDone(r, 1, 60000);
+    const DOWN = "#grid > .card .rates > .rate:last-child";
+    const label = await r.ev(`document.querySelector(${JSON.stringify(DOWN)}).getAttribute("aria-label")`);
+    if (!/try again/.test(label)) return { skip: `the CPU engine runs ISNet here (${label})` };
+    const n = r.votes.length;
+    await click(r, DOWN);
+    await r.until(`(() => { const c = document.querySelector("#grid > .card"), up = c.querySelector(".rate");
+      return !c.classList.contains("working") && !up.disabled && up.style.visibility !== "hidden"; })()`, 90000, "the retry's result");
+    const first = r.votes[n]; assert(first?.vote === "down" && first.engine === "cpu-birefnet640" && !first.retry, "👎 vote " + JSON.stringify(first));
+    const e1 = await engineOf(r), v = r.votes.at(-1);
+    assert(e1 === "cpu" && v.retry === true, `retry: engine ${e1}, retry ${v.retry}`);
+    await addPhotos(r, ["after"]);
+    await allDone(r, 2, 90000);
+    const e2 = await engineOf(r); // new photos go in front
+    assert((await names(r))[0] === "after", "order " + (await names(r)));
+    assert(e2 === "cpu-birefnet640", `next photo ran on ${e2}`);
+    noErrors(r);
+    await r.close();
+    return `👎 ${first.engine}, retry ${e1}, next ${e2}`;
   });
 
   // The GPU gate: BiRefNet fails to start (?gpufail=birefnet-init, after a 3 s delay), ISNet on the GPU takes over, and a
