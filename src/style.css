@@ -238,6 +238,7 @@ body:not(.has-work) .foot { margin: 56px auto auto; padding-bottom: max(24px, 8v
 .count { border: 0; background: none; padding: 0 6px; font: inherit; line-height: inherit; color: inherit; cursor: pointer; font-variant-numeric: tabular-nums;
   visibility: hidden; opacity: 0; transition: opacity .4s; }
 .count.on { visibility: visible; opacity: 1; }
+.count.offnote { cursor: default; } /* offline: a note, not the confetti counter (app.js offlineNote) */
 /* The one message bubble (see tell in app.js): placed next to the button it's about, pointing at it. Over the page,
    so nothing moves when it comes and goes. */
 .tell { position: absolute; z-index: 30; width: max-content; max-width: min(calc(100vw - 16px), 420px);

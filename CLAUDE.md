@@ -268,8 +268,13 @@ history is in git (before f4612b5) and `docs/history.md`. Don't bring them back 
 - Never cached: `/api/`, `/go/`, `/cap/`, `/version.txt`, `/ad.html`, `/sw.js`, non-GET. Stored responses keep
   COOP/COEP/CSP, so offline the CPU engine still has threads. No install prompt UI.
 - Not offline: the CPU fallback on a computer that only ever ran the GPU engine; the first page after an upgrade;
-  link fetching and ad clicks. Tested in headless Chrome only (`scripts/test/offline.mjs`). **Not claimed on the site**
-  until Kevin checks Safari (then add "Works offline after your first cut-out").
+  link fetching and ad clicks. Tested in headless Chrome (`scripts/test/offline.mjs`) and by Kevin in Safari (2026-11-22: works). Claimed quietly,
+  "Works offline: After your first cut-out", in the remove.bg page's table (six languages) and the launch kit; not
+  in the hero (Kevin: "I don't know how loudly we need to advertise that"). "After your first visit" would be false on
+  phones (the model downloads on intent) and needs every model downloaded up front, about 210 MB.
+- Offline, the footer's counter line says so (`offlineNote`, Kevin 2026-11-22: "a subtle indicator"): "Offline.
+  goodbye.bg still works." when an engine was ready here before (`gb-model`), else "Offline. Connect once to load the
+  model."; the count comes back online. Not shown where the footer is hidden (many photos, a phone on its side).
 
 ## Ads and Zazzle
 
@@ -286,8 +291,11 @@ and redirects; a POST there counts the card being shown ('adseen').
   so no photo moves when an ad arrives (smoke test "ads: one after the 6th photo of 8"). Ads appear once the first cut-out is done, 1.1 s after it (`ADS_PAUSE`), one after another with a shimmering
   placeholder; the 3D code is fetched while the first photo is worked on.
 - Zazzle's 8 variants draw the visitor's cut-out on a product (mug, sticker, shirt, tote, ornament, phone case, pillow,
-  keychain), a different cut-out per card when there are several; with 2+ one card at a time swaps cut-out every 4 s. Tapping a
-  finished photo puts it on every product card and stops the swapping (Kevin, 2026-11-22; `showArt`).
+  keychain), a different cut-out per card when there are several. Every 4 s one card changes: with one photo its
+  product (Kevin, 2026-11-22: "Should the product also rotate, not just the photo?"; `swapProduct` rebuilds the card in
+  place with the next product no other card shows, same cut-out), with 2+ photos the cut-out and the product take turns.
+  Tapping a finished photo puts it on every product card and keeps it there (`showArt`); the products keep changing.
+  All motion stops after about 24 s and never runs with reduced motion.
   The button names the product ("Put it on a mug"), outlined so Download stays the loud button. Ad cards have no
   surface, a solid hairline. Products follow light/dark.
 - Products render in 3D (`src/render3d.js` + Three.js 0.187.0, MIT, ~150 KB gzipped, loaded only when ads show): a
@@ -366,11 +374,10 @@ a difference.
 
 ## Next steps
 
-1. Real-device tests: Mac Safari (BiRefNet on WebGPU; the 2-minute check in `docs/platforms-and-phone-model.md`), a
+1. Real-device tests: Mac Safari works (Kevin, 2026-11-22). Still: a
    real iPhone (engine restart after idle, the 16 MP PNG, the share sheet after Download all), Android (share target,
    install), desktop "Open with", folder drops, live link fetching; BiRefNet on Windows and Linux GPUs and 8 GB Macs.
-2. Offline claim: check offline in Safari, then add "Works offline after your first cut-out" to the site and launch kit.
-3. Open draft PR for Kevin to decide: #5 the bulk tool.
+2. Open draft PR for Kevin to decide: #5 the bulk tool.
    Time `refineEdge` with BiRefNet 640 on a real iPhone (0.3 to 0.7 s a photo at 6x throttling in Chrome).
 4. A smaller GPU footprint might make WebGPU safe on iPhones again (try once ORT or the model changes).
 

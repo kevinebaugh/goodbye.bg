@@ -61,9 +61,8 @@ Honest notes about the captures:
   reload doesn't lose them.
 - Not there: API, edge brush, new backgrounds, sizes. Hair is OK, not great. Close-ups over a blurred background can keep some blur on phones
   (ISNet).
-- **Offline: not claimed.** It works offline in Chrome after the first cut-out (service worker, tested headless), but
-  Safari is untested. Don't say "works offline" until Kevin has checked Safari (steps in `offline-pwa` notes:
-  cut out a photo, wait 10 s, Airplane Mode, reload). Then the line is "Works offline after your first cut-out."
+- **Offline: after your first cut-out.** Checked in Chrome and by Kevin in Safari (2026-11-22). Say exactly that, not
+  "after your first visit" (phones download the model only once used). Mention it when asked; don't lead with it.
 - Install: there is a web app manifest, so Chrome shows its own install icon. No install prompt on the page.
 - Open source, AGPL-3.0 (because ISNet is): https://github.com/kevinebaugh/goodbye.bg
 - remove.bg says its background removal "moves to Leonardo.Ai" on 1 December 2026 (remove.bg/api, checked
@@ -139,7 +138,7 @@ Honest notes about the captures:
 
 Likely questions, short true answers:
 - *Why AGPL?* ISNet's weights are AGPL. BiRefNet is MIT, but phones and the CPU fallback still need ISNet.
-- *Offline?* Not promised yet. Don't say yes until Safari is checked (see the facts above).
+- *Offline?* Yes, after your first cut-out: the page and the model stay on the device.
 - *Is there an app?* No native app. Chrome shows its install icon in the address bar (there's a manifest); it's the
   same page in its own window.
 - *Why not just rembg?* rembg is great on a server or CLI; this is for people who want a web page and no install.
@@ -201,8 +200,8 @@ Today is Sunday 22 November 2026. remove.bg's background removal ends on Tuesday
 - [ ] Open the site on a computer and an iPhone; cut out 2 photos; Download and Download all work.
 - [ ] Re-read every claim above against the site that day (features land fast). If a brush or an API
       ships, update the "missing" lines.
-- [ ] Offline: if Kevin has checked Safari (iPhone and Mac) by then, add "Works offline after your first cut-out" to
-      the maker comment and the HN comment, and change the *Offline?* answer. If not, leave it out.
+- [x] Offline checked in Safari (2026-11-22): "Works offline after your first cut-out" may go in the maker comment and
+      the HN comment, as a small line, not a headline.
 - [ ] Check that the share preview shows the new og.png: paste the link into the
       [Facebook Sharing Debugger](https://developers.facebook.com/tools/debug/) and press "Scrape Again"; LinkedIn's
       Post Inspector does the same.

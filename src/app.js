@@ -274,7 +274,7 @@ function renderCount(v) {
   countShown = v;
   if (v > countMax) { countMax = v; try { localStorage.setItem(COUNT_KEY, String(v)); } catch {} }
   const el = $("count");
-  if (v <= 0) return;
+  if (v <= 0 || el.classList.contains("offnote")) return; // offline: the line says so instead (offlineNote)
   el.classList.add("on"); el.tabIndex = 0;
   el.textContent = t(v === 1 ? "Goodbye to {n} background since 2026." : "Goodbye to {n} backgrounds since 2026.", { n: v.toLocaleString(LANG === "en" ? "en-US" : LANG) });
 }
@@ -285,6 +285,23 @@ function growCount() { // waits like a random arrival at the recent pace, then a
   countTimer = setTimeout(() => { if (!document.hidden) renderCount(countShown + 1); growCount(); }, Math.min(wait, 30 * 60000));
 }
 function ownCount(n) { renderCount(Math.max(countShown + 1, n || 0)); }
+// Offline (Kevin, 2026-11-22: "a subtle indicator when the user is offline that goodbye.bg will continue to work"):
+// the counter's line, which can't update offline anyway, says so quietly. Back online, the count returns. gb-model
+// means an engine was ready here once, so its model is in the offline cache (sw.js).
+function offlineNote() {
+  const el = $("count");
+  if (navigator.onLine) {
+    if (!el.classList.contains("offnote")) return;
+    el.classList.remove("offnote", "on"); el.textContent = "\u00a0"; el.tabIndex = -1;
+    if (countShown > 0) renderCount(countShown);
+    return;
+  }
+  let here = false; try { here = !!localStorage.getItem("gb-model"); } catch {}
+  el.classList.add("offnote", "on"); el.tabIndex = -1;
+  el.textContent = t(here ? "Offline. goodbye.bg still works." : "Offline. Connect once to load the model.");
+}
+addEventListener("online", offlineNote); addEventListener("offline", offlineNote);
+if (!navigator.onLine) offlineNote();
 // That one request also counts the visit: just that it happened, and the site the visitor came from (hostname
 // only). The server adds device kind and country; nothing identifies the person.
 // Many visits arrive without a referrer (apps, typed links, chat), so a launch link can carry its own tag:
@@ -307,7 +324,7 @@ function ownCount(n) { renderCount(Math.max(countShown + 1, n || 0)); }
     countPace = r.perMin || 0; growCount();
   } catch {}
 })();
-$("count").addEventListener("click", (e) => { tick(); confetti(e.currentTarget); });
+$("count").addEventListener("click", (e) => { if (e.currentTarget.classList.contains("offnote")) return; tick(); confetti(e.currentTarget); });
 
 // The wordmark links home, but on this page that would reload and wipe every result. It waves instead.
 document.querySelector(".mark").addEventListener("click", (e) => {
@@ -1736,7 +1753,9 @@ function placeAds(n, c, k) {
   }
   while (adEls.length > want) { const a = adEls.pop(); adWatch.unobserve(a); a.remove(); }
   while (adEls.length < want) {
-    try { adEls.push(buildAd(adEls.length)); }
+    // The first product no card shows (a card may have changed product, see swapProduct).
+    let vi = 0; while (vi < adVariants.length && adEls.some((o) => o.vi === vi)) vi++;
+    try { adEls.push(buildAd(vi < adVariants.length ? vi : adEls.length)); }
     catch (e) { console.warn("Ad card failed", e); report("ad-failed", e); adVariants = []; break; } // no ads rather than broken ones
   }
   while (adSlots.length > at.length - adEls.length) adSlots.pop().remove();
@@ -1749,8 +1768,9 @@ function placeAds(n, c, k) {
     if (ads[k].parentNode !== g || ads[k].nextElementSibling !== next) g.insertBefore(ads[k], next);
   }
 }
-function buildAd(i) {
+function buildAd(i, artIt = null, swap = false) { // swap: replaces a card in place (swapProduct): no entrance delay
   const p = adPartner, x = adVariants[i % adVariants.length], a = document.createElement("a");
+  a.vi = i % adVariants.length;
   const ci = x.ctas?.length ? Math.min(adCta, x.ctas.length - 1) : -1, cta = ci >= 0 ? x.ctas[ci] : x.cta;
   const q = `?v=${x.v}&l=${adLabel.toLowerCase()}${ci >= 0 ? `&c=${ci}` : ""}${TEST ? "&t=1" : ""}`;
   a.className = "adcard loading"; a.href = `/go/${p.id}${q}`; a.target = "_blank"; a.rel = "sponsored noopener";
@@ -1758,7 +1778,7 @@ function buildAd(i) {
   let src = null;
   const draw = PRODUCTS[x.product];
   const cuts = finishedCuts();
-  a.artIt = cuts.length ? cuts[i % cuts.length] : null; // the cut-out it shows (changes, see nextArt); a click saves this one
+  a.artIt = artIt || (cuts.length ? cuts[i % cuts.length] : null); // the cut-out it shows (changes, see nextArt); a click saves this one
   try { src = draw && a.artIt && artOf(a.artIt); } catch (e) { report("mug-failed", e); }
   if (src) { // the visitor's own cut-out on the product, drawn here (sent nowhere until the card is clicked)
     const c = document.createElement("canvas"); c.className = "adart"; c.setAttribute("aria-hidden", "true");
@@ -1798,8 +1818,8 @@ function buildAd(i) {
   });
   // The card comes in with a shimmering placeholder where the product goes, and the product rises in once
   // drawn (never sooner than a moment after the card, one card after another).
-  const born = performance.now(), at = adsQuiet ? 0 : 450 + i * 160;
-  if (adsQuiet) a.classList.add("back"); else a.style.animationDelay = `${i * 120}ms`;
+  const born = performance.now(), at = adsQuiet || swap ? 0 : 450 + i * 160;
+  if (adsQuiet) a.classList.add("back"); else if (!swap) a.style.animationDelay = `${i * 120}ms`;
   const show = () => setTimeout(unveil, Math.max(0, born + at - performance.now()));
   const unveil = () => {
     if (!a.classList.contains("loading")) return;
@@ -1996,15 +2016,31 @@ const adWatch = new IntersectionObserver((entries) => {
 function beat() {
   beatTimer = setTimeout(() => { beatTimer = 0; nextArt(); if (onScreen()) beat(); }, BEAT);
 }
+// Each beat one card changes: its cut-out, or its product (Kevin, 2026-11-22: "Should the product also rotate, not just
+// the photo?"). One photo: the product changes. Several: they take turns. A tapped photo stays on the cards
+// (pinnedArt), and the products keep changing around it.
 function nextArt() {
   if (document.hidden || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   const done = finishedCuts();
-  if (done.length < 2 || !adEls.length || swaps >= MOTION_MS / BEAT || pinnedArt) return;
+  if (!adEls.length || swaps >= MOTION_MS / BEAT) return;
+  const canPhoto = done.length >= 2 && !pinnedArt, canProduct = adVariants.length > adEls.length;
+  if (!canPhoto && !canProduct) return;
   let a = null;
   for (let k = 0; k < adEls.length && !a; k++) { const c = adEls[(beatNext + k) % adEls.length]; if (c.onScreen && c.art) { a = c; beatNext = (beatNext + k + 1) % adEls.length; } }
   if (!a || a.matches(":hover, :focus-within")) return; // never under the pointer or keyboard focus
   swaps++;
-  swapArt(a, done[(done.indexOf(a.artIt) + 1) % done.length]);
+  if (canProduct && (!canPhoto || swaps % 2 === 0)) swapProduct(a);
+  else swapArt(a, done[(done.indexOf(a.artIt) + 1) % done.length]);
+}
+// The next product no other card shows, on a new card in this one's place, with the same cut-out.
+function swapProduct(a) {
+  const n = adVariants.length, at = adEls.indexOf(a);
+  if (at < 0) return;
+  let vi = -1;
+  for (let k = 1; k < n && vi < 0; k++) { const c = (a.vi + k) % n; if (!adEls.some((o) => o !== a && o.vi === c)) vi = c; }
+  if (vi < 0) return;
+  let b; try { b = buildAd(vi, a.artIt, true); } catch (e) { report("ad-failed", e); return; }
+  a.replaceWith(b); adWatch.unobserve(a); adEls[at] = b; b.onScreen = a.onScreen;
 }
 // A tap on a finished photo puts it on every product card (Kevin, 2026-11-22), and the cards stop taking turns.
 let pinnedArt = null;
