@@ -109,15 +109,7 @@ async function parseRequest(fields, { harden }) {
   }
 
   bool(g("semitransparency"), true, "invalid_semitransparency", "semitransparency"); // car windows only at remove.bg; nothing to do here
-  const addShadow = bool(g("add_shadow"), false);
-  const shadowType = str(g("shadow_type")).toLowerCase();
-  if (addShadow && shadowType) throw bad("multiple_shadow_params", "Multiple shadow parameters given: Please provide either the add_shadow or the shadow_type parameter.");
-  const so = str(g("shadow_opacity")).toLowerCase();
-  if (so && so !== "auto" && !(/^\d+$/.test(so) && +so <= 100)) throw bad("invalid_shadow_opacity", "Invalid shadow_opacity parameter given");
-  // add_shadow only ever made a car shadow, and only for a car; this server never detects one, so only type=car asks for it.
-  const perType = Object.keys(fields).some((k) => /^shadow_type\s*\[/.test(k) && !["", "none"].includes(str(fields[k]).toLowerCase())); // shadow_type[car]=car
-  if ((addShadow && t === "car") || (shadowType && shadowType !== "none") || perType)
-    throw bad("unsupported_parameter", "Shadows are not supported by this local server", "Leave out shadow_type (or set it to none) and add_shadow."); // ours
+  const shadow = parseShadow(fields, t);
 
   const bgs = ["bg_color", "bg_image_url", "bg_image_file"].filter((k) => present(g(k)));
   if (bgs.length > 1) throw bad("multiple_bg_sources", "Multiple background sources given: Please provide either the bg_color, the bg_image_url or the bg_image_file parameter.");
@@ -134,7 +126,46 @@ async function parseRequest(fields, { harden }) {
     bgImage = { kind: "file", blob: g("bg_image_file") };
   }
 
-  return { image, bgImage, o: { harden, roi, channels, crop, margin, scale, position, bg, format, size } };
+  return { image, bgImage, o: { harden, roi, channels, crop, margin, scale, position, bg, format, size, shadow } };
 }
 
-module.exports = { parseRequest, ApiError, parseColor };
+// Shadows: add_shadow, shadow_type and shadow_opacity, plain or per foreground type (shadow_type[product]=drop). This
+// server doesn't detect the foreground type: it is the request's type, or "other" without one (or with type=auto).
+// Every shadow type (car, 3D, drop) gets the same look, the site's soft ground shadow (lib/shadow.cjs).
+// Returns null or { kind, opacity 0..100 }.
+const SHADOWS = new Set(["car", "3d", "drop", "none", "auto"]);
+const AUTO = { car: "car", product: "drop", person: "3d", animal: "drop", transportation: "3d", graphic: "drop", other: "drop" }; // their default assignments
+const isMap = (v) => v != null && typeof v === "object" && !(v instanceof Blob) && !Array.isArray(v);
+// name[type] = value: form keys "shadow_type[car]" or "shadow_type [car]", or JSON { "shadow_type": { "car": "car" } }.
+function perType(fields, name) {
+  const m = {}, re = new RegExp(`^${name}\\s*\\[\\s*([a-z_]+)\\s*\\]$`, "i");
+  for (const k of Object.keys(fields)) { const r = re.exec(k); if (r) m[r[1].toLowerCase()] = str(fields[k]).toLowerCase(); }
+  if (isMap(fields[name])) for (const [k, v] of Object.entries(fields[name])) m[k.toLowerCase()] = str(v).toLowerCase();
+  for (const k of Object.keys(m)) if (m[k] === "") delete m[k];
+  return m;
+}
+function parseShadow(fields, t) {
+  const fg = t && t !== "auto" ? t : "other";
+  const addShadow = bool(fields.add_shadow, false);
+  const plain = isMap(fields.shadow_type) ? "" : str(fields.shadow_type).toLowerCase();
+  const types = perType(fields, "shadow_type");
+  if (addShadow && (plain || Object.keys(types).length)) throw bad("multiple_shadow_params", "Multiple shadow parameters given: Please provide either the add_shadow or the shadow_type parameter.");
+  for (const v of [plain, ...Object.values(types)]) if (v && !SHADOWS.has(v)) throw bad("invalid_shadow_type", "Invalid shadow_type parameter given"); // ours
+  const opac = (v) => {
+    if (v && v !== "auto" && !(/^\d+$/.test(v) && +v <= 100)) throw bad("invalid_shadow_opacity", "Invalid shadow_opacity parameter given");
+    return v && v !== "auto" ? +v : null;
+  };
+  const plainOp = opac(isMap(fields.shadow_opacity) ? "" : str(fields.shadow_opacity).toLowerCase());
+  const ops = perType(fields, "shadow_opacity");
+  for (const k of Object.keys(ops)) ops[k] = opac(ops[k]);
+
+  let kind = null;
+  if (addShadow) kind = fg === "car" ? "car" : null; // add_shadow means shadow_type[car]=car: a shadow only for a car
+  else if (Object.keys(types).length) kind = types[fg] === "auto" ? AUTO[fg] : types[fg] || null; // unmentioned types: none
+  else if (plain) kind = plain === "auto" ? AUTO[fg] : plain;
+  if (!kind || kind === "none") return null;
+  const opacity = ops[fg] ?? plainOp ?? (fg === "car" ? 90 : 50); // their defaults: car 90, everything else 50
+  return { kind, opacity };
+}
+
+module.exports = { parseRequest, parseShadow, ApiError, parseColor };

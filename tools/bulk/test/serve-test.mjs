@@ -83,6 +83,39 @@ check("Accept: application/json gives result_b64 and foreground_*", r.json?.data
 r = await post({ image_file: jpg, size: "preview", type: "person", type_level: "2", semitransparency: "false", add_shadow: "false", shadow_type: "none", shadow_opacity: "auto" });
 check("no-op values are accepted", r.status === 200, r.code);
 
+// Shadows: the site's soft ground shadow under the subject (needs a photo whose subject is not cut by its bottom edge).
+{
+  const crop = { image_file: jpg, size: "auto", crop: "true" };
+  const plain = await post(crop), pd = await dims(plain.buf);
+  const fgB = (x) => ({ l: +x.h.get("x-foreground-left"), t: +x.h.get("x-foreground-top"), w: +x.h.get("x-foreground-width"), h: +x.h.get("x-foreground-height") });
+  const px = async (buf, x, y) => { const { data, info } = await sharp(buf).ensureAlpha().raw().toBuffer({ resolveWithObject: true }); const j = (y * info.width + x) * 4; return Array.from(data.subarray(j, j + 4)); };
+  r = await post({ ...crop, shadow_type: "drop" }); d = await dims(r.buf);
+  const f = fgB(r), below = r.status === 200 ? await px(r.buf, Math.round(f.l + f.w / 2), f.t + f.h + 1) : [];
+  check("shadow_type=drop with crop: same width, taller, PNG", r.status === 200 && r.h.get("content-type") === "image/png" && d.w === pd.w && d.h > pd.h, `${r.status} ${r.code || ""} ${pd.w}x${pd.h} -> ${d.w}x${d.h}`);
+  check("X-Foreground-* is still the subject", f.w === fgB(plain).w && f.h === fgB(plain).h);
+  check("below the subject: soft black", below[0] < 20 && below[3] > 10 && below[3] < 255, below.join());
+  r = await post({ ...crop, shadow_type: "drop", shadow_opacity: "100" });
+  const dark = r.status === 200 ? await px(r.buf, Math.round(f.l + f.w / 2), f.t + f.h + 1) : [];
+  check("shadow_opacity=100 is darker than 50", dark[3] > below[3] * 1.5, `${dark[3]} vs ${below[3]}`);
+  r = await post({ ...crop, shadow_type: "drop", shadow_opacity: "0" });
+  check("shadow_opacity=0: no shadow, same size as none", r.status === 200 && (await dims(r.buf)).h === pd.h);
+  r = await post({ ...crop, shadow_type: "none" });
+  check("shadow_type=none: the same bytes as no shadow", r.status === 200 && Buffer.compare(r.buf, plain.buf) === 0);
+  r = await post({ ...crop, add_shadow: "true" });
+  check("add_shadow without type=car: no shadow (a car shadow is for cars)", r.status === 200 && Buffer.compare(r.buf, plain.buf) === 0);
+  r = await post({ ...crop, add_shadow: "true", type: "car" });
+  check("add_shadow with type=car: a shadow", r.status === 200 && (await dims(r.buf)).h > pd.h);
+  r = await post({ ...crop, "shadow_type[product]": "drop", type: "product" });
+  check("shadow_type[product]=drop with type=product: a shadow", r.status === 200 && (await dims(r.buf)).h > pd.h, `${r.status} ${r.code || ""}`);
+  r = await post({ ...crop, "shadow_type[product]": "drop" });
+  check("shadow_type[product]=drop without a type: none (other is unmentioned)", r.status === 200 && Buffer.compare(r.buf, plain.buf) === 0);
+  r = await post({ ...crop, shadow_type: "drop", bg_color: "ffffff" });
+  const g = r.status === 200 ? await px(r.buf, Math.round(f.l + f.w / 2), f.t + f.h + 1) : [], corner = r.status === 200 ? await px(r.buf, 0, 0) : [];
+  check("bg_color with a shadow: JPG, grey below the subject, white elsewhere", r.h.get("content-type") === "image/jpeg" && g[0] < 245 && g[0] > 100 && corner[0] > 250, `${g.join()} / ${corner.join()}`);
+  r = await post({ image_file: jpg, size: "auto", shadow_type: "drop" }); d = await dims(r.buf);
+  check("shadow without crop: the photo's own size", r.status === 200 && d.w === meta.width && d.h === meta.height, `${d.w}x${d.h}`);
+}
+
 // Errors: status 400 and remove.bg's codes.
 const errs = [
   ["missing_source", {}],
@@ -102,7 +135,7 @@ const errs = [
   ["invalid_semitransparency", { image_file: jpg, semitransparency: "maybe" }],
   ["multiple_shadow_params", { image_file: jpg, add_shadow: "true", shadow_type: "drop" }],
   ["invalid_shadow_opacity", { image_file: jpg, shadow_opacity: "300" }],
-  ["unsupported_parameter", { image_file: jpg, shadow_type: "drop" }],
+  ["invalid_shadow_type", { image_file: jpg, shadow_type: "long" }],
   ["invalid_file_type", { image_file: Buffer.from("this is not an image at all") }],
   ["unknown_foreground", { image_file: blank }],
 ];

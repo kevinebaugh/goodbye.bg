@@ -139,6 +139,7 @@ async function job({ src, dst, tmp, o }) {
 // ---- serve: the remove.bg API's image work (lib/api.cjs checks the parameters first) ----
 
 const { ApiError } = require("./api.cjs");
+const S = require("./shadow.cjs");
 
 // The subject's box at full size: every pixel at least 8 of 255 opaque (fainter is upscaling ringing).
 function fgBox(data, W, H) {
@@ -175,13 +176,15 @@ async function apiJob({ img, bgImg, o }) {
   }
   const bgSolid = o.bg && o.bg[3] === 255 && o.channels !== "alpha" ? o.bg.slice(0, 3) : null;
   const bg4 = o.bg && !bgSolid && o.channels !== "alpha" ? o.bg : null;
-  const { box } = await cutout(data, W, H, { harden: o.harden, bg: bgSolid, bg4, roi });
+  // A shadow goes between the cut-out and its background, so with one the colour is filled in after the layout.
+  const shadow = o.shadow && o.shadow.opacity > 0 ? o.shadow : null;
+  const { box } = await cutout(data, W, H, { harden: o.harden, bg: shadow ? null : bgSolid, bg4: shadow ? null : bg4, roi });
   if (!box) throw new ApiError(400, "unknown_foreground", "Could not identify foreground in image. For details and recommendations see https://www.remove.bg/supported-images.");
 
   // The subject's box comes from the alpha before any background fill. With a fill, the 1024 mask's box is used.
-  const sub = o.bg ? (() => { const l = Math.floor(box.x0 * W), t = Math.floor(box.y0 * H); return { left: l, top: t, width: Math.max(1, Math.min(W, Math.ceil(box.x1 * W)) - l), height: Math.max(1, Math.min(H, Math.ceil(box.y1 * H)) - t) }; })() : fgBox(data, W, H) || { left: 0, top: 0, width: W, height: H };
+  const sub = o.bg && !shadow ? (() => { const l = Math.floor(box.x0 * W), t = Math.floor(box.y0 * H); return { left: l, top: t, width: Math.max(1, Math.min(W, Math.ceil(box.x1 * W)) - l), height: Math.max(1, Math.min(H, Math.ceil(box.y1 * H)) - t) }; })() : fgBox(data, W, H) || { left: 0, top: 0, width: W, height: H };
   const fillRGBA = bgSolid ? bgSolid.concat(255) : bg4 || [0, 0, 0, 0];
-  const fill = { r: fillRGBA[0], g: fillRGBA[1], b: fillRGBA[2], alpha: fillRGBA[3] / 255 };
+  const fill = shadow ? { r: 0, g: 0, b: 0, alpha: 0 } : { r: fillRGBA[0], g: fillRGBA[1], b: fillRGBA[2], alpha: fillRGBA[3] / 255 };
   const raw4 = (w, h) => ({ raw: { width: w, height: h, channels: 4 } });
 
   // Layout: crop (tight, plus crop_margin), or scale/position on the original canvas, or the photo as it is.
@@ -207,6 +210,23 @@ async function apiJob({ img, bgImg, o }) {
     fg = { left: l, top: t, width: w, height: h };
   }
 
+  // The ground shadow under the subject (lib/shadow.cjs), then the colour under both. With crop the canvas grows at the
+  // bottom to hold the shadow; on the photo's own canvas it stops at the edge, as on the site. None under a subject cut
+  // off by the photo's bottom edge.
+  if (shadow) {
+    if (!S.cutAtBottom(box)) {
+      const e = S.ellipse(fg);
+      if (o.crop && e.bottom > outH) {
+        const grow = Math.ceil(e.bottom) - outH;
+        out = await sharp(out, raw4(outW, outH)).extend({ bottom: grow, background: fill }).raw().toBuffer();
+        outH += grow;
+      }
+      S.drawUnder(out, outW, outH, e, shadow.opacity);
+    }
+    if (bgSolid) S.fillUnder(out, bgSolid.concat(255));
+    else if (bg4) S.fillUnder(out, bg4);
+  }
+
   // Background image: cover-resized and centred under the cut-out.
   if (bgImg && o.channels !== "alpha") {
     let under;
@@ -227,7 +247,7 @@ async function apiJob({ img, bgImg, o }) {
   if (format === "png" && (o.size === "full" || o.size === "50mp")) cap = 10; // remove.bg: PNG up to 10 megapixels
   let img2 = sharp(out, raw4(outW, outH));
   if (outW * outH > cap * 1e6) {
-    const k = Math.sqrt((cap * 1e6) / (outW * outH)), nw = Math.max(1, Math.round(outW * k)), nh = Math.max(1, Math.round(outH * k));
+    const k = Math.sqrt((cap * 1e6) / (outW * outH)), nw = Math.max(1, Math.floor(outW * k)), nh = Math.max(1, Math.floor(outH * k)); // down: never over the cap
     img2 = sharp(await img2.resize(nw, nh, { fit: "fill", kernel: "lanczos3" }).raw().toBuffer(), raw4(nw, nh));
     fg = { left: Math.round(fg.left * (nw / outW)), top: Math.round(fg.top * (nh / outH)), width: Math.round(fg.width * (nw / outW)), height: Math.round(fg.height * (nh / outH)) };
     outW = nw; outH = nh;
