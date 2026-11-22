@@ -620,18 +620,19 @@ function morph(src, r, grow) {
   return out;
 }
 
-// Box blur at RES x RES, separable running sums, edges clamped.
-function boxBlur(src, r) {
-  const n = RES * RES, t = new Float32Array(n), out = new Float32Array(n), k = 1 / (2 * r + 1), c = (v) => Math.min(RES - 1, Math.max(0, v));
-  for (let y = 0; y < RES; y++) {
-    const o = y * RES; let s = 0;
-    for (let x = -r; x <= r; x++) s += src[o + c(x)];
-    for (let x = 0; x < RES; x++) { t[o + x] = s * k; s += src[o + c(x + r + 1)] - src[o + c(x - r)]; }
+// Box blur of a w x h map (RES x RES unless given), separable running sums, edges clamped.
+function boxBlur(src, r, w = RES, h = RES) {
+  const n = w * h, t = new Float32Array(n), out = new Float32Array(n), k = 1 / (2 * r + 1);
+  const cx = (v) => Math.min(w - 1, Math.max(0, v)), cy = (v) => Math.min(h - 1, Math.max(0, v));
+  for (let y = 0; y < h; y++) {
+    const o = y * w; let s = 0;
+    for (let x = -r; x <= r; x++) s += src[o + cx(x)];
+    for (let x = 0; x < w; x++) { t[o + x] = s * k; s += src[o + cx(x + r + 1)] - src[o + cx(x - r)]; }
   }
-  for (let x = 0; x < RES; x++) {
+  for (let x = 0; x < w; x++) {
     let s = 0;
-    for (let y = -r; y <= r; y++) s += t[c(y) * RES + x];
-    for (let y = 0; y < RES; y++) { out[y * RES + x] = s * k; s += t[c(y + r + 1) * RES + x] - t[c(y - r) * RES + x]; }
+    for (let y = -r; y <= r; y++) s += t[cy(y) * w + x];
+    for (let y = 0; y < h; y++) { out[y * w + x] = s * k; s += t[cy(y + r + 1) * w + x] - t[cy(y - r) * w + x]; }
   }
   return out;
 }
@@ -646,29 +647,37 @@ function refineEdge(px, img) {
   let soft = new Uint8Array(n);
   for (let i = 0; i < n; i++) soft[i] = d[i * 4 + 3] > 0 && d[i * 4 + 3] < 255 ? 1 : 0;
   soft = morph(morph(soft, 1, false), 1, true); // only wide soft zones
-  if (!soft.includes(1)) return 0;
+  let x0 = RES, y0 = RES, x1 = -1, y1 = -1;
+  for (let i = 0; i < n; i++) if (soft[i]) { const x = i % RES, y = (i / RES) | 0; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  if (x1 < 0) return 0;
   const band = morph(soft, r, true), wide = morph(soft, 2 * r, true);
-  const prod = (a, b) => { const o = new Float32Array(n); for (let i = 0; i < n; i++) o[i] = a[i] * b[i]; return o; };
-  const ch = [0, 1, 2].map((c) => { const a = new Float32Array(n); for (let i = 0; i < n; i++) a[i] = px[i * 4 + c] / 255; return a; });
-  const p = new Float32Array(n); for (let i = 0; i < n; i++) p[i] = d[i * 4 + 3] / 255;
-  const m = ch.map((a) => boxBlur(a, r)), mp = boxBlur(p, r), mIp = ch.map((a) => boxBlur(prod(a, p), r));
-  const [rr, rg, rb, gg, gb, bb] = [[0, 0], [0, 1], [0, 2], [1, 1], [1, 2], [2, 2]].map(([a, b]) => boxBlur(prod(ch[a], ch[b]), r));
-  const A = [new Float32Array(n), new Float32Array(n), new Float32Array(n)], B = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    if (!wide[i]) { B[i] = p[i]; continue; } // far from the edge: a = 0, b = the mask
+  // Work on the soft zones' box plus 3r: every window the result needs lies inside it, so it equals the whole-frame filter.
+  x0 = Math.max(0, x0 - 3 * r); y0 = Math.max(0, y0 - 3 * r); x1 = Math.min(RES - 1, x1 + 3 * r); y1 = Math.min(RES - 1, y1 + 3 * r);
+  const w = x1 - x0 + 1, h = y1 - y0 + 1, cn = w * h, bl = (a) => boxBlur(a, r, w, h), idx = new Int32Array(cn);
+  for (let y = 0, j = 0; y < h; y++) for (let x = 0; x < w; x++) idx[j++] = (y0 + y) * RES + x0 + x;
+  const at = (j) => idx[j];
+  const prod = (a, b) => { const o = new Float32Array(cn); for (let j = 0; j < cn; j++) o[j] = a[j] * b[j]; return o; };
+  const ch = [0, 1, 2].map((c) => { const a = new Float32Array(cn); for (let j = 0; j < cn; j++) a[j] = px[at(j) * 4 + c] / 255; return a; });
+  const p = new Float32Array(cn); for (let j = 0; j < cn; j++) p[j] = d[at(j) * 4 + 3] / 255;
+  const m = ch.map(bl), mp = bl(p), mIp = ch.map((a) => bl(prod(a, p)));
+  const [rr, rg, rb, gg, gb, bb] = [[0, 0], [0, 1], [0, 2], [1, 1], [1, 2], [2, 2]].map(([a, b]) => bl(prod(ch[a], ch[b])));
+  const A = [new Float32Array(cn), new Float32Array(cn), new Float32Array(cn)], B = new Float32Array(cn);
+  for (let j = 0; j < cn; j++) {
+    if (!wide[at(j)]) { B[j] = p[j]; continue; } // far from the edge: a = 0, b = the mask
     // Per window: a = (cov(I) + eps)^-1 cov(I, p), b = mean(p) - a . mean(I); the 3x3 inverse by cofactors.
-    const m0 = m[0][i], m1 = m[1][i], m2 = m[2][i];
-    const a = rr[i] - m0 * m0 + eps, b = rg[i] - m0 * m1, c = rb[i] - m0 * m2, e = gg[i] - m1 * m1 + eps, f = gb[i] - m1 * m2, g = bb[i] - m2 * m2 + eps;
-    const c0 = mIp[0][i] - m0 * mp[i], c1 = mIp[1][i] - m1 * mp[i], c2 = mIp[2][i] - m2 * mp[i];
+    const m0 = m[0][j], m1 = m[1][j], m2 = m[2][j];
+    const a = rr[j] - m0 * m0 + eps, b = rg[j] - m0 * m1, c = rb[j] - m0 * m2, e = gg[j] - m1 * m1 + eps, f = gb[j] - m1 * m2, g = bb[j] - m2 * m2 + eps;
+    const c0 = mIp[0][j] - m0 * mp[j], c1 = mIp[1][j] - m1 * mp[j], c2 = mIp[2][j] - m2 * mp[j];
     const i00 = e * g - f * f, i01 = c * f - b * g, i02 = b * f - c * e, i11 = a * g - c * c, i12 = b * c - a * f, i22 = a * e - b * b, det = a * i00 + b * i01 + c * i02;
     const a0 = (i00 * c0 + i01 * c1 + i02 * c2) / det, a1 = (i01 * c0 + i11 * c1 + i12 * c2) / det, a2 = (i02 * c0 + i12 * c1 + i22 * c2) / det;
-    A[0][i] = a0; A[1][i] = a1; A[2][i] = a2; B[i] = mp[i] - a0 * m0 - a1 * m1 - a2 * m2;
+    A[0][j] = a0; A[1][j] = a1; A[2][j] = a2; B[j] = mp[j] - a0 * m0 - a1 * m1 - a2 * m2;
   }
-  const mA = A.map((x) => boxBlur(x, r)), mB = boxBlur(B, r);
+  const mA = A.map(bl), mB = bl(B);
   let changed = 0;
-  for (let i = 0; i < n; i++) {
+  for (let j = 0; j < cn; j++) {
+    const i = at(j);
     if (!band[i]) continue;
-    const v = Math.round(Math.max(0, Math.min(1, mA[0][i] * ch[0][i] + mA[1][i] * ch[1][i] + mA[2][i] * ch[2][i] + mB[i])) * 255);
+    const v = Math.round(Math.max(0, Math.min(1, mA[0][j] * ch[0][j] + mA[1][j] * ch[1][j] + mA[2][j] * ch[2][j] + mB[j])) * 255);
     if (v !== d[i * 4 + 3]) { d[i * 4 + 3] = v; changed++; }
   }
   return changed;
