@@ -49,6 +49,10 @@ Extra usage capped at $0. Stop starting new work at 85% weekly; never pass 90%.
 | 05:47 | Quality on product photos and high-res phone-style photos (all 4 pipelines) | background agent | 43% → 44% | 871c1ac docs/quality-products.md, 800 photos. Mean IoU, phone-size 8 MP+ / thin products / seller shots: BiRefNet 0.971 / 0.926 / 0.971; ISNet 0.851 / 0.933 / 0.965; BiRefNet 640 0.950 / 0.865 (worse on 172 of 200) / 0.947; ?pp=1 same as BiRefNet (no regressions). All keep mirror reflections. Phone-size and thin sets may overlap BiRefNet's training data. |
 | 05:55 | Local web window for the bulk tool (branch bulk-cli) | background agent | 44% → 45% | bulk-cli c8aeb71, 49daefd: `goodbye-bg` with no arguments opens a local page (drop folder, background, format, size, margin, progress with thumbnails). Same speed and byte-identical output as the CLI; works in the 169 MB binary; 32 Playwright checks. Verdict: a browser window covers non-terminal users; a native app (Dock icon, notarized .dmg) only once copies sell. |
 | 05:58 | Draft PRs for the preview branches | coordinator | 44% | kevinebaugh/goodbye.bg#2 mask editing, #3 phone model, #4 hair/fur filter (drafts; Kevin merges). |
+| 06:40 | Morning summary published: https://claude.ai/artifact/LxyN5z6X8hgYkBxwqjp74P | coordinator | 44% | Work continues to use the weekly budget. |
+| 06:42 | PR #3: 👎 on a CPU result retries with ISNet (fixes thin products) | background agent | 44% → | started |
+| 06:42 | PR #4: time ?pp=1 under phone-like throttling, maybe default on | background agent | 44% → | started |
+| 06:42 | Keep test traffic out of ad/vote data; dark theme-color; small leftovers | background agent | 44% → | started |
 
 Check-in 23:46: weekly 28%, 5-hour window 6% (reset 04:30 UTC). About 4 weekly points in the first 45 min.
 
