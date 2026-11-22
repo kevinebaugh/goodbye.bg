@@ -163,7 +163,11 @@ Tested: headless Chrome (reload in a restarted browser, Back still from bfcache)
   cards (1.5 s failsafe). Restored cards don't pop. A stale count falls back to the landing.
 - Remove can be undone for 5 s (Kevin, 2026-11-21): a pill at the bottom, "Removed." + Undo, with a ring on the button that
   runs down (hover or focus pauses it; Cmd/Ctrl+Z works). The stored copy is deleted at once and rewritten on Undo; memory
-  is freed when the time is up. One at a time: a second removal settles the first. Quips are the one place
+  is freed when the time is up. One at a time: a second removal settles the first.
+- Messages sit next to what they're about (Kevin, 2026-11-21), one look everywhere: `tell(msg, button)` in app.js shows one
+  bubble pointing at the button (adding photos: Choose photos/Paste; a failed save: that Download; a failed zip: Download all),
+  below it or above when there's no room. Trouble with one photo stays on its card. No bottom toast; zip progress is on the
+  Download all button. Undo is the only thing at the bottom. Quips are the one place
   for playful text; everything else is plain and only what people need.
 - Results are cropped to the subject by default (crop icon switches to the whole frame). 👎 retries zoomed in (merged into the first result outside the zoomed part, feathered where they meet; mergeRetry)
   on the subject, a second 👎 restores the first result. One vote per result: the chosen emoji stays lit and the

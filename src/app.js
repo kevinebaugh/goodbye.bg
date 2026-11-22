@@ -71,11 +71,23 @@ document.addEventListener("visibilitychange", freshen);
 let running = false, uid = 0, lastMs = 0;
 
 /* ---------- small helpers ---------- */
-function toast(msg, ms = 3500) {
-  const t = $("toast"); t.textContent = msg; t.hidden = false;
-  clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), ms);
+/* Messages appear next to what they're about (Kevin, 2026-11-21): one bubble that points at the button it concerns:
+   adding photos at Choose photos and Paste, a failed save at that Download, a failed zip at Download all. Trouble
+   with one photo is said on its card instead (see fail). Below the button, or above it when there's no room. */
+function tell(msg, at = $("pick").parentElement, ms = 4500) {
+  const t = $("tell"), r = at.getBoundingClientRect(), gap = 10;
+  t.textContent = msg; t.hidden = false; t.classList.remove("above");
+  const w = t.offsetWidth, h = t.offsetHeight, mid = r.left + r.width / 2;
+  const above = r.bottom + gap + h > innerHeight && r.top - gap - h > 0;
+  const x = Math.min(Math.max(8, mid - w / 2), innerWidth - w - 8);
+  t.style.left = `${x + scrollX}px`;
+  t.style.top = `${(above ? r.top - gap - h : r.bottom + gap) + scrollY}px`;
+  t.style.setProperty("--cx", `${mid - x}px`); // the pointer stays on the button even when the bubble is pushed in from an edge
+  t.classList.toggle("above", above);
+  t.classList.remove("in"); void t.offsetWidth; t.classList.add("in");
+  clearTimeout(t.timer); t.timer = setTimeout(() => (t.hidden = true), ms);
 }
-function hideToast() { clearTimeout(toast.t); $("toast").hidden = true; }
+addEventListener("resize", () => ($("tell").hidden = true)); // its place was measured for the old layout
 // Setup progress goes to the console only. People need to know when something fails, not how it is going.
 let lastStatus = "";
 function status(msg) { if (msg !== lastStatus) console.info(`goodbye.bg: ${(lastStatus = msg)}`); }
@@ -700,12 +712,12 @@ async function addSources(list, origin = "") {
     const out = [];
     for (const src of list) {
       if (!isZip(src)) { out.push(src); continue; }
-      try { out.push(...await unzipImages(src)); } catch (e) { console.warn(e); toast("Could not open that ZIP."); }
+      try { out.push(...await unzipImages(src)); } catch (e) { console.warn(e); tell("Could not open that ZIP."); }
     }
     list = out;
   }
   list = list.slice(0, MAX_BATCH);
-  if (!list.length) { toast("No image found there. Try a photo file, a copied image, or an image link."); return; }
+  if (!list.length) { tell("No image found there. Try a photo file, a copied image, or an image link."); return; }
   await restoring; // kept photos go in first, so this batch lands on top of them
   show();
   const top = keyBase();
@@ -895,7 +907,7 @@ function makeCard(it) {
     // A big photo takes a few seconds to build at full size: the button shimmers meanwhile (not for a quick one).
     const slow = setTimeout(() => dl.setAttribute("aria-busy", "true"), 150);
     try { const blob = await png(it); clearTimeout(slow); dl.removeAttribute("aria-busy"); await deliver([{ name: outName(it), blob }]); }
-    catch (e) { console.error(e); report("save-failed", e, it); toast("Could not save this image. Try again."); }
+    catch (e) { console.error(e); report("save-failed", e, it); tell("Could not save this image. Try again.", dl); }
     finally { clearTimeout(slow); dl.removeAttribute("aria-busy"); it.saving = false; }
   });
 
@@ -1650,7 +1662,7 @@ function drawMug(c, src) {
 function sync() {
   const done = items.filter((i) => i.mask).length;
   $("all").style.visibility = done < 2 ? "hidden" : "";
-  $("all").textContent = `Download all (${done})`;
+  if (!$("all").hasAttribute("aria-busy")) $("all").textContent = `Download all (${done})`; // not over "Preparing 3 of 8…"
   $("tools").hidden = items.length < 2; // reserve the row early so the cards don't jump
   if (!items.length) document.body.classList.remove("has-work");
   try { localStorage.setItem("gb-kept", String(items.length)); } catch {} // early.js: start in the photos layout next visit
@@ -1683,7 +1695,7 @@ $("all").addEventListener("click", async () => {
   if (zipping) return; // a second tap while it works would build it all again
   zipping = true; $("all").setAttribute("aria-busy", "true");
   try { await saveAll(); }
-  catch (e) { console.error(e); report("zip-failed", e); toast("Could not save them all. Try again, or save them one by one."); }
+  catch (e) { console.error(e); report("zip-failed", e); tell("Could not save them all. Try again, or save them one by one.", $("all")); }
   finally { zipping = false; $("all").removeAttribute("aria-busy"); }
 });
 async function saveAll() {
@@ -1699,7 +1711,7 @@ async function saveAll() {
     used.clear();
   }
   for (const [n, it] of done.entries()) {
-    toast(`Preparing ${n + 1} of ${done.length}…`, 60_000);
+    $("all").textContent = `Preparing ${n + 1} of ${done.length}…`; // on the button itself (sync puts its label back)
     let name = outName(it);
     for (let k = 2; used.has(name); k++) name = `${it.name}-goodbye-bg-${k}.${ext(it)}`;
     used.add(name);
@@ -1707,7 +1719,7 @@ async function saveAll() {
     // built fresh and not kept (memory).
     files[name] = [new Uint8Array(await (await (it.anim || it.png ? png(it) : fullBlob(it))).arrayBuffer()), { level: 0 }];
   }
-  hideToast();
+  sync();
   save(`goodbye-bg-${done.length}-images.zip`, new Blob([zipSync(files)], { type: "application/zip" }));
 }
 
@@ -1902,7 +1914,7 @@ else {
         out.push(...linksFrom(html, text));
       }
       addSources(out);
-    } catch { toast("Paste was blocked. Use ⌘/Ctrl + V, or allow clipboard access."); }
+    } catch { tell("Paste was blocked. Use ⌘/Ctrl + V, or allow clipboard access.", $("paste")); }
   });
 }
 
@@ -1937,7 +1949,7 @@ if (params.has("share")) {
         await cache.delete(req);
       }
       addSources(out);
-    } catch { toast("Could not read the shared image."); }
+    } catch { tell("Could not read the shared image."); }
   })();
 }
 if (params.has("url") || params.has("share")) history.replaceState(null, "", location.pathname);
@@ -1953,4 +1965,4 @@ if (DEBUG) window.goodbye = { items, png, frame, PRODUCTS, artSource, mugArt }; 
 if (ADS) { $("ad").querySelector("iframe").src = AD_SRC; $("ad").hidden = false; }
 
 // Start loading the model right away so the first photo is fast.
-loadModel().catch((e) => { console.error(e); toast("Could not load. Check your connection and reload.", 8000); });
+loadModel().catch((e) => { console.error(e); tell("Could not load. Check your connection and reload.", $("pick").parentElement, 10_000); });

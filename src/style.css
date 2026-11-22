@@ -232,7 +232,18 @@ body:not(.has-work) .foot { margin: 56px auto auto; padding-bottom: max(24px, 8v
 .count { border: 0; background: none; padding: 0 6px; font: inherit; line-height: inherit; color: inherit; cursor: pointer; font-variant-numeric: tabular-nums;
   visibility: hidden; opacity: 0; transition: opacity .4s; }
 .count.on { visibility: visible; opacity: 1; }
-.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 12px; font-size: 15px; font-weight: 600; max-width: 90vw; z-index: 30; animation: pop .25s cubic-bezier(.2,1.4,.4,1); }
+/* The one message bubble (see tell in app.js): placed next to the button it's about, pointing at it. Over the page,
+   so nothing moves when it comes and goes. */
+.tell { position: absolute; z-index: 30; width: max-content; max-width: min(calc(100vw - 16px), 420px);
+  background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 12px; font-size: 15px; font-weight: 600; line-height: 1.35;
+  text-align: center; box-shadow: 0 10px 30px -12px rgb(0 0 0 / .45); }
+.tell::before { content: ""; position: absolute; top: -5px; left: var(--cx, 50%); width: 12px; height: 12px; margin-left: -6px; background: inherit;
+  border-radius: 2px; transform: rotate(45deg); }
+.tell.above::before { top: auto; bottom: -5px; }
+.tell.in { animation: tellIn .25s cubic-bezier(.2,1.4,.4,1); }
+.tell.above.in { animation-name: tellUp; }
+@keyframes tellIn { from { opacity: 0; transform: translateY(-6px); } }
+@keyframes tellUp { from { opacity: 0; transform: translateY(6px); } }
 /* Undo after Remove: a quiet pill; the ring on the button runs down the seconds left (hover or focus pauses it). */
 .undo { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 31; display: flex; align-items: center; gap: var(--s3);
   padding: 6px 6px 6px 16px; border-radius: 999px; background: var(--ink); color: var(--paper); font-size: 15px; font-weight: 600;
