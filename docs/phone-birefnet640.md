@@ -5,6 +5,90 @@
 What the branch changes: the CPU engine (every iPhone and iPad, and computers without a usable GPU) runs **BiRefNet lite
 at 640x640** instead of ISNet. `?model=isnet` brings ISNet back on the same device. The GPU engine is unchanged
 (BiRefNet 1024 on computers, ISNet on Android). Background and earlier numbers: `docs/platforms-and-phone-model.md`.
+**A 👎 on a 640 result runs ISNet 1024 on the whole photo** (2026-11-22, below), so the photos where ISNet is better
+(thin products) are one tap away.
+
+## 👎 retries with ISNet (2026-11-22, morning)
+
+`docs/quality-products.md` (on main) found 640 far better than ISNet on phone photos (IoU 0.950 against 0.851 at 8 MP and
+up) but worse on thin products (DIS5K: 0.865 against 0.933, worse on 172 of 200). Now a 👎 on a `cpu-birefnet640` result
+runs ISNet 1024 instead.
+
+What the 👎 does:
+- **Whole photo, not zoomed.** The zoomed retry crops to the 640 mask's box, and that box misses the legs and cables 640 lost.
+  On the 198 DIS photos where ISNet beats 640, the zoomed ISNet retry (merged as `mergeRetry` does) scored 0.817, the
+  whole-photo one 0.920. Whole-photo also wins on every other set (seller shots 0.957 against 0.937, UHRSD 0.962 against
+  0.958). It goes through `mergeRetry` with the full frame, so the second 👎 still puts the 640 result back.
+- **Also when the subject fills the frame.** Before, a 👎 there was a vote only (half the DIS photos). Now it always says
+  "Bad result, try again" on a 640 result.
+- **Everything else is unchanged.** The zoomed retry stays for the GPU engines and for `?model=isnet`, and a GIF's 👎 is
+  still a vote only.
+- **Votes.** The retry's vote says engine `cpu` (ISNet) with `retry: true`. The 👎 itself says `cpu-birefnet640`.
+
+One engine at a time (`loadModel(want)` in app.js):
+- The page asks for a model per photo: `""` is the engine's own model, `"isnet"` the retry's.
+- A different model waits until the engine's jobs are done. Then the 640 worker is terminated and an ISNet worker
+  starts (`engine-switch`, then `engine-start` with `want: isnet`).
+- On iPhones the stop sets the same 3 s gap as the idle shutdown, so two engines never overlap.
+- The worker is replaced, not swapped in place, because a wasm heap never shrinks. Terminating the worker is the path
+  main's memory work measured.
+- **A 👎 during a batch waits for the batch to finish.** Otherwise the engine would swap back and forth. On iPhones the
+  idle shutdown then frees 640, and ISNet starts after the gap.
+- **The next new photo runs on 640 again.** On iPhones ISNet goes at the idle shutdown. On computers using the CPU
+  fallback, the next photo switches back to 640.
+- **Cost:** the first 👎 downloads ISNet (88 MB) once, and the service worker then caches it. Offline before that, the
+  retry fails quietly and the 640 result stays.
+
+### What it scores (best case: a 👎 on every 640 result that ISNet beats)
+
+`scripts/quality/retry-isnet.cjs` and the scores in `~/goodbye-bg-quality/products/out/`. "640, then ISNet" takes, per photo,
+ISNet's whole-photo result where it is better, else the 640 one. This is what someone gets who taps 👎 exactly when it
+helps and keeps the retry. IoU, then good / usable / bad / empty:
+
+| Set | n | ISNet | BiRefNet 640 | **640, then ISNet on 👎** | 👎 would help on | vs ISNet better / worse |
+|---|---|---|---|---|---|---|
+| **Products, DIS5K (thin parts)** | 200 | 0.933 (91/95/14/0) | 0.865 (30/109/61/0) | **0.934 (91/95/14/0)** | 172 | 1 / 0 |
+| Seller shots | 200 | 0.936 (152/22/26/0) | 0.901 (105/59/36/0) | **0.944 (160/19/21/0)** | 97 | 19 / 0 |
+| 8 MP or more (UHRSD + HRSOD) | 224 | 0.851 (99/66/56/3) | 0.950 (160/53/10/1) | **0.955 (166/50/7/1)** | 16 | 104 / 0 |
+| See-through (Trans10K) | 100 | 0.604 | 0.674 | **0.697** | 18 | 47 / 0 |
+
+("👎 would help on" counts photos where ISNet is more than 0.02 IoU better than 640; "vs ISNet" compares the combined
+result with ISNet alone, also at 0.02.)
+
+- **With the 👎, the 640 branch is never worse than today's ISNet on any set**, and better on phone photos, see-through
+  things and seller shots. Thin products end level with ISNet (0.934 vs 0.933), up from 0.865.
+- That is the best case. Without a 👎, a thin product stays at 640's 0.865, and people only tap 👎 on a result that looks
+  wrong. The thin-product failures are visible (a missing chair leg, a broken cable), though, which is when people tap.
+- If someone keeps a retry that is worse (they tapped 👎 on a 640 result ISNet doesn't beat), a second 👎 brings the
+  640 result back.
+
+### Swap time and memory (headless Chrome 157, iPhone UA and touch, `?engine=cpu&threads=2`, M5 Pro, load average 7 to 9)
+
+The same iPhone path as below: 5 photos, the idle shutdown, a 👎 on the first card `gap` after it, then the 18.75 MP
+photo. Two runs each. "Cold" means ISNet was not yet in the browser cache (it comes from localhost here, so it shows no
+download time: on a phone add the 88 MB download to the first 👎). "Warm" means it was fetched before the batch. The
+warm runs' batch peaks include that fetched copy, which the page still held. Largest renderer RSS, MB:
+
+| 👎 | 👎 to new result | of which | Peak during the 👎 | Peak, whole run |
+|---|---|---|---|---|
+| right at the shutdown (gap 0), cold | 7.2, 7.0 s | wait 3.0 s, ISNet session 0.3 to 0.4 s, run 3.5 s | 1848, 1869 | 1959, 2025 |
+| right at the shutdown, warm | 7.8, 7.6 s | the same | 1872, 1940 | 1986, 2020 |
+| after the shutdown (gap 4 s), cold | 4.6, 5.3 s | session 0.3 s, run 3.7 to 4.5 s | 1885, 1850 | 1966, 1966 |
+| after the shutdown, warm | 4.4, 4.6 s | the same | 1934, 1858 | 2022, 1995 |
+| during the batch (first card done, 4 to go) | 22, 23 s, mostly the batch | waits for the batch, then as gap 0 | 1892, 1866 | 1991, 1946 |
+| **ISNet only (`?model=isnet`, today's main), gap 0** | 8.2, 6.9 s | zoomed ISNet retry | 1929, 1798 | 1929, 1851 |
+
+- **Peak during the swap: 1850 to 1940 MB, level with ISNet's own 👎 (1798 to 1929) and under main's 2.0 GB.** It
+  never holds two engines: the log always shows `engine-idle`, then `engine-wait` (about 3.0 s), then `engine-start want isnet`.
+- The whole-run peaks (up to 2022 MB) come from the 18.75 MP photo on 640 or the warm runs' extra copy, not from the swap.
+- ISNet's session starts in 0.3 to 0.4 s, faster than 640's (1.0 to 1.2 s). The 3 s wait is the main cost of a quick 👎.
+- On a computer using the CPU fallback (engine kept, no idle shutdown), the smoke check shows the switch to ISNet and back
+  to 640 for the next photo.
+- Tests, rebased on main 979dc8a: `npm run test` 22/22 with the GPU and with the CPU as the main engine. The new check
+  `cpu 👎`: the 👎 vote says `cpu-birefnet640`, the retry's 👍 says `cpu` with `retry: true`, and the next photo says
+  `cpu-birefnet640`. `ONLY=<name>` runs single checks. One earlier run failed `output: Square...` on the GPU (timed out
+  waiting for 2 photos) while the quality harness loaded the Mac; it passed in both reruns. `npm run test:x` 41/41,
+  `offline.mjs` 13/13.
 
 ## How it works
 
@@ -79,10 +163,12 @@ Use Safari, a fresh tab. Each step's URL carries `?debug=1` so every step lands 
    couple of busy scenes with a small subject (a cat in a yard, a car interior). Then add 2 more. Pass: no reload or
    crash, each photo about 6 s or less. An empty card ("no subject") on a busy scene is a known weak spot; note how many.
 3. **Compare with ISNet.** Open `.../?debug=1&model=isnet` in a new tab and pick the same 8 photos. Which cut-outs look
-   better? (Research: 640 wins on people, pets, products; ISNet wins on thin wire frames like a bike stand.)
-4. **Required: a 👎 right after the batch finished** (the engine has just shut down; the 👎 starts a new one, up to 3 s
-   later) on a photo whose subject doesn't fill the frame. Pass: the zoomed retry comes back, no crash. This is the
-   pattern that crashed iPhones before main's 3 s wait. Then a GIF (16 frames on iPhone).
+   better? (Research: 640 wins on people and pets; ISNet wins on thin products such as a tripod, a chair or a cable.)
+4. **Required: a 👎 right after the batch finished** on a thin product (a chair, a tripod, a cable), ideally one where 640
+   lost a leg. The engine has just shut down, and the 👎 starts ISNet up to 3 s later. The first time it also downloads
+   ISNet (88 MB), so use Wi-Fi. Pass: ISNet's whole-photo result comes back in about 7 to 9 s, with no crash. A second 👎
+   puts the 640 result back. This is the pattern that crashed iPhones before main's 3 s wait. Then add one more photo
+   (the log should show `want` empty and `birefnet640` again), and a GIF (16 frames on iPhone).
 
 ### Reading the diag log
 
@@ -95,7 +181,8 @@ newest). Start the tail before testing. Look for, per tab (`id` is the same with
 - `worker:init` with `"model":"birefnet640"` (or `"isnet"` with `?model=isnet`), then `worker:session`, `ready` with engine `cpu-birefnet640` (`cpu` with `?model=isnet`).
 - `inferred` with `ms` for each photo: the model's time on the phone.
 - `engine-idle` after a batch (the engine let go of its memory), `engine-wait` (ms until 3 s after the shutdown) when a
-  photo or 👎 comes sooner, then `engine-start`.
+  photo or 👎 comes sooner, then `engine-start` (`"want":"isnet"` for a 👎 on a 640 result, then `worker:init` with
+  `"model":"isnet"`; `engine-switch` when the engine was still running).
 - A crash shows up as the log simply stopping. The next visit sends a crash report; read it with the crash query in
   CLAUDE.md (engine `cpu-birefnet640`).
 
@@ -105,10 +192,14 @@ Merge when, on Kevin's iPhone:
 1. **No crash** on the 18.75 MP photo, on 8 + 2 photos in one tab, and on the 👎 after the idle shutdown (ISNet passes
    the first two today);
 2. **6 s or less a photo** (ISNet: 5.0 s on 2 threads);
-3. the cut-outs look **at least as good as ISNet** on his own photos, with empty masks on busy scenes rare.
+3. the cut-outs look **at least as good as ISNet** on his own photos, with empty masks on busy scenes rare. With the 👎
+   retry, a thin product 640 gets wrong is one tap from ISNet's result. In the product test that makes the branch at
+   least level with ISNet on every set (best case, above), so the quality trade-off is gone; what is left is the iPhone
+   check (crashes and time).
 
 If it crashes where ISNet doesn't, don't merge; the fallback idea is ormbg (ISNet's architecture and memory,
 Apache-2.0) or BiRefNet at 512 (745 MB heap, weaker on thin objects). If it is slower than 6 s but stable, 512 is
 the next try. On merge: update CLAUDE.md's Engines section (CPU engine = BiRefNet 640, the engine names in
-"Votes and crash reports", the measured numbers), and watch crash reports by engine for a week. ISNet still runs on
+"Votes and crash reports", the measured numbers; the UX note "👎 zooms in only when..." gains "a 640 result's 👎
+always runs ISNet on the whole photo"), and watch 👎 on `cpu-birefnet640` against 👍 on its `cpu` retries, and crash reports by engine for a week. ISNet still runs on
 Android's GPU, so the AGPL reason stays unless that changes too.
