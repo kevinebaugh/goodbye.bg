@@ -750,6 +750,26 @@ try {
     return `👎 ${first.engine}, retry ${e1}, next ${e2}`;
   });
 
+  // A 👎 cuts in line (Kevin, 2026-11-22): its ISNet retry comes back while photos of the batch are still waiting,
+  // and the batch then finishes on 640.
+  await check("cpu 👎 during a batch: the retry cuts in line", async () => {
+    const c6 = await context(), r = await page(c6);
+    await r.go(`${base}/?engine=cpu&confetti=0`);
+    await addPhotos(r, ["one", "two", "three", "four"]);
+    const DONE = `${CARDS}.find((x) => !x.classList.contains("working") && !x.classList.contains("queued") && !x.querySelector(".dl").disabled)`;
+    await r.until(`!!${DONE}`, 90000, "a first finished photo");
+    const label = await r.ev(`${DONE}.querySelector(".rate:last-child").getAttribute("aria-label")`);
+    if (!/try again/.test(label)) return { skip: `the CPU engine runs ISNet here (${label})` };
+    await r.ev(`(() => { const c = ${DONE}; c.dataset.cut = "1"; c.querySelector(".rate:last-child").click(); })()`);
+    await r.until(`(() => { const c = document.querySelector('[data-cut="1"]'); return c && !c.classList.contains("working") && !c.querySelector(".rate").disabled; })()`, 120000, "the retry's result");
+    const waiting = await r.ev(`${CARDS}.filter((x) => x.classList.contains("queued") || x.classList.contains("working")).length`);
+    assert(waiting > 0, "the retry came back only after the whole batch");
+    await allDone(r, 4, 180000);
+    noErrors(r);
+    await r.close();
+    return `${waiting} photo(s) still waiting when the retry came back`;
+  });
+
   // The GPU gate: BiRefNet fails to start (?gpufail=birefnet-init, after a 3 s delay), ISNet on the GPU takes over, and a
   // photo added while it starts still finishes there. Fallback reports are expected here (they go to /api/crash).
   await check("gpu gate: BiRefNet fails to start, ISNet on the GPU finishes", async () => {

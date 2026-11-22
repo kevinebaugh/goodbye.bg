@@ -76,7 +76,10 @@ scales the mask back up).
   iPhone UA: 2.9 to 3.7 s inferred, peak about 50 MB above ISNet (under 2.0 GB). Loses thin legs, cables and frames
   that ISNet keeps (`docs/quality-products.md`), so a 👎 on its result runs **ISNet 1024 on the whole photo** (one
   engine at a time: the 640 worker goes, 3 s gap on iPhones; `retryModel`). `?model=isnet` runs ISNet on the CPU as
-  before. Untested on a real iPhone: watch crashes by engine and 👎 on `cpu-birefnet640` for a week.
+  before. A 👎 during a batch cuts in line (Kevin, 2026-11-22): the photo on the engine finishes, the batch waits
+  (`cutIn`, `inPhoto`), about 15 s more on an iPhone. Kevin's iPhone (2026-11-22, Safari in front): 5.3 to 8.3 s a
+  photo, 24 MP photos, 8 + 2 in a tab and a 👎 right after a batch, no crash (before `refineEdge` ran on 640: not
+  timed on a phone yet). Watch crashes by engine and 👎 on `cpu-birefnet640` for a week.
 - WebGPU is used when the adapter has `shader-f16`. iPhones and iPads always use the CPU engine (2 threads: 4 threads peaked at 2.1 GB in the Simulator and crashed an
   18.75 MP photo half the time on Kevin's iPhone; 2 threads peak about 300 MB lower; 5.0 s a photo). WebGPU crashed
   the tab there one try in two (2026-11-20). Safari needs `Cross-Origin-Embedder-Policy: require-corp` (it ignores
@@ -385,9 +388,8 @@ a difference.
    real iPhone (engine restart after idle, the 16 MP PNG, the share sheet after Download all), Android (share target,
    install), desktop "Open with", folder drops, live link fetching; BiRefNet on Windows and Linux GPUs and 8 GB Macs.
 2. Offline claim: check offline in Safari, then add "Works offline after your first cut-out" to the site and launch kit.
-3. Open draft PRs for Kevin to decide: #2 mask editing (tap pieces, erase/restore brush, undo), #3 phones on BiRefNet
-   lite at 640 instead of ISNet (`docs/platforms-and-phone-model.md`), #4 guided filter for hair edges (`?pp=1`).
-   Branch `bulk-cli` (a desktop bulk tool) has no PR. No i18n PR exists.
+3. Open draft PRs for Kevin to decide: #2 mask editing (tap pieces, erase/restore brush, undo), #5 the bulk tool.
+   Time `refineEdge` with BiRefNet 640 on a real iPhone (0.3 to 0.7 s a photo at 6x throttling in Chrome).
 4. A smaller GPU footprint might make WebGPU safe on iPhones again (try once ORT or the model changes).
 
 ## Open items outside the code

@@ -1916,6 +1916,7 @@ function fail(it, msg) {
   if (it.name && it.name !== "image") { const n = document.createElement("span"); n.className = "fname"; n.textContent = it.name; it.el.busy.append(n); } // in a batch: which one
 }
 
+let cutIn = 0, inPhoto = false; // 👎 retries waiting to swap the model in; the batch's photo on the engine now
 async function run() {
   if (running) return;
   running = true;
@@ -1924,11 +1925,15 @@ async function run() {
     const next = () => [...$("grid").children].map((card) => items.find((i) => i.el.card === card))
       .find((i) => i && !i.mask && !i.failed && i.bmp && !i.hold);
     for (let it; (it = next()); ) {
+      if (cutIn) { while (cutIn) await new Promise((r) => setTimeout(r, 200)); continue; } // a 👎 on the other model goes first (retry); then pick again
       startQuips(it);
       await nextFrame();
+      if (cutIn) { clearInterval(it.quip); it.el.card.classList.remove("working"); it.el.card.classList.add("queued"); continue; } // a 👎 came in meanwhile: this one waits, still
       working(engineReady ? "model" : "load", it);
+      inPhoto = true;
       try { it.mask = await segment(it.bmp, !it.anim); finished++; }
       catch (e) { if (!items.includes(it)) continue; console.error(e); report("run-failed", e, it); fail(it, t("Could not process this image.")); continue; } // removed meanwhile: not a failure
+      finally { inPhoto = false; }
       if (!it.mask.box) { it.mask = null; fail(it, t("No clear subject in this photo.")); continue; }
       it.ms = lastMs; it.engine = lastEngine;
       // Removed meanwhile: Undo finishes it (undoRemove). A GIF cut short starts over (its frames were let go).
@@ -2076,8 +2081,9 @@ async function retry(it) {
   // Never next to a PNG being built (a full photo each): wait for those, and hold back the ones not started.
   clearTimeout(pngTimer);
   await pngChain.catch(() => {});
-  // The other model replaces the engine: let the batch finish on its own model first (no swapping back and forth).
-  while (want && running) await new Promise((r) => setTimeout(r, 300));
+  // The other model replaces the engine. A 👎 cuts in line (Kevin, 2026-11-22): the photo being worked on finishes,
+  // the batch waits, the engine swaps for this one photo (about 15 s more on an iPhone), then swaps back.
+  if (want) { cutIn++; while (inPhoto) await new Promise((r) => setTimeout(r, 100)); }
   try {
     const sx = Math.round(x0 * it.w), sy = Math.round(y0 * it.h), sw = Math.max(1, Math.round((x1 - x0) * it.w)), sh = Math.max(1, Math.round((y1 - y0) * it.h));
     let m;
@@ -2092,6 +2098,7 @@ async function retry(it) {
     }
     if (m.box) { changed = true; it.mask = mergeRetry(it.first, m, { x: sx / it.w, y: sy / it.h, w: sw / it.w, h: sh / it.h }); it.maskRect = null; it.ms = lastMs; it.engine = lastEngine; it.png = null; }
   } catch (e) { console.warn("Retry failed", e); }
+  if (want) cutIn--;
   retrying--; clearInterval(it.quip);
   busy.hidden = true; dl.disabled = false; it.el.card.classList.remove("working");
   if (!items.includes(it)) { rested(); return; }
