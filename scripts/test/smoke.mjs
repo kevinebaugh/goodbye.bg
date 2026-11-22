@@ -664,6 +664,38 @@ try {
     return `CLS ${cls.toFixed(4)}`;
   });
 
+  // ?pp=1: the guided filter on hair and fur (refineEdge, docs/mask-postprocess.md) runs after the model on a furry
+  // subject, changes some soft pixels, and the cut-out still saves. ?debug=1 reports its step (name and numbers only).
+  await check(`edge refinement (?pp=1, ${engine}): refines a furry edge, PNG saves`, async () => {
+    const c6 = await context(), q = await page(c6), steps = [];
+    const off = browser.on((d) => {
+      if (d.method !== "Network.requestWillBeSent" || !/\/api\/diag$/.test(d.params.request.url)) return;
+      try { const b = JSON.parse(d.params.request.postData); if (b.step === "edge") steps.push(b); } catch {}
+    });
+    try {
+      await q.go(`${base}/?engine=${engine}&pp=1&debug=1&confetti=0`);
+      await q.ev(`(async () => { // a round furry animal: a body, then a few thousand thin light hairs sticking out, on a dark blurred backdrop
+        const c = document.createElement("canvas"); c.width = 1000; c.height = 1000; const x = c.getContext("2d");
+        const g = x.createRadialGradient(500, 500, 100, 500, 500, 700); g.addColorStop(0, "#3a4a3a"); g.addColorStop(1, "#101810"); x.fillStyle = g; x.fillRect(0, 0, 1000, 1000);
+        x.fillStyle = "#d8c8a8"; x.beginPath(); x.arc(500, 560, 280, 0, 7); x.fill();
+        let s = 7; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+        x.lineWidth = 1.2;
+        for (let k = 0; k < 6000; k++) { const a = rnd() * 7, r0 = 230 + rnd() * 40, r1 = r0 + 30 + rnd() * 70, w = (rnd() - 0.5) * 0.25;
+          x.strokeStyle = "rgba(240,228,205," + (0.5 + rnd() * 0.5) + ")"; x.beginPath(); x.moveTo(500 + r0 * Math.cos(a), 560 + r0 * Math.sin(a)); x.lineTo(500 + r1 * Math.cos(a + w), 560 + r1 * Math.sin(a + w)); x.stroke(); }
+        x.fillStyle = "#222"; x.beginPath(); x.arc(420, 520, 22, 0, 7); x.arc(580, 520, 22, 0, 7); x.fill();
+        const b = await new Promise((r) => c.toBlob(r, "image/jpeg", 0.92)), dt = new DataTransfer(); dt.items.add(new File([b], "fluffy.jpg", { type: "image/jpeg" }));
+        const i = document.getElementById("file"); i.files = dt.files; i.dispatchEvent(new Event("change", { bubbles: true })); return true; })()`);
+      await allDone(q, 1, 90000);
+      for (let i = 0; i < 50 && !steps.length; i++) await sleep(50);
+      assert(steps.length === 1, `${steps.length} "edge" steps`);
+      assert(steps[0].px > 0, "the filter changed no pixels on a furry edge");
+      const f = await download(c6, () => click(q, "#grid > .card .dl"));
+      assert(f.kind === "png" && f.bytes[25] === 6, `got ${f.kind}`);
+      noErrors(q);
+      return `${steps[0].px} px refined in ${steps[0].ms} ms`;
+    } finally { off(); await q.close(); }
+  });
+
   // The CPU engine on its own, when the main run used the GPU.
   await check("one photo (cpu): result and PNG download", async () => {
     if (engine === "cpu") return { skip: "the main run already used the CPU engine" };
