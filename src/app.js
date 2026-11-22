@@ -881,11 +881,13 @@ function makeCard(it) {
     for (const b of card.querySelectorAll(".crop")) b.setAttribute("aria-pressed", String(it.crop));
     it.png = null; drawCard(it); if (PHONE && !running && !retrying) png(it); keep(it);
   });
-  x.addEventListener("click", () => { dbg("removed"); clearInterval(it.quip); it.gen = -1;
-    for (const u of [it.previewUrl, it.fullUrl, it.gifUrl]) if (u) URL.revokeObjectURL(u); items.splice(items.indexOf(it), 1);
+  x.addEventListener("click", () => { dbg("removed"); clearInterval(it.quip);
+    const at = items.indexOf(it); if (at < 0) return;
+    items.splice(at, 1);
     // Focus goes to the next card's Remove (or the one before), not back to the top of the page.
-    const near = card.nextElementSibling?.querySelector?.(".x") || card.previousElementSibling?.querySelector?.(".x");
-    card.remove(); unshow(it); forget(it); sync();
+    const next = card.nextElementSibling, near = next?.querySelector?.(".x") || card.previousElementSibling?.querySelector?.(".x");
+    card.remove(); swapAds(it); forget(it); sync();
+    offerUndo({ it, card, at, next });
     if (near) near.focus({ preventScroll: true }); else $("pick").focus({ preventScroll: true }); });
   dl.addEventListener("click", async () => {
     if (it.saving) return; // already on it
@@ -984,14 +986,55 @@ function named(it, name) {
 }
 
 // A removed photo: ad cards showing it move on to another cut-out, and its preview bitmap is freed (iPhone memory).
-function unshow(it) {
-  const done = finishedCuts();
+/* ---------- undo a removal ----------
+   Remove takes the card off at once and offers Undo for a few seconds: a ring on the button runs down (hover or focus
+   pauses it). The stored copy is deleted at once and written again on Undo, so a tab closed meanwhile can't bring a
+   removed photo back; the photo's memory is freed only when the time is up. One at a time: a second removal settles the first. */
+let pendingUndo = null;
+function offerUndo(u) {
+  if (pendingUndo) settle(pendingUndo);
+  pendingUndo = u;
+  const bar = $("undo"), ring = bar.querySelector(".ring circle");
+  bar.hidden = false;
+  ring.style.animation = "none"; void ring.getBoundingClientRect(); ring.style.animation = ""; // restart the countdown
+}
+function settle(u) {
+  if (pendingUndo === u) { pendingUndo = null; $("undo").hidden = true; }
+  const { it } = u; it.gen = -1;
+  for (const url of [it.previewUrl, it.fullUrl, it.gifUrl]) if (url) URL.revokeObjectURL(url);
+  unshow(it);
+}
+function undoRemove() {
+  const u = pendingUndo; if (!u) return;
+  pendingUndo = null; $("undo").hidden = true;
+  const { it, card, at, next } = u, g = $("grid");
+  // Back where it was: before the card that followed it, else after the photos (ahead of the ads and Download all).
+  const before = next?.parentNode === g ? next : g.querySelector(".adcard") || $("tools");
+  g.insertBefore(card, before);
+  items.splice(Math.min(at, items.length), 0, it);
+  it.filed = false; // its stored file was deleted on Remove: write it again, not only its state
+  show(); keep(it); sync(); dbg("undo");
+  if (it.mask) drawCard(it); else if (!it.failed) run();
+  it.el.card.querySelector(".x")?.focus({ preventScroll: true });
+}
+$("undobtn").addEventListener("click", () => { tick(); undoRemove(); });
+$("undo").querySelector(".ring circle").addEventListener("animationend", () => { if (pendingUndo) settle(pendingUndo); });
+addEventListener("keydown", (e) => {
+  if (pendingUndo && (e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "z" && !/input|textarea/i.test(e.target.tagName)) { e.preventDefault(); undoRemove(); }
+});
+
+// An ad showing this photo moves to another cut-out.
+function swapAds(it) {
+  const done = finishedCuts().filter((d) => d !== it);
   for (const a of adEls) {
     if (a.artIt !== it) continue;
     a.artIt = done[0] || null;
     const c = a.querySelector(".adart");
     if (a.artIt && a.art && c) try { a.art.src = artOf(a.artIt); Promise.resolve(a.art.draw(c, a.art.src)).catch(() => {}); } catch {}
   }
+}
+function unshow(it) {
+  swapAds(it);
   if (pressed === it) pressed = null;
   try { it.bmp?.close(); } catch {} // a run still on it stops quietly (see run)
 }

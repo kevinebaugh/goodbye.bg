@@ -160,7 +160,10 @@ Tested: headless Chrome (reload in a restarted browser, Back still from bfcache)
   so the quip fits two lines; the smallest cards show only the wave. Footer: "Goodbye to N backgrounds since 2026."
 - Kept photos load without jitter: `src/early.js` (first thing in <body>) reads the count `gb-kept` that app.js keeps in
   localStorage and starts the page in its photos layout, grid and footer hidden ("restoring") until layout() has sized the
-  cards (1.5 s failsafe). Restored cards don't pop. A stale count falls back to the landing. Quips are the one place
+  cards (1.5 s failsafe). Restored cards don't pop. A stale count falls back to the landing.
+- Remove can be undone for 5 s (Kevin, 2026-11-21): a pill at the bottom, "Removed." + Undo, with a ring on the button that
+  runs down (hover or focus pauses it; Cmd/Ctrl+Z works). The stored copy is deleted at once and rewritten on Undo; memory
+  is freed when the time is up. One at a time: a second removal settles the first. Quips are the one place
   for playful text; everything else is plain and only what people need.
 - Results are cropped to the subject by default (crop icon switches to the whole frame). 👎 retries zoomed in (merged into the first result outside the zoomed part, feathered where they meet; mergeRetry)
   on the subject, a second 👎 restores the first result. One vote per result: the chosen emoji stays lit and the
