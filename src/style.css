@@ -152,19 +152,19 @@ body.moving main, body.moving main *, body.moving .foot, body.moving .foot * { v
 .bar .dl { flex: 1; min-width: 0; }
 .dl svg { display: none; }
 .rates { display: flex; gap: var(--s1); }
+/* Bar icons (background, crop, 👍 👎, remove) share one resting look: full strength on a faint chip, on every device
+   (faded grey thumbs read as disabled). Crop on: a teal ring on an aqua tint. Thumbs stay grey until chosen: yellow on
+   every card would break the cool palette. */
 .ico { flex: none; width: var(--h-sm); height: var(--h-sm); border-radius: 50%; border: 0; padding: 0; display: grid; place-items: center; cursor: pointer;
-  background: transparent; color: var(--ink); font-size: 15px; line-height: 1; opacity: .7; transition: opacity .15s, background .15s, filter .15s, transform .15s; }
+  background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); font-size: 15px; line-height: 1; transition: background .15s, box-shadow .15s, filter .15s, transform .15s; }
 .x { font-size: 20px; margin-left: var(--s1); } /* room before remove, so a tap meant for 👎 doesn't land on it */
-.crop[aria-pressed="true"] { background: color-mix(in srgb, var(--ink) 12%, transparent); opacity: .9; }
+.crop[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 35%, transparent); box-shadow: inset 0 0 0 2px var(--brand); }
 .rate { filter: grayscale(1); }
-/* Light mode: grey thumbs at 70% were 2.1:1 on white; darker and full strength they pass 3:1 (dark mode already did). */
-@media not (prefers-color-scheme: dark) { .rate:not(.chosen, :hover) { filter: grayscale(1) brightness(.7); opacity: 1; } }
-.ico:focus-visible { opacity: 1; }
-@media (hover: hover) { .ico:hover:not(:disabled) { opacity: 1; filter: none; background: color-mix(in srgb, var(--ink) 8%, transparent); } }
+/* Light mode: grey thumbs were 2.1:1 on white; darker they pass 3:1 (dark mode already did). */
+@media not (prefers-color-scheme: dark) { .rate:not(.chosen, :hover) { filter: grayscale(1) brightness(.7); } }
+@media (hover: hover) { .ico:hover:not(:disabled) { filter: none; background: color-mix(in srgb, var(--ink) 13%, transparent); }
+  .crop[aria-pressed="true"]:hover { background: color-mix(in srgb, var(--accent) 50%, transparent); } }
 .rate:disabled { cursor: default; }
-/* Phones never hover, so 👍 👎 rested grey at 70% and read as disabled: there they rest at full strength on the hover
-   chip. Still grey: yellow thumbs on every card would break the cool palette (the chosen one lights up). */
-@media (hover: none) { .rate:not(:disabled) { opacity: 1; background: color-mix(in srgb, var(--ink) 8%, transparent); } }
 /* Background: the trigger shows the current one. See-through (the default) is half checkerboard, half colour: "this
    swaps the background". The picker takes the bar's place, at the bar's height, so nothing covers the photo and the
    cards never resize. */
@@ -189,7 +189,8 @@ body.moving main, body.moving main *, body.moving .foot, body.moving .foot * { v
 @media (pointer: fine) { .swb { --d: 28px; } } /* a mouse needs less; more swatches fit on a page */
 .swb .sw { width: calc(var(--d) - 8px); height: calc(var(--d) - 8px); }
 .swb[aria-pressed="true"]:not(.pcrop) { box-shadow: 0 0 0 2px var(--brand); }
-.pcrop[aria-pressed="true"] { background: color-mix(in srgb, var(--ink) 12%, transparent); }
+.pcrop { background: color-mix(in srgb, var(--ink) 7%, transparent); }
+.pcrop[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 35%, transparent); box-shadow: inset 0 0 0 2px var(--brand); }
 .swb:focus-visible, .swb:has(input:focus-visible) { outline: 2px solid var(--ink); outline-offset: 2px; } /* ink, offset: unlike the brand ring of the chosen swatch; the colour and photo swatches focus their hidden input */
 @media (hover: hover) { .swb:hover { transform: scale(1.12); } }
 .swb:active { transform: scale(.9); }
@@ -245,9 +246,10 @@ body.moving main, body.moving main *, body.moving .foot, body.moving .foot * { v
 .pcrop svg { width: 15px; height: 15px; }
 .rate.chosen { opacity: 1; filter: none; transform: scale(1.1); }
 
-/* The ad card: fills an otherwise empty grid cell. Same size as a photo card, but quieter (no card surface, a dashed
-   edge, a faint panel), no checkerboard and an "Ad" label, so it never passes for one of your photos. */
-.adcard { display: flex; flex-direction: column; background: transparent; border: 1px dashed color-mix(in srgb, var(--ink) 22%, transparent); border-radius: 18px; overflow: hidden;
+/* The ad card: fills an otherwise empty grid cell. Same size as a photo card, but quieter (no card surface, no fill,
+   a solid hairline: dashes read as an empty slot), no checkerboard and an "Ad" label, so it never passes for one of
+   your photos. */
+.adcard { display: flex; flex-direction: column; background: transparent; border: 1px solid color-mix(in srgb, var(--ink) 16%, transparent); border-radius: 18px; overflow: hidden;
   text-decoration: none; color: inherit; container-type: inline-size; animation: fade .4s ease-out; }
 /* Until its product is drawn (app.js): a soft shimmering placeholder where the product goes. */
 .adcard { animation-fill-mode: both; }
@@ -260,8 +262,9 @@ body.moving main, body.moving main *, body.moving .foot, body.moving .foot * { v
 .adcard.loading .adpic::after { animation: shimmer 1.3s ease-in-out infinite; opacity: .9; transition: none; }
 @keyframes shimmer { from { background-position: 120% 0; } to { background-position: -120% 0; } }
 @media (prefers-reduced-motion: reduce) { .adcard.loading .adpic::after { animation: none; } }
-.adpic { position: relative; height: var(--p, 300px); display: grid; place-content: center; justify-items: center; gap: 10px; padding: 16px; text-align: center;
-  background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.adpic { position: relative; height: calc(var(--p, 300px) + var(--bar, 0px) - var(--bar1, var(--bar, 0px))); display: grid; place-content: center; justify-items: center; gap: 10px; padding: 16px; text-align: center; }
+/* Ad cards keep a one-row bar (--bar1); a roomy grid's second row goes to the product art instead (app.js layout). */
+.adcard .bar { min-height: var(--bar1, var(--bar, 0)); }
 .adicon { font-size: clamp(28px, calc(var(--p, 300px) * 0.18), 56px); line-height: 1; }
 .adart { width: 100%; height: calc(var(--p, 300px) * 0.62); display: block; }
 .artcard .adline { display: none; }
@@ -381,6 +384,7 @@ html:has(body.app) { height: 100%; overflow-x: hidden; overflow-y: auto; } /* sc
 body.app { height: 100dvh; min-height: 0; overflow-x: hidden; overflow-y: auto; }
 body.app, body.app * { touch-action: manipulation; } /* pinch-zoom and pan once zoomed; no double-tap zoom */
 body.app main { flex: 1; min-height: 0; display: flex; flex-direction: column; padding-bottom: 8px; }
+body.app.has-work main { max-width: 1800px; } /* the grid sizes its cards from both axes (app.js layout): a laptop is height-bound, not capped at 1100 px */
 body.app.has-work .grid { flex: 1; min-height: 0; grid-template-columns: repeat(var(--cols, 1), var(--p, 300px));
   grid-auto-rows: max-content; justify-content: center; align-content: start; gap: 12px; padding-top: 22px; } /* room under Choose photos / Paste */
 body.app .grid .pic { aspect-ratio: auto; height: var(--p, 300px); }
@@ -439,6 +443,10 @@ body.app:not(.has-work) main { flex: none; margin-top: auto; }
 .grid.roomy .card:not(.working) .bar > .bgb, .grid.roomy .card:not(.working) .bar > .crop, .grid.roomy .card:not(.working) .bar > .x { display: grid; }
 .grid.roomy .card:not(.working) .rates { display: flex; }
 .grid.roomy .bgs, .grid.roomy .opts { flex-wrap: wrap; align-content: center; row-gap: var(--s1); }
+/* A working card in a roomy grid: the quip fills both rows (the wave on top), not one line floating in a tall bar. */
+.grid.roomy .card.working .bar { flex-wrap: nowrap; }
+.grid.roomy .card.working .say { align-self: stretch; flex-direction: column; gap: 2px; font-size: 13px; line-height: 1.2; }
+.grid.roomy .card.working .say::before { margin: 0; font-size: 24px; }
 /* Short screens (a phone on its side): the wordmark moves beside the buttons and the spacing tightens, so the
    cards get the height. */
 @media (max-height: 520px) {

@@ -1559,7 +1559,10 @@ function offerUndo(u) {
   if (pendingUndo) settle(pendingUndo);
   pendingUndo = u;
   const bar = $("undo"), ring = bar.querySelector(".ring circle");
-  bar.firstChild.textContent = `Removed ${u.it.name}.`;
+  // "Removed." on screen (camera names like IMG_4823 are noise next to the ringed card); screen readers hear the name.
+  const said = bar.firstChild, who = document.createElement("span");
+  who.className = "sr-only"; who.textContent = ` ${u.it.name}`;
+  said.replaceChildren("Removed", who, ".");
   bar.hidden = false;
   // In the footer's place (the footer fades out meanwhile), so it covers neither the count nor the cards.
   const f = document.querySelector(".foot").getBoundingClientRect();
@@ -1842,6 +1845,8 @@ const GAP = 12, MIN_PIC = 84, MAX_PIC = 640;
 // roomy bar adds (32 px controls and a 4 px gap). FULL_BAR: the card width from which one row holds every control.
 const BAR_SM = 49, BAR_MD = 57, ROW2 = 36, FULL_BAR = 242, ROOMY_MIN = 154;
 const barFor = (p) => (p <= FULL_BAR ? BAR_SM : BAR_MD);
+const COARSE = matchMedia("(pointer: coarse)");
+COARSE.addEventListener?.("change", () => requestAnimationFrame(layout));
 function layout() {
   const g = $("grid"), n = g.querySelectorAll(".card").length, all = $("tools");
   if (!n) { placeAds(0, 0); hugFooter(0); return; } // the last photo was removed: the ads go with it
@@ -1868,11 +1873,14 @@ function layout() {
   if (scroll) p = Math.min(MAX_PIC, Math.floor((W - GAP * (c - 1)) / c)); // scrolling anyway: the columns use the full width
   // Roomy: the cards fill the width before the height (a phone in portrait, 1 to 4 photos) and their bar has no room
   // for every control. The bar takes a second row (crop, 👍 👎, remove) instead of hiding them in the picker.
-  const roomy = !scroll && p >= ROOMY_MIN && p < FULL_BAR && best.row - barFor(p) - ROW2 >= p;
+  // Touch only: with a mouse the photos get the height (a laptop with 12 photos keeps one row) and the picker carries
+  // crop and remove.
+  const roomy = !scroll && COARSE.matches && p >= ROOMY_MIN && p < FULL_BAR && best.row - barFor(p) - ROW2 >= p;
   g.classList.toggle("scroll", scroll); g.classList.toggle("roomy", roomy);
   const m = $("main").style;
   m.setProperty("--cols", c); m.setProperty("--p", `${p}px`); // grid and tools row share them
-  m.setProperty("--bar", `${barFor(p) + (roomy ? ROW2 : 0)}px`); // every bar, ads too, so the cards in a row line up
+  m.setProperty("--bar", `${barFor(p) + (roomy ? ROW2 : 0)}px`); // every photo card's bar, so the cards in a row line up
+  m.setProperty("--bar1", `${barFor(p)}px`); // ad cards keep one row; the second row's height goes to the product
   placeAds(n, scroll ? 0 : Math.ceil(slots / c) * c - n);
   centreLastRow(scroll ? 0 : c, p);
   repick();
@@ -1956,7 +1964,7 @@ function placeAds(n, free) {
   }
   else if (performance.now() < adsAt) want = 0;
   // The cards changed size (rotation, a resized window): redraw the products, or they'd stretch.
-  const size = $("main").style.getPropertyValue("--p");
+  const size = $("main").style.getPropertyValue("--p") + $("main").style.getPropertyValue("--bar");
   if (size !== adDrawnAt) {
     adDrawnAt = size;
     requestAnimationFrame(() => { for (const a of adEls) if (a.art) { const c = a.querySelector(".adart"); if (c) try { a.art.draw(c, a.art.src); } catch {} } });
