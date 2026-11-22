@@ -1,0 +1,46 @@
+/* The cut-out editor (edit.js, docs/mask-edit.md). Loaded with it. It takes the grid's place: one screen, the photo
+   on a stage and the tools in one bar under it, so nothing sits on the image. Tokens and button system from style.css. */
+body.editing .hero, body.editing .grid, body.editing .foot, body.editing .undo, body.editing .tell { display: none !important; }
+.editor { flex: 1; min-height: 0; display: flex; flex-direction: column; margin-top: var(--s3); background: var(--card);
+  border: 1px solid var(--line); border-radius: 18px; overflow: hidden; animation: pop .3s cubic-bezier(.2,1.4,.4,1); }
+.estage { position: relative; flex: 1; min-height: 0; }
+/* Two fingers zoom and pan the photo here, not the page: the page blocks pinch (body.app * { touch-action: pan-x pan-y }
+   in style.css, early.js cancels Safari's gesture events), so the stage takes every touch and edit.js handles the
+   pointers itself. body.app outranks that rule whatever order the sheets load in. */
+body.app .estage, body.app .estage canvas { touch-action: none; }
+.estage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair;
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.estage[data-m="tap"] canvas { cursor: pointer; }
+.estage.grab canvas { cursor: grab; }
+/* A tap that would change too much: a small shake, no words. */
+.estage.nope { animation: nope .34s ease; }
+@keyframes nope { 20% { transform: translateX(-6px); } 40% { transform: translateX(5px); } 60% { transform: translateX(-3px); } 80% { transform: translateX(2px); } }
+.ebar { display: flex; align-items: center; gap: var(--s2); padding: var(--s2) var(--s3); border-top: 1px solid var(--line); }
+.emodes { flex: none; display: flex; gap: 2px; padding: 3px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 7%, transparent); }
+.emode { --h: var(--h-sm); --px: 12px; --fs: 14px; gap: 6px; border-color: transparent; background: transparent; }
+.emode[aria-pressed="true"] { background: var(--card); border-color: var(--accent); box-shadow: 0 2px 6px -3px color-mix(in srgb, var(--ink) 40%, transparent); }
+.emode[aria-pressed="true"] svg { animation: swin .28s cubic-bezier(.2,1.5,.4,1); }
+.eslot { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; min-height: var(--h-md); }
+.ehint { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.2; color: var(--muted); text-align: center; }
+.ehint .short { display: none; }
+.esize { width: 100%; max-width: 240px; display: flex; align-items: center; gap: var(--s2); }
+.esize input { flex: 1; min-width: 0; accent-color: var(--brand); }
+.edot { flex: none; width: 24px; height: 24px; display: grid; place-items: center; }
+.edot::after { content: ""; width: var(--d, 8px); height: var(--d, 8px); border-radius: 50%; background: var(--ink); opacity: .75; transition: width .1s, height .1s; }
+.eundo { --px: 14px; }
+.edone { --px: 22px; }
+.ebar svg { flex: none; }
+/* Narrow (a phone in portrait): icons without words; the hint gets shorter. */
+@media (max-width: 560px) {
+  .ebar { gap: 6px; padding-inline: var(--s2); }
+  .emode span, .eundo span { display: none; }
+  .emode { --px: 9px; }
+  .eundo { --px: 0px; width: var(--h-md); }
+  .edone { --px: 16px; }
+  .ehint .long { display: none; }
+  .ehint .short { display: inline; }
+  .edot { display: none; }
+}
+@media (max-height: 520px) { .editor { margin-top: var(--s2); } .ebar { padding-block: 6px; } }
+/* A phone on its side: the wordmark goes back above (the add buttons it sat beside are hidden while editing). */
+@media (max-height: 520px) and (min-width: 560px) { body.app.has-work.editing .top { position: static; padding-block: 6px; } body.app.has-work.editing main { padding-top: 0; } }

@@ -177,6 +177,22 @@ Anything the browser opens goes straight in. HEIC and TIFF on Chrome/Edge/Firefo
 Batches: `MAX_BATCH` per drop, paste, folder or ZIP: 100 on computers (fine pointer, not iOS, `deviceMemory` 8 or
 unknown), 50 otherwise (about 10 MB of page memory per finished photo). Download all streams its zip.
 
+## Mask editing (2026-11-22)
+
+The pencil in a finished cut-out's bar (not GIFs) opens the editor: `src/edit.js` + `src/edit.css` (loaded then, in the
+service worker shell) take the grid's place. Pieces (a tap drops a kept piece or brings back a dropped one from the
+model's raw output, kept per photo as deflated bytes, `mask.raw`), Erase and Restore brush, Undo, Done. Done hands back
+a new mask (photo proportions, long side 2048, 1600 on phones) that flows into everything that reads `it.mask`
+(backgrounds, options, Download, Download all, ads, Zazzle, kept photos as `edited`). Once edited, 👎 is a vote only.
+- Ways in: the pencil (`.edit`, from 280 px card width; narrower cards and the roomy second row: see Card bar), the
+  pencil in the background picker when the bar hides it (`wantedit`), and Enter or Space on a focused cut-out (it is in
+  the tab order; a click on it stays main's "put it on the product cards", `showArt`). From the keyboard, focus goes to
+  Done and comes back after.
+- The page blocks pinch, but the stage pinches and pans itself: `touch-action: none` on the stage, two pointers zoom
+  (wheel or trackpad pinch on computers). early.js cancels Safari's gesture events; the editor uses pointer events only.
+- Strings go through `GB.t` (the editor gets `t` from app.js); not translated yet (`docs/i18n.md`, Pending).
+- Smoke check `editing: ...`. Design and limits: `docs/mask-edit.md`. Untested on a real phone and in Safari.
+
 ## Kept photos
 
 Kevin: leaving and coming back lost every photo. Every photo is kept in IndexedDB (`goodbye-bg` version 2, stores
@@ -241,7 +257,7 @@ without a visit; private windows refuse Blobs, so nothing is kept there.
 
 ## Card bar
 
-Bar order: crop, background, Download, 👍 👎, remove. Every bar control is 32 px (`--h-sm`); icons rest at full
+Bar order: crop, edit (pencil), background, Download, 👍 👎, remove. Every bar control is 32 px (`--h-sm`); icons rest at full
 strength on a faint ink chip; crop when on has a teal ring on an aqua tint. The bar drops controls so Download stays
 at least ~40 px wide (card widths, style.css): 242+ px everything; 206 to 241 no crop; 162 to 205 no crop and no remove,
 👍 👎 stay (Kevin, 2026-11-21: voting beats crop); 130 to 161 background, Download, remove; under 130 background and
@@ -388,8 +404,11 @@ a difference.
    real iPhone (engine restart after idle, the 16 MP PNG, the share sheet after Download all), Android (share target,
    install), desktop "Open with", folder drops, live link fetching; BiRefNet on Windows and Linux GPUs and 8 GB Macs.
 2. Offline claim: check offline in Safari, then add "Works offline after your first cut-out" to the site and launch kit.
-3. Open draft PRs for Kevin to decide: #2 mask editing (tap pieces, erase/restore brush, undo), #5 the bulk tool.
-   Time `refineEdge` with BiRefNet 640 on a real iPhone (0.3 to 0.7 s a photo at 6x throttling in Chrome).
+3. Merged 2026-11-22 to test forward (Kevin: "Merge the rest and we'll test forward"): #4 hair and fur filter, #3
+   BiRefNet 640 on the CPU engine, #2 mask editing. All three are untested on a real iPhone: watch crashes by engine,
+   👎 on `cpu-birefnet640`, and the editor's touch feel. The editor's words wait for translation (`docs/i18n.md`).
+   Time `refineEdge` with BiRefNet 640 on a real iPhone (0.3 to 0.7 s a photo at 6x throttling in Chrome). PR #5 (bulk
+   tool) is open.
 4. A smaller GPU footprint might make WebGPU safe on iPhones again (try once ORT or the model changes).
 
 ## Open items outside the code

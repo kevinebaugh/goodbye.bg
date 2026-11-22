@@ -142,6 +142,7 @@ body.moving main, body.moving main *, body.moving .foot, body.moving .foot * { v
 .pic img { display: none; -webkit-touch-callout: default; -webkit-tap-highlight-color: transparent; }
 .pic.still img { display: block; }
 .pic.still canvas { display: none; }
+.pic:focus-visible { outline-offset: -4px; border-radius: 16px; } /* Enter opens the editor; the card clips anything outside */
 /* The checkerboard means "see-through". With a colour picked the download is a plain JPG, so the card shows it as a
    picture on a plain surface, with a soft shadow. */
 .solid .pic { background: color-mix(in srgb, var(--ink) 6%, var(--card)); }
@@ -203,8 +204,8 @@ body.moving main, body.moving main *, body.moving .foot, body.moving .foot * { v
 .custom .sw { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 45%, transparent); display: grid; place-items: center; }
 .custom:not(.set) .sw::after { content: "+"; font-size: 15px; font-weight: 800; color: var(--muted); }
 .custom input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; border: 0; padding: 0; cursor: pointer; }
-.pcrop, .px { display: none; }
-.bgs.wantcrop .pcrop, .bgs.wantx .px { display: grid; } /* what the bar has no room for (app.js openPick) */
+.pcrop, .px, .pedit { display: none; }
+.bgs.wantcrop .pcrop, .bgs.wantx .px, .bgs.wantedit .pedit { display: grid; } /* what the bar has no room for (app.js openPick) */
 .prate { display: none; font-size: 16px; background: color-mix(in srgb, var(--ink) 7%, transparent); }
 .bgs.wantrate .prate { display: grid; } /* 👍 👎 ride along too when the bar hides them */
 /* Blur: a soft dot (soft), spread wider (strong). Your photo: its thumbnail, or a picture icon. */
@@ -423,10 +424,11 @@ body.app:not(.has-work) main { flex: none; margin-top: auto; }
 }
 /* Download keeps at least 40 px; every control is 32 px. What the bar has no room for moves into the background
    picker, so crop and remove are never lost. Bar by card width (the queries see 2 px less):
-   242+ crop, background, Download, 👍 👎, remove | 206-241 no crop | 162-205 no crop, no remove (a phone in portrait
+   282+ crop, edit, background, Download, 👍 👎, remove | 242-281 no edit | 206-241 no crop | 162-205 no crop, no remove (a phone in portrait
    with 1 to 3 photos, 165 px: 👍 👎 stay) | 130-161 background, Download, remove | under 130 background, Download.
    A roomy grid (app.js: the cards fill the width first, so there is height to spare) gives narrow bars a second row
-   with crop, 👍 👎 and remove instead. */
+   with crop, 👍 👎 and remove instead (and the pencil, from 186 px). */
+@container (max-width: 279px) { .bar > .edit { display: none; } }
 @container (max-width: 239px) { .bar > .crop { display: none; } }
 @container (max-width: 203px) { .bar { padding-inline: 6px; } }
 @container (min-width: 160px) and (max-width: 203px) { .picky .bar > .x { display: none; } }
@@ -446,12 +448,13 @@ body.app:not(.has-work) main { flex: none; margin-top: auto; }
 .grid.roomy .card .bar { flex-wrap: wrap; row-gap: var(--s1); align-content: center; justify-content: space-between; }
 .grid.roomy .card .bar > .bgb { order: 1; }
 .grid.roomy .card .bar > .dl { order: 2; flex: 1 1 calc(100% - var(--h-sm) - var(--s1)); }
-.grid.roomy .card .bar > .crop { order: 3; }
+.grid.roomy .card .bar > .crop, .grid.roomy .card .bar > .edit { order: 3; }
 .grid.roomy .card .rates { order: 4; }
 .grid.roomy .card .bar > .say { order: 5; }
 .grid.roomy .card .bar > .x { order: 6; margin-left: 0; }
 .grid.roomy .card:not(.working) .bar > .bgb, .grid.roomy .card:not(.working) .bar > .crop, .grid.roomy .card:not(.working) .bar > .x { display: grid; }
 .grid.roomy .card:not(.working) .rates { display: flex; }
+@container (min-width: 184px) { .grid.roomy .card:not(.working) .bar > .edit { display: grid; } } /* five 32 px controls fit the second row */
 .grid.roomy .bgs, .grid.roomy .opts { flex-wrap: wrap; align-content: center; row-gap: var(--s1); }
 /* A working card in a roomy grid: the quip fills both rows (the wave on top), not one line floating in a tall bar. */
 .grid.roomy .card.working .bar { flex-wrap: nowrap; }

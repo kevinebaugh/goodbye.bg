@@ -35,7 +35,7 @@ and what the vendors' posts say users depend on. Nothing here is user research.
 | One photo, free | Preview 0.25 MP free, HD costs a credit | Full resolution free, on device, no account | We win |
 | Privacy | Uploads to server | Never uploaded (Zazzle click excepted) | We win |
 | Cut quality, people and pets | Good, hair strong | Good; hair edges blocky on phones (ISNet), better on GPU computers (BiRefNet) | Phone and hair quality (branch exists) |
-| Fix a bad cut by hand (erase/restore) | Editor (unverified) | Only 👎 zoomed retry | Big; mask editor on a branch |
+| Fix a bad cut by hand (erase/restore) | Editor (unverified) | Pencil under the cut-out: tap a piece, erase/restore brush, undo (2026-11-22) | None |
 | Solid background colour | Yes | Yes (new tonight), JPG download | None |
 | Background image / blur | Yes (API `bg_image`, editor) | Yes (2026-11-22): blur (soft, strong) and your own photo | None |
 | Drop shadow | Yes (`shadow_type`) | No | Medium, products |
