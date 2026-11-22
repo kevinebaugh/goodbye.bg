@@ -140,8 +140,10 @@ const params = new URLSearchParams(location.search);
 // and /go and /api/rate and /api/crash drop it, so the A/B, vote and crash data hold real visitors only. The page still
 // sends it (the smoke tests read those requests) and clicks still redirect. /api/count is left alone (Kevin: tests count).
 const TEST_SWITCHES = ["adtest", "adpartner", "adv", "engine", "gpufail", "model", "threads", "nowarm", "haze", "pp", "keepmax", "keepmb",
-  "maxbatch", "zazzlecap", "confetti", "debug", "lang"];
+  "maxbatch", "zazzlecap", "confetti", "debug", "lang", "ads"];
 const TEST = !!navigator.webdriver || TEST_SWITCHES.some((k) => params.has(k));
+// ?adtest=1 shows partners before their links exist (?adtest=0 used to count as on). ?ads=0: no ad cards (screenshots).
+const ADTEST = params.has("adtest") && params.get("adtest") !== "0", ADS_OFF = params.get("ads") === "0";
 
 // ?debug=1: report each step to /api/diag (server log only) to find where a phone crashes.
 // Step names and numbers only, never photo data. Off for everyone else.
@@ -323,12 +325,15 @@ function working(step, it) {
   note = { step, engine: engineTag(), dev: DEVICE, done: finished, mp: it ? +((it.w * it.h) / 1e6).toFixed(1) : 0, ...(TEST && { t: 1 }) };
   saveNote();
 }
-function saveNote() { try { localStorage.setItem(CRASH_KEY, JSON.stringify({ ...note, trail: trail.join("\n") })); } catch {} }
+// The GPU's maker and family ("apple metal-3", "nvidia ampere"), as the browser names them: the first line of a report's
+// trail, so GPU failures can be told apart by hardware. Coarse on purpose; it names no device and no person.
+let gpuInfo = "";
+function saveNote() { try { localStorage.setItem(CRASH_KEY, JSON.stringify({ ...note, trail: (gpuInfo ? `gpu ${gpuInfo}\n` : "") + trail.join("\n") })); } catch {} }
 // Errors the page survives but the person sees (the engine would not start, or a photo failed), and GPU tiers
 // stepping down (see the GPU gate): sent at once.
 function report(step, e, it) {
   const note = { step, engine: engineTag(), dev: DEVICE, done: finished, mp: it ? +((it.w * it.h) / 1e6).toFixed(1) : 0,
-    error: String(e?.message || e).slice(0, 160), trail: trail.join("\n"), ...(TEST && { t: 1 }) };
+    error: String(e?.message || e).slice(0, 160), trail: (gpuInfo ? `gpu ${gpuInfo}\n` : "") + trail.join("\n"), ...(TEST && { t: 1 }) };
   fetch("/api/crash", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(note), keepalive: true }).catch(() => {});
 }
 // Cleared only once nothing is working: no batch, no 👎 retry, no PNG being built.
@@ -348,6 +353,7 @@ async function pickEngine() {
   if (gpuBroken) return "cpu";
   try {
     const adapter = await navigator.gpu?.requestAdapter();
+    if (adapter?.info) gpuInfo = `${adapter.info.vendor || "?"} ${adapter.info.architecture || "?"}`.replace(/[^\w .-]/g, "").slice(0, 60);
     if (adapter?.features.has("shader-f16")) return "gpu"; // the model is 16-bit
   } catch {}
   return "cpu";
@@ -1674,10 +1680,10 @@ const adSeen = new Set();
 // cells: fetched, it arrived after kept photos were laid out and the photo shrank from 1 cell to 4 (jitter on reload).
 const PARTNERS = "%PARTNERS%";
 (PARTNERS.startsWith("[") ? Promise.resolve(JSON.parse(PARTNERS)) : fetch("/partners.json").then((r) => r.json())).then((list) => {
-  const ok = list.filter((p) => p.live || params.has("adtest")); // ?adtest=1 shows partners before their links exist
+  const ok = ADS_OFF ? [] : list.filter((p) => p.live || ADTEST);
   adPartner = ok.find((p) => p.id === params.get("adpartner")) || (ok.length ? ok[Math.floor(Math.random() * ok.length)] : null); // ?adpartner=<id> to test one
   // The partner's live variants in random order, so each card gets a different one (?adv=<v> puts one first).
-  adVariants = (adPartner?.variants.filter((x) => x.live || params.has("adtest")) || []).sort(() => Math.random() - 0.5);
+  adVariants = (adPartner?.variants.filter((x) => x.live || ADTEST) || []).sort(() => Math.random() - 0.5);
   const first = adVariants.findIndex((x) => x.v === params.get("adv"));
   if (first > 0) adVariants.unshift(...adVariants.splice(first, 1));
   const ctas = adVariants.find((x) => x.ctas)?.ctas;

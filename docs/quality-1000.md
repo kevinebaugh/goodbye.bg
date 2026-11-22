@@ -1,6 +1,9 @@
 # Quality on 1,073 public photos (2026-11-21)
 
-Both engines, run the way the page runs them, scored against ground truth and graded by eye.
+Both engines, run the way the page ran them on 2026-11-21, scored against ground truth and graded by eye.
+Since 2026-11-22 the CPU engine (iPhones, fallback) is BiRefNet lite at 640, not ISNet, and BiRefNet results get an
+edge refinement pass: the ISNet figures below describe the 👎 retry and the GPU step-down, not a phone's first result.
+For the 640 engine see `docs/phone-birefnet640.md`; for the edge pass `docs/mask-postprocess.md`.
 Full report with the contact sheet: https://claude.ai/artifact/Rtq1ESvfQ4TeDtRwJKcYWy (private; it shows dataset photos).
 
 ## Verdict
