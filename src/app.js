@@ -488,10 +488,10 @@ async function segment(bitmap) {
   }
   despeck(id);
   if (!birefnet && params.get("haze") !== "0") hardenHaze(id); // ISNet only; ?haze=0 shows it without
-  const box = subjectBox(id);
+  let box = subjectBox(id);
   for (let i = 3; i < id.data.length; i += 4) id.data[i] = LUT[id.data[i]]; // soften the edge once, here
   // ?pp=1, BiRefNet only (on ISNet it changed next to nothing): the guided filter on hair and fur.
-  if (PP && birefnet) { const t = performance.now(), px1 = refineEdge(px, id); dbg("edge", { ms: Math.round(performance.now() - t), px: px1 }); }
+  if (PP && birefnet) { const t = performance.now(), px1 = refineEdge(px, id); dbg("edge", { ms: Math.round(performance.now() - t), px: px1 }); if (px1) box = subjectBox(id); } // the crop follows the new mask
   const mask = new OffscreenCanvas(RES, RES);
   mask.getContext("2d").putImageData(id, 0, 0);
   mask.box = box;
