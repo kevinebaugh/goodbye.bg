@@ -9,7 +9,7 @@ A free background remover that cuts photos out in your browser, on your device.
 
 <img src="docs/launch/demo.gif" alt="Dropping four photos on goodbye.bg, the cut-outs appearing, then Download all" width="640">
 
-Live: https://goodbye-bg-git.pages.dev (the page and the model are cached after the first visit).
+Live: https://goodbye-bg-git.pages.dev (the page and the model are cached after the first cut-out).
 Demo photos are CC0 (credits in [`docs/launch/CREDITS.md`](docs/launch/CREDITS.md)). The demo was recorded on an
 M-series Mac with the model already cached.
 
@@ -18,7 +18,8 @@ I built it because remove.bg stops removing backgrounds on 1 December 2026.
 - Free. No account, no watermark.
 - PNG at the photo's own resolution, cropped to the subject (a toggle gives the whole frame), or a JPG on a colour, a
   blurred copy of the photo, or a photo of your own. Optional size presets, margin, ground shadow and WebP.
-- Up to 100 photos per drop on computers with 8 GB or more (50 elsewhere), or a ZIP or folder. Download all gives a zip.
+- Up to 100 photos per drop on computers (50 on phones, tablets and computers that report less than 8 GB of memory),
+  or a ZIP or folder. Download all gives a zip.
 - Reads JPG, PNG, WebP, AVIF, SVG, HEIC, TIFF, camera RAW (its embedded JPEG preview), ZIPs and animated GIFs.
 - Not there: an API, an edge brush.
 
@@ -42,8 +43,8 @@ models take a fixed 1024 x 1024 input, so the mask is scaled back to the photo.
 
 | Engine | Where | Model | Measured |
 |---|---|---|---|
-| GPU | Computers with WebGPU and `shader-f16` | BiRefNet lite, fp16, 93 MB, MIT | 280 to 300 ms a photo (M5 Pro, Chrome); GPU memory about +3.0 GB at peak |
-| GPU | Phones and tablets with WebGPU | IMG.LY ISNet medium, fp16, 88 MB, AGPL | 150 to 300 ms a photo (M5 Pro, Chrome) |
+| GPU | Computers with WebGPU and `shader-f16` (and 8 GB or more, when the browser reports it) | BiRefNet lite, fp16, 93 MB, MIT | 280 to 300 ms a photo (M5 Pro, Chrome); GPU memory about +3.0 GB at peak |
+| GPU | Phones and tablets with WebGPU; computers where BiRefNet fails or is too slow | IMG.LY ISNet medium, fp16, 88 MB, AGPL | 150 to 300 ms a photo (M5 Pro, Chrome) |
 | CPU | Everything else, and the fallback | ISNet, WebAssembly | 5 to 7 s a photo on a desktop CPU; about 5 s on an iPhone with 2 threads |
 
 The first cut-out needs about 120 MB (the model plus the 29 MB ONNX Runtime wasm); the browser keeps both. Computers start
@@ -74,7 +75,9 @@ off by more than 0.1, none across 0.5. All 3820 nodes run on WebGPU. Details and
 A failed WebGPU run aborts ONNX Runtime's wasm instance for the whole realm, so the GPU engine lives in its own
 Worker. The GPU worker does a warm-up run before "Ready" (it compiles the shaders and proves the GPU works). If the
 GPU fails to start, fails a run, hangs (30 s for the warm-up, 15 s a run) or returns NaN, the page terminates that
-worker and a CPU worker redoes the photo. `?gpufail=init|run|hang` simulates each.
+worker and steps down: BiRefNet to ISNet on the GPU (also when BiRefNet takes over 10 s to start or over 2 s for its
+first photo), ISNet on the GPU to the CPU, which redoes the photo. A step down is remembered on that device for 30 days
+or until the browser, runtime or model changes. `?gpufail=init|run|hang` simulates each.
 
 ### iPhones and memory
 
@@ -99,7 +102,7 @@ clears site storage after 7 days without a visit.
 
 ### Other pieces
 
-- Animated GIFs: gifuct-js reads them, every frame (at most 100; 16 on iPhones and without WebGPU) goes through the
+- Animated GIFs: gifuct-js reads them, every frame (at most 100; 16 when the CPU engine runs them) goes through the
   model, gifenc writes a GIF with on/off transparency, so soft edges become hard.
 - HEIC and TIFF (on browsers that do not open them) and camera RAW decode in a module Worker (`src/formats.js`) that
   is loaded only when needed: libheif 1.23.5 and UTIF.
@@ -181,7 +184,8 @@ Needs Node. The build uses native packages, so install on the machine that runs 
 
     npm ci
     npm run dev        # builds dist/ and serves it at http://localhost:8788 with the production headers
-    npm run test       # builds, serves and drives headless Chrome with Playwright's browser or CHROME=/path/to/chrome
+    npm run test       # builds, serves and drives the installed Google Chrome headless (or CHROME=/path/to/chrome)
+    npm run test:x     # the same flows in WebKit and Firefox (Playwright's browsers: npx playwright install webkit firefox)
 
 `npm run build` builds only. The tests run in about a minute and a half. `scripts/serve.mjs` passes `/api/count`
 through to the live site, so each cut-out in a test adds one to the public count.
