@@ -212,8 +212,13 @@ runtime/model folders with their files.
   `gb-m-birefnet-<hash>`), kept on use; activate deletes `gb-*` caches not in the list (never `share-inbox`). Downloads
   use `cache: "no-store"`, so the 116 MB (210 MB with both models) are stored once. Chrome's `only-if-cached` from the
   worker never hit what the page had put in the HTTP cache (tested), so it isn't used. Parts the engine fetched before the
-  worker took over (a first visit where the model starts at once) are fetched again 5 s after the engine's last request
-  (`whole()`), so the set is whole offline: up to one model's worth of extra download, once.
+  worker took over (a first visit where the model starts at once) are fetched again (`whole()`): 5 s after the last
+  part through the worker has finished streaming, only numbered parts below the first one it saw, plus manifests and
+  the runtime's .mjs files; never parts the engine hasn't reached (the GPU gate can stop BiRefNet halfway). Measured at
+  20 Mbps with a photo added at once: the first part of the runtime and of BiRefNet went past the worker, so 40 MB extra
+  once; no part fetched twice by the worker (offline.mjs checks this). Time to first cut-out through a real 20 Mbps
+  limit (a throttling proxy, photo added at once, desktop GPU): 51.3 s before, 51.9 s with the worker (twice each).
+  CDP throttling showed 52 vs 61 s, an artifact: it throttles the worker-served responses as well.
 - Never cached: `/api/`, `/go/`, `/cap/`, `/version.txt`, `/ad.html`, `/sw.js`, non-GET. The share POST is handled as before.
 - Stored responses keep the server's COOP/COEP/CSP, so offline the page is `crossOriginIsolated` and the CPU engine runs
   with its 3 thread workers (same speed as online).

@@ -94,23 +94,29 @@ async function startChrome() {
   const send = (method, params = {}, sessionId) => new Promise((ok, no) => { const i = ++id; pending.set(i, { ok, no, method }); ws.send(JSON.stringify({ id: i, method, params, sessionId })); });
   browser = { send, on: (f) => (listeners.add(f), () => listeners.delete(f)) };
   // Service workers too: what they fetch (from the disk cache or not) and what fails.
-  const swSessions = new Set(), swReqs = new Map();
+  const swReqs = new Map();
   browser.on(async (d) => {
     if (d.method === "Target.targetCreated" && d.params.targetInfo.type === "service_worker") {
       const { sessionId } = await send("Target.attachToTarget", { targetId: d.params.targetInfo.targetId, flatten: true }).catch(() => ({}));
       if (!sessionId) return; swSessions.add(sessionId);
-      send("Runtime.enable", {}, sessionId).catch(() => {}); send("Network.enable", {}, sessionId).catch(() => {});
+      send("Runtime.enable", {}, sessionId).catch(() => {}); await send("Network.enable", {}, sessionId).catch(() => {});
+      if (throttle) send("Network.emulateNetworkConditions", throttle, sessionId).catch(() => {});
       send("Runtime.runIfWaitingForDebugger", {}, sessionId).catch(() => {});
     }
     if (!swSessions.has(d.sessionId)) return;
-    if (d.method === "Network.requestWillBeSent") swReqs.set(d.params.requestId, d.params.request.url.replace(/^https?:\/\/[^/]+/, "") + " " + (d.params.request.headers?.["Cache-Control"] || ""));
+    if (d.method === "Network.requestWillBeSent") {
+      const path = d.params.request.url.replace(/^https?:\/\/[^/]+/, "");
+      swReqs.set(d.params.requestId, path + " " + (d.params.request.headers?.["Cache-Control"] || ""));
+      swFetches[path] = (swFetches[path] || 0) + 1;
+    }
     if (d.method === "Network.responseReceived") swLog.push(`sw got ${d.params.response.status} ${d.params.response.fromDiskCache ? "disk" : "net"} ${swReqs.get(d.params.requestId)}`);
     if (d.method === "Network.loadingFailed") swLog.push(`sw failed ${d.params.errorText} ${swReqs.get(d.params.requestId)}`);
     if (d.method === "Runtime.consoleAPICalled" || d.method === "Runtime.exceptionThrown") swLog.push("sw console " + JSON.stringify(d.params).slice(0, 300));
   });
   await send("Target.setDiscoverTargets", { discover: true });
 }
-const swLog = [];
+const swLog = [], swSessions = new Set(), swFetches = {};
+let throttle = null; // network conditions for service workers as they start (page and workers: see slowVisit)
 
 // A page; workers it starts (and their workers: ORT's threads) are attached so we can ask them things.
 async function page(ctxId, { w = 1280, h = 800 } = {}) {
@@ -234,6 +240,43 @@ self.addEventListener("fetch", (e) => { if (e.request.method === "POST" && new U
   await browser.send("Target.disposeBrowserContext", { browserContextId: old }).catch(() => {});
 }
 
+// A first visit at 20 Mbps (page, its workers and the service worker), photo added at once: the model is fetched
+// through the worker (or before it took over) but never twice by the worker, and nothing past what the engine asked for.
+{
+  throttle = { offline: false, latency: 20, downloadThroughput: 2.5e6, uploadThroughput: 1e6 };
+  for (const k in swFetches) delete swFetches[k];
+  const newSw = readFileSync(join(dist, "sw.js"), "utf8");
+  if (process.env.OLD_SW) writeFileSync(join(dist, "sw.js"), OLD_SW); // OLD_SW=1: the same visit before this worker, for comparison
+  const { browserContextId: slow } = await browser.send("Target.createBrowserContext", { disposeOnDetach: true });
+  const q = await page(slow);
+  const direct = {};
+  const off = browser.on((d) => {
+    if (d.method === "Target.attachedToTarget" && d.params.targetInfo.type === "worker") browser.send("Network.emulateNetworkConditions", throttle, d.params.sessionId).catch(() => {});
+    if (d.method === "Network.responseReceived" && (d.sessionId === q.sessionId || q.workers.has(d.sessionId)) && /\/(m|rt)\//.test(d.params.response.url) && !d.params.response.fromServiceWorker) {
+      const path = new URL(d.params.response.url).pathname; direct[path] = (direct[path] || 0) + 1; // went past the worker
+    }
+  });
+  await q.offline(false); await q.s("Network.emulateNetworkConditions", throttle);
+  await check("first visit at 20 Mbps: no model part fetched twice by the worker", async () => {
+    const t = Date.now();
+    await q.go(APP());
+    await addPhoto(q, "slow");
+    await allDone(q, 1, 300000);
+    const ms = Date.now() - t;
+    await sleep(12000); // the completion pass
+    const twice = Object.entries(swFetches).filter(([u, n]) => /\/(m|rt)\//.test(u) && n > 1);
+    assert(!twice.length, "fetched twice by the worker: " + twice.map(([u, n]) => `${u} x${n}`).join(", "));
+    const c = await cachesNow(q);
+    const viaWorker = Object.keys(swFetches).filter((u) => /\/(m|rt)\//.test(u));
+    const both = viaWorker.filter((u) => direct[u.split("?")[0]] && !/manifest|\.mjs/.test(u));
+    return `first cut-out ${(ms / 1000).toFixed(1)} s; ${viaWorker.length} big files via the worker, ${both.length} of them had also gone past it before it took over (${both.join(", ") || "none"}); ` +
+      Object.entries(c).filter(([k]) => /^gb-(m|rt)/.test(k)).map(([k, v]) => `${k}: ${v.length}`).join(", ");
+  });
+  off(); throttle = null; writeFileSync(join(dist, "sw.js"), newSw);
+  for (const s of swSessions) browser.send("Network.emulateNetworkConditions", { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 }, s).catch(() => {});
+  await browser.send("Target.disposeBrowserContext", { browserContextId: slow }).catch(() => {});
+}
+
 const p = await page(ctx);
 let msOnline = {};
 
@@ -257,7 +300,7 @@ await check("online: first visit, GPU photo, GIF, TIFF, ad previews, CPU photo",
 await check("online: what the worker kept", async () => {
   await sleep(6500); // the completion pass after the engine's last request
   const c = await cachesNow(p);
-  for (const [n, want] of [["gb-rt-", 5], ["gb-m-birefnet", 7], ["gb-m-isnet", 6]]) { const k = Object.keys(c).find((x) => x.startsWith(n)); assert(k && c[k].length === want, `${n}: ${k ? c[k].length : "none"} of ${want}`); }
+  for (const [n, want] of [["gb-rt-", 5], ["gb-m-birefnet", 6], ["gb-m-isnet", 6]]) { const k = Object.keys(c).find((x) => x.startsWith(n)); assert(k && c[k].length === want, `${n}: ${k ? c[k].length : "none"} of ${want}`); }
   const est = await p.ev("navigator.storage.estimate().then((e) => Math.round(e.usage / 1e6))");
   const sw = await p.ev("navigator.serviceWorker.controller?.scriptURL || 'none'");
   return `controller ${sw}; storage ${est} MB; ` + Object.entries(c).map(([n, k]) => `${n}: ${k.length}`).join(", ");

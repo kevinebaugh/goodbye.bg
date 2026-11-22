@@ -73,8 +73,8 @@ self.addEventListener("fetch", (e) => {
   if (prefix) {
     if (req.headers.has("range")) return;
     e.waitUntil(warm().catch(() => {}));
-    e.waitUntil(whole(prefix));
-    return e.respondWith(fromBig(req, C.big[prefix].cache, e));
+    e.waitUntil(whole(prefix, path.slice(prefix.length)));
+    return e.respondWith(fromBig(req, prefix, e));
   }
   if (path.startsWith("/rt/") || path.startsWith("/m/")) return; // another build's version: straight to the network
   const shellPath = req.mode === "navigate" && path === "/" ? "/" : C.shell[path] && path;
@@ -122,27 +122,38 @@ async function fromPage(e) {
 // Runtime and models: the kept copy, else the network without writing the HTTP cache. Streamed through; a full disk
 // never fails the response.
 const putting = new Set();
-async function fromBig(req, name, e) {
-  const cache = await caches.open(name);
+async function fromBig(req, prefix, e) {
+  const cache = await caches.open(C.big[prefix].cache);
   const hit = await cache.match(req.url);
   if (hit) return hit;
   const res = await fetch(req.url, { cache: "no-store" });
-  if (keepable(res)) { putting.add(req.url); e.waitUntil(cache.put(req.url, res.clone()).catch(() => {}).finally(() => putting.delete(req.url))); }
+  if (keepable(res)) {
+    putting.add(req.url);
+    e.waitUntil(cache.put(req.url, res.clone()).catch(() => {}).finally(() => { putting.delete(req.url); whole(prefix); }));
+  }
   return res;
 }
 
-// A few seconds after the engine's last request for a folder, fetch what it got before this worker was in charge.
-// Only folders the engine asked for: a computer with the GPU engine never downloads the CPU model this way.
+// Parts the engine fetched before this worker was in charge (a first visit where the model starts at once) went past
+// it. 5 s after the last part through here has finished, fetch those: the numbered parts below the first one this
+// worker saw, the manifests and the small runtime modules. Never parts the engine hasn't reached (the GPU gate can stop
+// BiRefNet halfway), and only folders the engine asked for.
 const quiet = {};
-function whole(prefix) {
-  const q = quiet[prefix] ||= { done: null };
+const partNo = (f) => { const m = f.match(/^(.*?)(\d+)\.bin$/); return m && { dir: m[1], n: +m[2] }; };
+function whole(prefix, rel) {
+  const q = quiet[prefix] ||= { done: null, first: {} };
+  const part = rel && partNo(rel);
+  if (part) q.first[part.dir] = Math.min(q.first[part.dir] ?? Infinity, part.n);
   clearTimeout(q.timer);
   q.done ||= new Promise((ok) => (q.ok = ok));
-  q.timer = setTimeout(async () => {
+  q.timer = setTimeout(async function fire() {
+    if ([...putting].some((u) => new URL(u).pathname.startsWith(prefix))) { q.timer = setTimeout(fire, 5000); return; }
     const { ok } = q; q.done = null;
     try {
-      const { cache: name, files } = C.big[prefix], cache = await caches.open(name);
-      for (const f of files) {
+      const cache = await caches.open(C.big[prefix].cache);
+      for (const f of C.big[prefix].files) {
+        const p = partNo(f);
+        if (p ? !(p.n < (q.first[p.dir] ?? 0)) : !/(^|\/)manifest\.json$|\.mjs$/.test(f)) continue;
         const url = new URL(prefix + f, location.origin).href;
         if (putting.has(url) || await cache.match(url)) continue;
         const res = await fetch(url, { cache: "no-store" });
