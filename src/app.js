@@ -1336,7 +1336,7 @@ let adsAt = 0;
 // entrance (adsQuiet). A flag of its own: a layout before the masks are back resets adsAt.
 let adsStraight = false, adsQuiet = false;
 function placeAds(n, free) {
-  let want = adReady() && n >= 1 ? free : 0;
+  let want = adReady() && n >= 1 ? Math.min(free, adVariants.length) : 0; // each card a different product: a partner with one leaves the other cells empty
   if (!want) { adsAt = 0; adsQuiet = false; }
   else if (!adsAt) {
     adsQuiet = adsStraight; adsStraight = false;
@@ -1950,7 +1950,7 @@ else {
         out.push(...linksFrom(html, text));
       }
       addSources(out);
-    } catch { tell("Paste was blocked. Use ⌘/Ctrl + V, or allow clipboard access.", $("paste")); }
+    } catch { tell(PHONE || !DESKTOP ? "Paste was blocked. Allow it, or use Choose photos." : "Paste was blocked. Use ⌘/Ctrl + V, or allow clipboard access.", $("paste")); }
   });
 }
 
