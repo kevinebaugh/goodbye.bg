@@ -640,7 +640,7 @@ function boxBlur(src, r, w = RES, h = RES) {
 
 // Hair, fur and fluff: the model draws them as a soft blur; the photo knows where each strand is. A guided filter
 // (He et al. 2010, the photo's colour as the guide, radius 4, eps 0.001) redraws the mask there from the photo. Only
-// where the soft zone is wider than 3 px, so a crisp edge (a white sofa on a white wall, a wire) stays as the model drew
+// where the soft zone is wider than 3 px, so a crisp edge (a white headboard on a pale sky, a wire) stays as the model drew
 // it. Measured on the 923 test photos with real masks (docs/mask-postprocess.md). Experiment: ?pp=1.
 // px: the photo at RES x RES (RGBA), img: the mask after the edge curve. Returns how many pixels it changed.
 function refineEdge(px, img) {
