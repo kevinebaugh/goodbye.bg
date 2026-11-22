@@ -102,6 +102,11 @@ two rewrites, both in `scripts/birefnet.sh`:
   busy backdrops (bicycle on graffiti: no blobs), see-through objects (headphone case), small subjects
   (yard cat), sky gaps in the tree. Hair about the same at 1024.
 
+Quality on 1,073 public photos (2026-11-21, `docs/quality-1000.md`, harness in `scripts/quality/`): by eye, of 104
+cut-outs, gpu-birefnet 85 good / 14 usable / 5 bad, ISNet 57 / 32 / 15. Mean IoU on 923 photos with real masks 0.960
+vs 0.894. ISNet loses or fades parts of the subject; BiRefNet's flaw is which thing it keeps. Hair is a solid shape
+on both; see-through objects fail on both. The harness copies the page's mask handling: change both together.
+
 Rejected:
 - ISNet **small** (quint8): garbage (61% of pixels unsure).
 
