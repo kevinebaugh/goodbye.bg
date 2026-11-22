@@ -108,9 +108,9 @@ Found with `git grep -n "pages.dev"` on origin/main 9278576.
 | `src/index.html:28` | comment "switch to goodbye.bg once live" | Reword |
 | `scripts/serve.mjs:30` | `LIVE` for the dev `/api/count` proxy | `https://goodbye.bg` |
 | `docs/seo.md:50,53` | cutover instructions (still the todo) | Mark done, remove the middleware option |
-| `docs/launch/README.md:6-7` | "Link to use" rule | Say goodbye.bg, old host only as fallback |
-| `docs/launch/README.md:59,89,138,145,151,157,163` | `?ref=` links in PH, HN, Reddit and forum drafts | Replace host with `goodbye.bg` |
-| `docs/launch/README.md:203,207` | "If goodbye.bg isn't live yet" section | Delete once live |
+| `docs/launch/README.md:8-9` | "Link to use" rule | Say goodbye.bg, old host only as fallback |
+| `docs/launch/README.md:77,107,165,172,178,185,192` | `?ref=` links in PH, HN, Reddit and forum drafts | Replace host with `goodbye.bg` |
+| `docs/launch/README.md:233,237` | "If goodbye.bg isn't live yet" section | Delete once live |
 | `docs/launch-drafts.md:8` | link rule (the file says README replaces it) | Delete the file or update |
 | `docs/ads.md:17,19,103` | ad landing URLs, "wait for the domain" | Use goodbye.bg, drop the fallback |
 | `docs/zazzle-cap.md:133` | declared Zazzle image domains | No change: `goodbye.bg` is already declared |
