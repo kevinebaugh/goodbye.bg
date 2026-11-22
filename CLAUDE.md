@@ -123,10 +123,14 @@ Anything the browser opens goes straight in. HEIC and TIFF on Chrome/Edge/Firefo
   Fetched only when a HEIC arrives on a browser without HEIC. 1920x2306 decodes in about 0.16 s.
 - TIFF: UTIF (`utif2`, MIT), the largest colour picture in the file, EXIF orientation applied.
 - RAW (DNG, CR2, CR3, NEF, ARW, RAF, ORF, RW2, ...): the largest baseline JPEG the camera stored inside, turned by the
-  TIFF orientation. No developing. Older Canons store only about 2 MP (a 40D-era CR2 gave 1936x1288); a NEF gave
+  TIFF orientation (unless that JPEG carries its own EXIF orientation, which the browser applies already: iPhone ProRAW
+  portrait DNGs came out sideways before 2026-11-22). No developing. Older Canons store only about 2 MP (a 40D-era CR2 gave 1936x1288); a NEF gave
   the full 4256x2832. A RAW without a usable preview says so.
 - ZIPs (picked, dropped or in a dropped folder) open with fflate's `unzipSync`: pictures by extension, in natural name
-  order, skipping `__MACOSX` and dot-files, at most `MAX_BATCH`.
+  order, skipping `__MACOSX` and dot-files, at most `MAX_BATCH` (the first by name; a name-only first pass picks them).
+- Tested 2026-11-22 (headless Chrome, raw.pixls.us samples): CR2 1936x1288, NEF 6016x4000, iPhone 12 Pro DNG 3024x4032,
+  Sony A7 III ARW 1616x1080 (the largest preview that camera stores), CR3 3408x2272; HEIC 6016x6016 in 1.9 s; LZW TIFF;
+  broken HEIC/TIFF/fake DNG give an error card; mixed ZIP (nested folders, HEIC, CR2, TIFF, junk) in name order.
 
 ## Kept on the device (2026-11-21)
 
