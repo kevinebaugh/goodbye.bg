@@ -3,8 +3,8 @@
 // one-time model download from the goodbye.bg site.
 "use strict";
 const fs = require("fs"), path = require("path");
-const { Worker } = require("worker_threads");
 const { MODELS } = require("../lib/pipeline.cjs");
+const B = require("../lib/batch.cjs");
 const { startEngine } = require("../lib/engine.cjs");
 const VERSION = require("../package.json").version;
 let MODEL_HELP = "birefnet (the only model in this build)";
@@ -13,6 +13,7 @@ if (MODELS.isnet) MODEL_HELP = "birefnet (default, MIT) or isnet (AGPL, faster o
 const HELP = `goodbye-bg ${VERSION}: remove backgrounds from photos on this computer. Nothing is uploaded.
 
 Usage: goodbye-bg <photos or folders...> [options]
+       goodbye-bg                       the same in a window, in your browser (also: goodbye-bg app; see --help there)
        goodbye-bg serve [--port 5000]   remove.bg's API on this computer (see goodbye-bg serve --help)
 
   --out <dir>          where cut-outs go (default: ./cutouts). Subfolders are kept.
@@ -32,7 +33,6 @@ Usage: goodbye-bg <photos or folders...> [options]
 Reads JPG, PNG, WebP, AVIF, TIFF, GIF (first frame) and HEIC. Run the same command again to carry on
 after a stop: finished photos are skipped.`;
 
-const EXTS = new Set([".jpg", ".jpeg", ".jpe", ".jfif", ".png", ".webp", ".avif", ".tif", ".tiff", ".gif", ".heic", ".heif"]);
 const NAMED = { white: [255, 255, 255], black: [0, 0, 0] };
 
 function fail(msg) { console.error(`goodbye-bg: ${msg}`); process.exit(2); }
@@ -72,70 +72,24 @@ function parseArgs(argv) {
   return o;
 }
 
-// Every picture under the inputs, in name order, with the folder it was found under (for the output's subfolders).
-function collect(inputs, outAbs) {
-  const found = [], seen = new Set();
-  const natural = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" }).compare;
-  const walk = (dir, root) => {
-    let ents;
-    try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { console.error(`goodbye-bg: can't read ${dir}: ${e.code || e.message}`); return; }
-    ents.sort((a, b) => natural(a.name, b.name));
-    for (const e of ents) {
-      if (e.name.startsWith(".") || e.name === "__MACOSX") continue;
-      const p = path.join(dir, e.name);
-      if (e.isSymbolicLink()) { try { const st = fs.statSync(p); if (st.isFile() && EXTS.has(path.extname(e.name).toLowerCase())) add(p, root); } catch {} continue; } // links to folders are not followed (no loops)
-      if (e.isDirectory()) { if (path.resolve(p) !== outAbs) walk(p, root); }
-      else if (e.isFile() && EXTS.has(path.extname(e.name).toLowerCase())) add(p, root);
-    }
-  };
-  const add = (p, root) => { const abs = path.resolve(p); if (!seen.has(abs)) { seen.add(abs); found.push({ src: abs, rel: path.relative(root, abs) }); } };
-  for (const inp of inputs) {
-    let st; try { st = fs.statSync(inp); } catch { fail(`can't find ${inp}`); }
-    if (st.isDirectory()) walk(path.resolve(inp), path.resolve(inp));
-    else add(inp, path.dirname(path.resolve(inp)));
-  }
-  return found;
-}
-
-// Output paths: same subfolders and name, the new extension. a.jpg and a.png in one folder would both be a.png, so
-// the second keeps its old extension in the name (a-png.png).
-function plan(files, outAbs, format) {
-  const taken = new Set();
-  for (const f of files) {
-    const p = path.parse(f.rel);
-    let dst = path.join(outAbs, p.dir, `${p.name}.${format}`);
-    if (taken.has(dst.toLowerCase())) dst = path.join(outAbs, p.dir, `${p.name}-${p.ext.slice(1).toLowerCase()}.${format}`);
-    taken.add(dst.toLowerCase());
-    f.dst = dst;
-  }
-}
-
-// Any cut-out (a file that isn't a dot-file) anywhere under dir.
-const hasFiles = (dir) => fs.readdirSync(dir, { withFileTypes: true }).some((e) => !e.name.startsWith(".") && (e.isDirectory() ? hasFiles(path.join(dir, e.name)) : true));
-
 const fmtTime = (s) => { s = Math.round(s); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60; return (h ? `${h}:${String(m).padStart(2, "0")}` : `${m}`) + `:${String(x).padStart(2, "0")}`; };
 
 async function main() {
   const o = parseArgs(process.argv.slice(2));
   const outAbs = path.resolve(o.out);
-  const files = collect(o.inputs, outAbs);
+  let files;
+  try { files = B.collect(o.inputs, outAbs, (w) => console.error(`goodbye-bg: ${w}`)); } catch (e) { if (e.fatal) fail(e.message); throw e; }
   if (!files.length) fail("no photos found (JPG, PNG, WebP, AVIF, TIFF, GIF, HEIC)");
-  plan(files, outAbs, o.format);
+  B.plan(files, outAbs, o.format);
 
   // Resume: a finished cut-out (written whole, then renamed into place) newer than its photo is skipped. The settings
   // are kept next to the cut-outs, so a run with other settings doesn't silently mix two looks in one folder.
-  const settings = { model: o.model, bg: o.bg, format: o.format, crop: o.crop, size: o.size, pad: o.size ? o.pad : null };
-  const settingsFile = path.join(outAbs, ".goodbye-bg.json");
+  const settings = B.settingsOf(o);
   fs.mkdirSync(outAbs, { recursive: true });
-  if (!o.force && fs.existsSync(settingsFile)) {
-    let old = {}; try { old = JSON.parse(fs.readFileSync(settingsFile, "utf8")); } catch {}
-    const diff = Object.keys(settings).filter((k) => JSON.stringify(old[k] ?? null) !== JSON.stringify(settings[k] ?? null));
-    if (diff.length && hasFiles(outAbs)) fail(`${o.out} has cut-outs made with other settings (${diff.join(", ")}). Add --force to redo them, or pick another --out.`);
-  }
-  fs.writeFileSync(settingsFile, JSON.stringify(settings) + "\n");
-  const todo = o.force ? files : files.filter((f) => {
-    try { const d = fs.statSync(f.dst); return !(d.size > 0 && d.mtimeMs >= fs.statSync(f.src).mtimeMs); } catch { return true; }
-  });
+  const diff = o.force ? [] : B.settingsClash(outAbs, settings);
+  if (diff.length) fail(`${o.out} has cut-outs made with other settings (${diff.join(", ")}). Add --force to redo them, or pick another --out.`);
+  B.writeSettings(outAbs, settings);
+  const todo = o.force ? files : B.notDone(files);
   const skipped = files.length - todo.length;
   const say = (s) => { if (!o.quiet) process.stderr.write(process.stderr.isTTY ? `\r\x1b[K${s}` : s + "\n"); };
   if (!todo.length) { console.log(`All ${files.length} photos already have cut-outs in ${o.out}. Add --force to redo them.`); return; }
@@ -145,10 +99,9 @@ async function main() {
   let eng;
   try { eng = await startEngine(o, say); } catch (e) { if (e.fatal) fail(e.message); throw e; }
   const spec = eng.spec, tReady = performance.now();
-  const infer = eng.infer;
 
   const jobOpts = { harden: spec.harden, bg: o.bg, format: o.format, crop: o.crop, size: o.size, pad: o.pad };
-  const queue = todo.slice(), inflight = new Map(), failed = [], empty = [];
+  const queue = todo.slice(), failed = [], empty = [];
   let done = 0, stopping = false, mp = 0;
   const tStart = performance.now();
   const progress = (name) => {
@@ -156,38 +109,17 @@ async function main() {
     const eta = rate > 0 ? fmtTime((todo.length - done - failed.length) / rate) : "?";
     say(`${String(done + failed.length).padStart(String(todo.length).length)}/${todo.length}  ${(rate * 60).toFixed(1)} a minute  ${eta} left  ${name || ""}`.slice(0, (process.stderr.columns || 120) - 1));
   };
-  const workers = Array.from({ length: Math.min(o.jobs, todo.length) }, () => new Worker(path.join(__dirname, "../lib/worker.cjs")));
-  await new Promise((resolveAll) => {
-    let live = workers.length;
-    const feed = (w) => {
-      const f = !stopping && queue.shift();
-      if (!f) { w.terminate(); if (--live === 0) resolveAll(); return; }
-      fs.mkdirSync(path.dirname(f.dst), { recursive: true });
-      const tmp = `${f.dst}.part-${process.pid}`;
-      inflight.set(w, { f, tmp });
-      w.postMessage({ type: "job", key: f.src, src: f.src, dst: f.dst, tmp, o: jobOpts });
-    };
-    for (const w of workers) {
-      w.on("message", (m) => {
-        if (m.type === "infer") {
-          infer(m.px).then((mask) => w.postMessage({ type: "mask", id: m.id, mask }, [mask.buffer]), (e) => w.postMessage({ type: "maskerr", id: m.id, error: String(e?.message || e) }));
-          return;
-        }
-        const { f } = inflight.get(w); inflight.delete(w);
-        if (m.type === "done") { done++; mp += (m.W * m.H) / 1e6; if (m.empty) empty.push(f.rel); }
-        else { failed.push({ rel: f.rel, error: m.error }); if (!o.quiet) process.stderr.write(`\n${f.rel}: ${m.error}\n`); }
-        progress(f.rel);
-        feed(w);
-      });
-      w.on("error", (e) => { const j = inflight.get(w); inflight.delete(w); if (j) { failed.push({ rel: j.f.rel, error: String(e.message) }); fs.rmSync(j.tmp, { force: true }); } if (--live === 0) resolveAll(); });
-      feed(w);
-    }
-    process.once("SIGINT", () => {
-      stopping = true;
-      if (!o.quiet) process.stderr.write(`\nStopping after the photos in progress (Ctrl-C again to quit now)...\n`);
-      process.once("SIGINT", () => { for (const { tmp } of inflight.values()) fs.rmSync(tmp, { force: true }); process.exit(130); });
-    });
+  const batch = B.runBatch({
+    eng, jobOpts, jobs: o.jobs, total: todo.length, next: () => queue.shift() || null, isStopping: () => stopping,
+    onDone: (f, m) => { done++; mp += (m.W * m.H) / 1e6; if (m.empty) empty.push(f.rel); progress(f.rel); },
+    onFail: (f, error) => { failed.push({ rel: f.rel, error }); if (!o.quiet) process.stderr.write(`\n${f.rel}: ${error}\n`); progress(f.rel); },
   });
+  process.once("SIGINT", () => {
+    stopping = true;
+    if (!o.quiet) process.stderr.write(`\nStopping after the photos in progress (Ctrl-C again to quit now)...\n`);
+    process.once("SIGINT", () => { for (const { tmp } of batch.inflight.values()) fs.rmSync(tmp, { force: true }); process.exit(130); });
+  });
+  await batch.done;
   await eng.release();
 
   const secs = (performance.now() - tStart) / 1000, total = (performance.now() - t0) / 1000;
@@ -204,5 +136,9 @@ async function main() {
   process.exitCode = stopping ? 130 : failed.length ? 1 : 0;
 }
 
-const run = process.argv[2] === "serve" ? () => require("../lib/serve.cjs").serve(process.argv.slice(3)) : main;
+// No arguments at all (a double-click in Finder runs it that way too) or "app": the window.
+const cmd = process.argv[2];
+const run = cmd === "serve" ? () => require("../lib/serve.cjs").serve(process.argv.slice(3))
+  : cmd === undefined || cmd === "app" ? () => require("../lib/app.cjs").app(process.argv.slice(3))
+  : main;
 run().catch((e) => { console.error(`\ngoodbye-bg: ${e?.stack || e}`); process.exit(1); });
