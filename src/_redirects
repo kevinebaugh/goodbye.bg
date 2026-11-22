@@ -1,0 +1,3 @@
+# The Android share target posts to /share, where sw.js catches it. If the service worker isn't running,
+# send the visitor to the app instead of a 404 or 405 page.
+/share / 303

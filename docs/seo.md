@@ -17,13 +17,14 @@ Status: items marked **done** are on `main` (see `src/robots.txt`, `src/sitemap.
 | remove background free, no upload, private, offline, no watermark | `/` | Our real differences. Low volume, high conversion. |
 | remove background from photo on iPhone / Android | `/how-to-remove-background/` | Long tail, later its own pages if it shows up in Search Console. |
 
-## 2. App page title and description (not applied yet)
+## 2. App page title and description (**done** 2026-11-21)
 
 The `<title>` and `<meta name="description">` in `src/index.html` sit next to the share tags, so they were
 left for whoever owns that file. Recommended:
 
 - Title (under 60 chars): `Remove Image Background Free, Private – goodbye.bg`
-- Description (under 155 chars): `Remove the background from any image for free. Runs in your browser, so photos never upload. Full size, transparent PNG, no account, no watermark.`
+- Description (under 155 chars): `Remove image backgrounds for free. Photos are cut out in your browser, not on a server. High resolution, transparent PNG, no account, no watermark.`
+  (Changed from the first draft: "photos never upload" isn't true once a visitor clicks a Zazzle card, and "full size" isn't true past 16 MP in Safari.)
 - Keep the visible H1 "Say goodbye to the background." It already contains "background"; the title does the keyword work.
 
 ## 3. Content that can win
@@ -33,7 +34,8 @@ left for whoever owns that file. Recommended:
 2. **done** `/how-to-remove-background/`: three steps, transparent vs white, what works well and what doesn't.
 3. Later, only if Search Console shows the queries: `/transparent-background/`, `/remove-background-iphone/`,
    `/remove-background-android/`. Each needs real, distinct content. Thin near-duplicates hurt.
-4. Update the alternative page on 1 December 2026 ("remove.bg has shut down") and set `dateModified`.
+4. **done** 2026-11-21: the alternative page has an honest comparison (what we don't do: new background, brush, API), what to do with credits, past images and API keys, and an "Updated" date.
+5. Update the alternative page on 1 December 2026 ("remove.bg has shut down") and set `dateModified`.
 
 ## 4. Technical
 
@@ -59,6 +61,7 @@ left for whoever owns that file. Recommended:
   costs mobile data for visitors who only read. Start the download on first interaction (pointer over or
   focus on "Choose photos", paste, drop) or after `requestIdleCallback`, and keep the result fast for the
   first photo. Measure with PageSpeed Insights on mobile after the change.
+- **done** `404.html` (2026-11-21): unknown paths return a real 404 (they used to return the app with 200, a soft 404). `_redirects` sends `GET`/`POST /share` to `/` when the service worker didn't catch it (it was 405 for POST before).
 - Later: `hreflang` only if the page gets translated. Not before.
 
 ## 5. Off-site (where most of the ranking comes from)
@@ -68,9 +71,9 @@ In order:
 1. **Directories and lists of remove.bg alternatives.** Search "remove.bg alternative", "remove.bg shutting
    down", "free background remover" and ask the authors of the top 20 articles to add goodbye.bg. Lead with
    the angle: free, full size, no upload, open source.
-2. **Hacker News** "Show HN: goodbye.bg, a background remover that runs in your browser". Post on a weekday
+2. **Hacker News** (draft in `docs/launch-drafts.md`) "Show HN: goodbye.bg, a background remover that runs in your browser". Post on a weekday
    morning US time, close to the shutdown news. Link the source.
-3. **Product Hunt** launch the same week. Have screenshots and a 20 s clip ready.
+3. **Product Hunt** (draft in `docs/launch-drafts.md`) launch the same week. Have screenshots and a 20 s clip ready.
 4. **Reddit**: r/InternetIsBeautiful, r/webdev, r/photography, r/graphic_design, threads asking what to use
    after remove.bg. Answer the question; don't spam.
 5. **Open source listings**: GitHub topics (`background-removal`, `onnx`, `webgpu`), awesome lists

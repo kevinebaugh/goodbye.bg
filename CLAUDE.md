@@ -19,7 +19,9 @@ Actions. The old upload-only project `goodbye-bg` can be deleted.
 ## Layout
 
 - `src/` static site: `index.html`, `style.css`, `app.js` (everything), `sw.js` (Android share target),
-  `manifest.webmanifest`, `_headers` (security headers, also used by local dev), `ad.html` (sandboxed ad slot, ads off)
+  `manifest.webmanifest`, `_headers` (security headers, also used by local dev), `ad.html` (sandboxed ad slot, ads off),
+  `404.html` (real 404 for unknown paths; no scripts), `_redirects` (`/share` to `/` when the service worker missed it),
+  `remove-bg-alternative/` and `how-to-remove-background/` (SEO pages, see `docs/seo.md`; launch drafts in `docs/launch-drafts.md`)
 - `functions/api/fetch.js` Cloudflare Pages Function. Fetches an image for a pasted link (same-origin only,
   30 MB cap, follows og:image for web pages). The only server code.
 - `scripts/build.mjs` assembles `dist/`. `scripts/serve.mjs` local server that applies `_headers` and runs the function.
