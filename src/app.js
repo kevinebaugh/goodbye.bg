@@ -2080,12 +2080,16 @@ async function retry(it) {
   while (want && running) await new Promise((r) => setTimeout(r, 300));
   try {
     const sx = Math.round(x0 * it.w), sy = Math.round(y0 * it.h), sw = Math.max(1, Math.round((x1 - x0) * it.w)), sh = Math.max(1, Math.round((y1 - y0) * it.h));
-    const big = await fullBitmap(it), sc = big.width / it.w; // decoded size can exceed the working size
-    // Straight to the model's input size: 4 MB instead of a full-resolution crop.
-    const part = await createImageBitmap(big, Math.round(sx * sc), Math.round(sy * sc), Math.max(1, Math.round(sw * sc)), Math.max(1, Math.round(sh * sc)),
-      { resizeWidth: RES, resizeHeight: RES, resizeQuality: "high" });
-    big.close();
-    const m = await segment(part, true, want); part.close();
+    let m;
+    if (want && it.bmp) m = await segment(it.bmp, true, want); // the whole photo, as the batch drew it: no full decode next to a starting engine
+    else {
+      const big = await fullBitmap(it), sc = big.width / it.w; // decoded size can exceed the working size
+      // Straight to the model's input size: 4 MB instead of a full-resolution crop.
+      const part = await createImageBitmap(big, Math.round(sx * sc), Math.round(sy * sc), Math.max(1, Math.round(sw * sc)), Math.max(1, Math.round(sh * sc)),
+        { resizeWidth: RES, resizeHeight: RES, resizeQuality: "high" });
+      big.close();
+      m = await segment(part, true, want); part.close();
+    }
     if (m.box) { changed = true; it.mask = mergeRetry(it.first, m, { x: sx / it.w, y: sy / it.h, w: sw / it.w, h: sh / it.h }); it.maskRect = null; it.ms = lastMs; it.engine = lastEngine; it.png = null; }
   } catch (e) { console.warn("Retry failed", e); }
   retrying--; clearInterval(it.quip);

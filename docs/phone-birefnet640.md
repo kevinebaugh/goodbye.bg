@@ -36,8 +36,11 @@ One engine at a time (`loadModel(want)` in app.js):
   idle shutdown then frees 640, and ISNet starts after the gap.
 - **The next new photo runs on 640 again.** On iPhones ISNet goes at the idle shutdown. On computers using the CPU
   fallback, the next photo switches back to 640.
-- **Cost:** the first 👎 downloads ISNet (88 MB) once, and the service worker then caches it. Offline before that, the
-  retry fails quietly and the 640 result stays.
+- **The whole-photo retry draws the bitmap the batch used** (`it.bmp`), as the batch does. It doesn't decode the full
+  photo, which the zoomed retry does, so a big photo adds nothing next to the starting engine.
+- **Cost:** the first 👎 downloads ISNet (88 MB) once, and the service worker then caches it. Offline before that: not
+  tested. By the code, the download retries 4 times with backoff, then the CPU start retries once after 3 s and
+  sends a `start-failed` report. After that the 640 result stays.
 
 ### What it scores (best case: a 👎 on every 640 result that ISNet beats)
 
@@ -76,6 +79,8 @@ warm runs' batch peaks include that fetched copy, which the page still held. Lar
 | after the shutdown (gap 4 s), cold | 4.6, 5.3 s | session 0.3 s, run 3.7 to 4.5 s | 1885, 1850 | 1966, 1966 |
 | after the shutdown, warm | 4.4, 4.6 s | the same | 1934, 1858 | 2022, 1995 |
 | during the batch (first card done, 4 to go) | 22, 23 s, mostly the batch | waits for the batch, then as gap 0 | 1892, 1866 | 1991, 1946 |
+| on the 18.75 MP photo (fills the frame: a vote only on main), gap 0 | 6.8, 6.8 s | wait 3.0 s, run 3.2 s | 1893, 1859 | 1989, 1928 |
+| on the 18.75 MP photo, gap 4 s | 3.8 s | | 1864 | 1994 |
 | **ISNet only (`?model=isnet`, today's main), gap 0** | 8.2, 6.9 s | zoomed ISNet retry | 1929, 1798 | 1929, 1851 |
 
 - **Peak during the swap: 1850 to 1940 MB, level with ISNet's own 👎 (1798 to 1929) and under main's 2.0 GB.** It
@@ -167,7 +172,8 @@ Use Safari, a fresh tab. Each step's URL carries `?debug=1` so every step lands 
 4. **Required: a 👎 right after the batch finished** on a thin product (a chair, a tripod, a cable), ideally one where 640
    lost a leg. The engine has just shut down, and the 👎 starts ISNet up to 3 s later. The first time it also downloads
    ISNet (88 MB), so use Wi-Fi. Pass: ISNet's whole-photo result comes back in about 7 to 9 s, with no crash. A second 👎
-   puts the 640 result back. This is the pattern that crashed iPhones before main's 3 s wait. Then add one more photo
+   puts the 640 result back. This is the pattern that crashed iPhones before main's 3 s wait. Also 👎 the 18.75 MP photo
+   from step 1 right after it finishes: it fills the frame, so on main its 👎 was a vote only. Then add one more photo
    (the log should show `want` empty and `birefnet640` again), and a GIF (16 frames on iPhone).
 
 ### Reading the diag log
