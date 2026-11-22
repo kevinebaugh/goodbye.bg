@@ -136,7 +136,7 @@ the finished GIF. On load the cards come back in place without the model; unfini
 perpetuity, sane limit"): newest 50 photos within 1 GB on computers, 400 MB on phones; oldest out first; quota errors
 drop the oldest and retry, then give up quietly. Removing a card deletes its copy. `navigator.storage.persist()` is
 asked except in Firefox (it prompts there). Safari still clears site storage after 7 days without a visit.
-Tested in headless Chrome only (reload, Back). Not tested on an iPhone.
+Tested: headless Chrome (reload in a restarted browser, Back still from bfcache); iOS Simulator (iPhone 17, iOS 27): force-quitting Safari and reopening brings back both photos in order with the 👍 lit, a removed card stays gone, and Download on a restored photo shares the full-size PNG. Not tested: 👎 retries and GIFs after a restore, the size cap.
 
 ## UX decisions (2026-11-20, from Kevin)
 
