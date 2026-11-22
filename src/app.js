@@ -1186,6 +1186,7 @@ function makeCard(it) {
   canvas.setAttribute("role", "img"); canvas.setAttribute("aria-label", "Image");
   const busy = document.createElement("div"); busy.className = "busy";
   card.classList.add("queued"); // waits quietly; only the photo being worked on waves and talks
+  card.setAttribute("aria-busy", "true");
   const x = document.createElement("button"); x.type = "button"; x.className = "x"; x.textContent = "×"; x.setAttribute("aria-label", "Remove"); x.title = "Remove";
   const crop = document.createElement("button"); crop.type = "button"; crop.className = "crop"; crop.style.visibility = "hidden"; // keeps its place, so the bar never shifts
   crop.setAttribute("aria-label", "Crop to subject"); crop.title = "Crop to subject"; crop.setAttribute("aria-pressed", "true");
@@ -1530,7 +1531,12 @@ function useForAll(from) {
 // The file name tells screen readers which photo a card (and its Download, Remove…) belongs to.
 function named(it, name) {
   it.name = name;
-  it.el.card.setAttribute("aria-label", name); it.el.img.alt = `${name}, background removed`;
+  it.el.card.setAttribute("aria-label", name); it.el.img.alt = `${name}, background removed`; it.el.canvas.setAttribute("aria-label", name);
+}
+// Screen readers hear when a photo is done or failed (a polite status line, always in the page; #tell comes and goes).
+function announce(msg) {
+  const sr = $("sr"); if (!sr) return;
+  sr.textContent = ""; requestAnimationFrame(() => (sr.textContent = msg));
 }
 
 // A removed photo: ad cards showing it move on to another cut-out, and its preview bitmap is freed (iPhone memory).
@@ -1612,7 +1618,7 @@ function unshow(it) {
 
 // A finished card: its controls come on.
 function ready(it) {
-  clearInterval(it.quip); it.el.card.classList.remove("queued", "working");
+  clearInterval(it.quip); it.el.card.classList.remove("queued", "working"); it.el.card.removeAttribute("aria-busy");
   it.el.busy.hidden = true; it.el.dl.disabled = false;
   for (const b of [it.anim ? null : it.el.crop, it.anim ? null : it.el.bgb, it.el.up, it.el.down]) if (b) b.style.visibility = "";
   it.el.card.classList.toggle("picky", !it.anim); // has a background picker, so narrow bars may move remove into it
@@ -1628,8 +1634,9 @@ function fail(it, msg) {
   clearInterval(it.quip);
   it.failed = true;
   it.el.card.classList.remove("working");
-  it.el.card.classList.add("failed");
+  it.el.card.classList.add("failed"); it.el.card.removeAttribute("aria-busy");
   it.el.busy.textContent = msg;
+  announce(`${it.name && it.name !== "image" ? it.name + ": " : ""}${msg}`);
   if (it.name && it.name !== "image") { const n = document.createElement("span"); n.className = "fname"; n.textContent = it.name; it.el.busy.append(n); } // in a batch: which one
 }
 
@@ -1653,6 +1660,7 @@ async function run() {
       if (it.anim) try { await animate(it); } catch (e) { console.error(e); report("gif-failed", e, it); it.anim = null; it.png = null; }
       if (!items.includes(it)) { it.unfinished = true; if (it.anim && !it.gifUrl) it.mask = null; continue; }
       ready(it); dbg("shown"); keep(it);
+      { const left = items.filter((i) => i.bmp && !i.mask && !i.failed).length; announce(`${it.name}: background removed.${left ? ` ${left} to go.` : ""}`); }
       dbg("reveal"); reveal(it); sync(); tick(); milestone(it);
       it.el.card.dataset.ms = lastMs;
     }
@@ -1701,7 +1709,12 @@ function sendRating(it, vote) {
 
 // One vote per result: the chosen one stays lit, the other steps aside (keeping its place in the bar).
 function showVote(it, vote) {
-  const { up, down } = it.el;
+  const { up, down, dl, card } = it.el;
+  // A keyboard vote keeps focus on the card: on Download, or on the card itself while a 👎 retry runs (it used to fall to <body>).
+  if (document.activeElement === up || document.activeElement === down) {
+    const retrying = vote === "down" && !it.retried && !it.anim && zoomRect(it);
+    if (retrying) { card.tabIndex = -1; card.focus({ preventScroll: true }); } else dl.focus({ preventScroll: true });
+  }
   up.disabled = down.disabled = true;
   (vote === "up" ? up : down).classList.add("chosen");
   (vote === "up" ? down : up).style.visibility = "hidden";
@@ -1801,6 +1814,8 @@ async function retry(it) {
   // A new result gets its own vote; if the retry found nothing better, the 👎 stands.
   if (changed) { it.vote = null; for (const b of [up, down]) { b.disabled = false; b.classList.remove("chosen"); b.style.visibility = ""; } }
   downLabel(it); keep(it);
+  if (document.activeElement === it.el.card) dl.focus({ preventScroll: true });
+  announce(`${it.name}: ${changed ? "tried again, new result" : "tried again, no better result"}`);
 }
 
 // Everything fits on one screen: cards are square and sized so they all fit the space left.
