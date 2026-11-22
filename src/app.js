@@ -1245,7 +1245,11 @@ function layout() {
   g.classList.toggle("scroll", scroll);
   $("main").style.setProperty("--cols", c); $("main").style.setProperty("--p", `${p}px`); // grid and tools row share them
   placeAds(n, scroll ? 0 : Math.ceil(slots / c) * c - n);
-  requestAnimationFrame(() => { hugFooter(scroll ? 0 : Math.ceil(slots / c)); document.body.classList.remove("restoring"); }); // rows, the cells kept for ads included; kept photos measured: show them
+  requestAnimationFrame(() => {
+    hugFooter(scroll ? 0 : Math.ceil(slots / c)); // rows, the cells kept for ads included
+    // Kept photos measured: show them a frame later, once the footer sits in place (no slide in from the bottom).
+    if (document.body.classList.contains("restoring")) requestAnimationFrame(() => document.body.classList.remove("restoring"));
+  });
 }
 // When the cards fill the width before the height (a phone in portrait), the grid has empty space under them. The
 // footer moves up to sit under the cards and the spare space goes to the bottom of the screen. A transform, so the
