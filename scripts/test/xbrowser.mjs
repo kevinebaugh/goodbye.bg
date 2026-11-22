@@ -188,7 +188,7 @@ async function target(name, t, base) {
   });
 
   await check(pre + "3D ad cards drawn (WebGL)", async () => {
-    await p.waitForFunction(() => document.querySelectorAll("#grid > .adcard").length === 3 && [...document.querySelectorAll("#grid > .adcard")].every((a) => !a.classList.contains("loading")), null, { timeout: 20000 });
+    await p.waitForFunction(() => document.querySelectorAll("#grid > .adcard").length >= 1 && /* 3 beside one photo; 1 on phones, where 1 photo + 1 ad keeps remove on the card */ [...document.querySelectorAll("#grid > .adcard")].every((a) => !a.classList.contains("loading")), null, { timeout: 20000 });
     await sleep(1500); // a failed drawing reports itself (3d-failed, ad-failed)
     await clean("drawing ads");
     const gl = await p.evaluate(() => !!document.createElement("canvas").getContext("webgl2"));
