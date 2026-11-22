@@ -664,9 +664,10 @@ try {
     return `CLS ${cls.toFixed(4)}`;
   });
 
-  // ?pp=1: the guided filter on hair and fur (refineEdge, docs/mask-postprocess.md) runs after the model on a furry
+  // ?pp=1: the guided filter on hair and fur (refineEdge, docs/mask-postprocess.md) runs after BiRefNet on a furry
   // subject, changes some soft pixels, and the cut-out still saves. ?debug=1 reports its step (name and numbers only).
-  await check(`edge refinement (?pp=1, ${engine}): refines a furry edge, PNG saves`, async () => {
+  await check("edge refinement (?pp=1, BiRefNet): refines a furry edge, PNG saves", async () => {
+    if (engine !== "gpu") return { skip: "BiRefNet only, and it needs WebGPU with shader-f16" };
     const c6 = await context(), q = await page(c6), steps = [];
     const off = browser.on((d) => {
       if (d.method !== "Network.requestWillBeSent" || !/\/api\/diag$/.test(d.params.request.url)) return;
