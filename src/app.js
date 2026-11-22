@@ -635,12 +635,12 @@ const isZip = (f) => f instanceof Blob && (/zip/i.test(f.type) || /\.zip$/i.test
 
 // A ZIP becomes the pictures inside it, in name order (folders inside are fine; Mac "__MACOSX" copies and dot-files are not pictures).
 async function unzipImages(zip) {
-  const names = [];
-  const files = unzipSync(new Uint8Array(await zip.arrayBuffer()), {
-    filter: (f) => IMG_EXT.test(f.name) && !/(^|\/)(__MACOSX\/|\.)/.test(f.name) && f.originalSize > 0 && f.originalSize < 200e6 && names.push(f.name) <= MAX_BATCH,
-  });
-  return Object.keys(files).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-    .map((n) => new File([files[n]], n.split("/").pop(), { type: mimeOf(n) }));
+  const data = new Uint8Array(await zip.arrayBuffer()), names = [];
+  // First pass reads only the names, so a ZIP of more than MAX_BATCH keeps the first ones by name, not by archive order.
+  unzipSync(data, { filter: (f) => { if (IMG_EXT.test(f.name) && !/(^|\/)(__MACOSX\/|\.)/.test(f.name) && f.originalSize > 0 && f.originalSize < 200e6) names.push(f.name); return false; } });
+  const keep = names.sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).slice(0, MAX_BATCH), want = new Set(keep);
+  const files = unzipSync(data, { filter: (f) => want.has(f.name) });
+  return keep.filter((n) => files[n]).map((n) => new File([files[n]], n.split("/").pop(), { type: mimeOf(n) }));
 }
 const mimeOf = (n) => ({ jpg: "image/jpeg", jpeg: "image/jpeg", jfif: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif", avif: "image/avif",
   bmp: "image/bmp", svg: "image/svg+xml", ico: "image/x-icon", heic: "image/heic", heif: "image/heif", tif: "image/tiff", tiff: "image/tiff" })[n.split(".").pop().toLowerCase()] || "";
