@@ -1229,8 +1229,10 @@ function makeCard(it) {
     // Focus goes to the next card's Remove (or the one before), not back to the top of the page.
     const next = card.nextElementSibling, near = next?.querySelector?.(".x") || card.previousElementSibling?.querySelector?.(".x");
     card.remove(); swapAds(it); forget(it); sync();
-    offerUndo({ it, card, at, next });
-    if (near) near.focus({ preventScroll: true }); else $("pick").focus({ preventScroll: true }); });
+    offerUndo({ it, card, at, next, near });
+    // From the keyboard, Undo is the next stop (its countdown pauses while it has focus); with a pointer, the next card.
+    if (performance.now() - keyAt < 600) $("undobtn").focus({ preventScroll: true });
+    else if (near) near.focus({ preventScroll: true }); else $("pick").focus({ preventScroll: true }); });
   dl.addEventListener("click", async () => {
     if (it.saving) return; // already on it
     it.saving = true; tick();
@@ -1549,6 +1551,7 @@ function offerUndo(u) {
   if (pendingUndo) settle(pendingUndo);
   pendingUndo = u;
   const bar = $("undo"), ring = bar.querySelector(".ring circle");
+  bar.firstChild.textContent = `Removed ${u.it.name}.`;
   bar.hidden = false;
   // In the footer's place (the footer fades out meanwhile), so it covers neither the count nor the cards.
   const f = document.querySelector(".foot").getBoundingClientRect();
@@ -1570,6 +1573,7 @@ function undoClock() {
 for (const ev of ["pointerenter", "focusin"]) $("undo").addEventListener(ev, () => { if (undoTimer) { clearTimeout(undoTimer); undoTimer = 0; undoLeft = Math.max(0, undoLeft - (performance.now() - undoAt)); } });
 for (const ev of ["pointerleave", "focusout"]) $("undo").addEventListener(ev, () => setTimeout(undoClock, 0));
 function settle(u) {
+  if ($("undo").contains(document.activeElement)) (u.near?.isConnected ? u.near : $("pick")).focus({ preventScroll: true }); // the pill goes: focus moves on
   if (pendingUndo === u) { pendingUndo = null; $("undo").hidden = true; document.body.classList.remove("undoing"); }
   const { it } = u; it.gen = -1;
   for (const url of [it.previewUrl, it.fullUrl, it.gifUrl]) if (url) URL.revokeObjectURL(url);
@@ -1596,6 +1600,9 @@ function undoRemove() {
   it.el.card.querySelector(".x")?.focus({ preventScroll: true });
 }
 $("undobtn").addEventListener("click", () => { tick(); undoRemove(); });
+$("undo").addEventListener("keydown", (e) => { if (e.key === "Escape" && pendingUndo) settle(pendingUndo); });
+let keyAt = -1e9; // the last Enter or Space: a Remove pressed from the keyboard sends focus to Undo
+addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") keyAt = performance.now(); }, true);
 addEventListener("keydown", (e) => {
   if (pendingUndo && (e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "z" && !/input|textarea/i.test(e.target.tagName)) { e.preventDefault(); undoRemove(); }
 });
@@ -2171,15 +2178,20 @@ let beatTimer = 0, beatNext = 0;
 const onScreen = () => adEls.some((a) => a.onScreen);
 // A little 3D, kept subtle: each product sways slowly on its own; while the mouse moves over a card it leans
 // toward the pointer, and a second after the mouse stops (or leaves) it eases back into the sway.
-let tiltRaf = 0;
-function tiltGo() { if (!tiltRaf && !matchMedia("(prefers-reduced-motion: reduce)").matches) tiltRaf = requestAnimationFrame(tiltLoop); }
+// The sway and the cut-out swaps stop on their own after about 24 s (WCAG 2.2.2: nothing moves for ever); leaning toward
+// the mouse still works, since the visitor makes it move.
+const MOTION_MS = 24000;
+let tiltRaf = 0, motionFrom = 0, swaps = 0;
+function tiltGo() { if (!tiltRaf && !matchMedia("(prefers-reduced-motion: reduce)").matches) { motionFrom ||= performance.now(); tiltRaf = requestAnimationFrame(tiltLoop); } }
 function tiltLoop(t) {
+  const sway = Math.min(1, Math.max(0, (motionFrom + MOTION_MS - t) / 4000)); // fades out over the last 4 s
   const live = adEls.filter((a) => a.onScreen && a.tilt);
-  tiltRaf = live.length && !document.hidden ? requestAnimationFrame(tiltLoop) : 0;
+  const moving = sway > 0 || live.some((a) => a.tilt.mix > 0.01 || (a.tilt.t && t - a.tilt.t < 1000));
+  tiltRaf = live.length && moving && !document.hidden ? requestAnimationFrame(tiltLoop) : 0;
   for (const a of live) {
     const k = a.tilt, ph = t / 1000 * (2 * Math.PI / 12) + k.phase; // a 12 s cycle
     k.mix += ((k.t && t - k.t < 1000 ? 1 : 0) - k.mix) * 0.07;
-    const ry = Math.sin(ph) * 5 * (1 - k.mix) + k.y * k.mix, rx = Math.cos(ph * 0.8) * 1.5 * (1 - k.mix) + k.x * k.mix;
+    const ry = Math.sin(ph) * 5 * sway * (1 - k.mix) + k.y * k.mix, rx = Math.cos(ph * 0.8) * 1.5 * sway * (1 - k.mix) + k.x * k.mix;
     a.style.setProperty("--ry", `${ry.toFixed(2)}deg`); a.style.setProperty("--rx", `${rx.toFixed(2)}deg`); // the products inherit them
   }
 }
@@ -2195,10 +2207,11 @@ function beat() {
 function nextArt() {
   if (document.hidden || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   const done = finishedCuts();
-  if (done.length < 2 || !adEls.length) return;
+  if (done.length < 2 || !adEls.length || swaps >= MOTION_MS / BEAT) return;
   let a = null;
   for (let k = 0; k < adEls.length && !a; k++) { const c = adEls[(beatNext + k) % adEls.length]; if (c.onScreen && c.art) { a = c; beatNext = (beatNext + k + 1) % adEls.length; } }
-  if (!a) return;
+  if (!a || a.matches(":hover, :focus-within")) return; // never under the pointer or keyboard focus
+  swaps++;
   const next = done[(done.indexOf(a.artIt) + 1) % done.length]; // becomes the card's once it shows, so a click saves what is on screen
   const old = a.querySelector(".adart");
   if (!old) return;

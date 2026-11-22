@@ -156,6 +156,8 @@ body.moving main, body.moving main *, body.moving .foot, body.moving .foot * { v
 .x { font-size: 20px; margin-left: var(--s1); } /* room before remove, so a tap meant for 👎 doesn't land on it */
 .crop[aria-pressed="true"] { background: color-mix(in srgb, var(--ink) 12%, transparent); opacity: .9; }
 .rate { filter: grayscale(1); }
+/* Light mode: grey thumbs at 70% were 2.1:1 on white; darker and full strength they pass 3:1 (dark mode already did). */
+@media not (prefers-color-scheme: dark) { .rate:not(.chosen, :hover) { filter: grayscale(1) brightness(.7); opacity: 1; } }
 .ico:focus-visible { opacity: 1; }
 @media (hover: hover) { .ico:hover:not(:disabled) { opacity: 1; filter: none; background: color-mix(in srgb, var(--ink) 8%, transparent); } }
 .rate:disabled { cursor: default; }
@@ -165,7 +167,7 @@ body.moving main, body.moving main *, body.moving .foot, body.moving .foot * { v
 /* Background: the trigger shows the current one. See-through (the default) is half checkerboard, half colour: "this
    swaps the background". The picker takes the bar's place, at the bar's height, so nothing covers the photo and the
    cards never resize. */
-.sw { width: 20px; height: 20px; border-radius: 50%; display: block; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 30%, transparent); }
+.sw { width: 20px; height: 20px; border-radius: 50%; display: block; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 55%, transparent); }
 .sw.none, .swb.sw0 .sw { background: repeating-conic-gradient(var(--check-a) 0 25%, var(--check-b) 0 50%) 0 0 / 8px 8px; }
 .bgb .sw.none { background: linear-gradient(135deg, transparent 0 50%, var(--accent) 50%), repeating-conic-gradient(var(--check-a) 0 25%, var(--check-b) 0 50%) 0 0 / 8px 8px; }
 .bgb { opacity: 1; }
@@ -338,6 +340,7 @@ body:not(.has-work) .foot { margin: 56px auto auto; padding-bottom: max(24px, 8v
   padding: 6px 6px 6px 16px; border-radius: 999px; background: var(--ink); color: var(--paper); font-size: 15px; font-weight: 600;
   box-shadow: 0 10px 30px -12px rgb(0 0 0 / .45); animation: pop .25s cubic-bezier(.2,1.4,.4,1); }
 .undo .btn { --h: var(--h-sm); --px: 14px; --fs: 14px; gap: 6px; }
+.undo > span { max-width: 45vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .undo .btn:focus-visible { outline-color: var(--paper); } /* the global ink ring vanished on the ink pill */
 /* The pill sits in the footer's place (app.js measures it): the footer steps back while it is up. */
 .foot { transition: opacity .2s; }
