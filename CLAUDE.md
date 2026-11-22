@@ -11,6 +11,18 @@ zero friction: fun copy and small animations are fine, delays and popups are not
     npm run dev          # build dist/ and serve at http://localhost:8788 with production headers
     npm run build        # build only
     npm run deploy       # manual fallback: wrangler pages deploy to project goodbye-bg-git
+    npm run test         # smoke tests (about 40 s): build, serve, headless Chrome; run before pushing
+
+`npm run test` (`scripts/test/smoke.mjs`, no dependencies beyond Chrome; `--no-build` reuses dist/, `CHROME=` picks
+another Chrome) drives headless Chrome over the DevTools protocol, each check in a fresh profile, and prints PASS/FAIL/SKIP;
+exit code 1 on any failure. Covers: build placeholders, CSP/COOP/COEP headers, empty page clean (no console errors, CSP
+violations, crash reports), one photo on the GPU engine (when headless has WebGPU with shader-f16, else CPU) and one on
+the CPU engine with PNG downloads, `?adtest=1` ad cards, White background -> JPG, 3 photos + Download all (zip names),
+reload with CLS 0 (desktop, and phone width at 300 ms latency), Remove/Undo and removal surviving a reload, an animated
+GIF staying animated, a ZIP opening, the 404 page and `/share`, the SEO pages (CSP, no sideways scroll at 390 px, first
+visit drawn in Nunito). Test photos are generated. Each cut-out adds to the public count (serve.mjs passes `/api/count` to
+the live site); ad cards are never clicked. `scripts/serve.mjs` mirrors Pages for unknown paths (404.html, status 404),
+`/dir` -> `/dir/`, `.html` -> clean URL and `_redirects`.
 
 Deploys: Cloudflare Pages project `goodbye-bg-git` builds from GitHub. Every push to `main`
 deploys; other branches get preview URLs (`<branch>.goodbye-bg-git.pages.dev`). No GitHub
