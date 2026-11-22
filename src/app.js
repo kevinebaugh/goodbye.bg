@@ -2071,7 +2071,7 @@ async function writeKept(it) {
   const gif = it.anim && it.gifUrl ? await it.png : null;
   const size = (r) => (r ? r.png.size + (r.fix?.size || 0) : 0);
   const state = { id: it.key, name: it.name, w: it.w, h: it.h, crop: it.crop, rect: it.maskRect || null, mask, first, retried: !!it.retried,
-    vote: it.vote || null, bg: it.bg || null, out: it.out || null, anim: !!it.anim, gif, ms: it.ms || 0,
+    vote: it.vote || null, bg: it.bg || null, out: it.out || null, anim: !!it.anim, gif, ms: it.ms || 0, engine: it.engine || null,
     bytes: it.blob.size + it.prev.size + size(mask) + size(first?.mask) + (gif?.size || 0) };
   if (state.bytes > KEEP_BYTES) return; // never fits (see trim)
   const db = await kdb();
@@ -2122,7 +2122,7 @@ async function restore() {
     const f = byId.get(st.id); byId.delete(st.id);
     if (!f?.blob || !f.prev) { orphans.push(st.id); continue; }
     const it = { id: ++uid, key: st.id, name: st.name, bmp: null, blob: f.blob, prev: f.prev, w: st.w, h: st.h, mask: null, crop: st.crop,
-      maskRect: st.rect, retried: st.retried, vote: st.vote, bg: st.bg || null, out: st.out || null, ms: st.ms, filed: true, st };
+      maskRect: st.rect, retried: st.retried, vote: st.vote, bg: st.bg || null, out: st.out || null, ms: st.ms, engine: st.engine || "", filed: true, st };
     items.push(it); list.push(it);
   }
   orphans.push(...byId.keys());
