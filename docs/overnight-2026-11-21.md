@@ -55,7 +55,9 @@ Extra usage capped at $0. Stop starting new work at 85% weekly; never pass 90%.
 | 06:42 | Keep test traffic out of ad/vote data; dark theme-color; small leftovers | background agent | 44% → 46% | 775346c: visits with a test switch or a test browser mark their beacons; /go/, /api/rate, /api/crash drop them (clicks still redirect; /api/count unchanged). 82f0f29: dark theme-color. 7397a95: non-Zazzle ad clicks now always save the see-through PNG (the bg-color session had made it follow the background; reversed per review #5: Kevin may prefer either); preview URL leak fixed. |
 | 07:15 | Translations branch (top remove.bg languages): UI + SEO pages, draft PR | background agent | 45% → | started |
 | 07:35 | CLAUDE.md consolidation after ~100 commits (docs only) | background agent | 46% → 47% | 20c52c1: CLAUDE.md 57 KB → 31 KB, removed text kept verbatim in docs/history.md. Kevin decisions the code doesn't follow (kept, flagged): grid scrolls past 12 photos on a phone and on bulk drops; one-product partners leave reserved cells empty (not live); the counter shows from page load, not from the first cut-out. Open: blur drops the crop. |
-| 07:47 | Bulk tool: Windows/Linux builds, remove.bg API shadow (branch bulk-cli) | background agent | 46% → | started |
+| 07:47 | Bulk tool: Windows/Linux builds, remove.bg API shadow (branch bulk-cli) | background agent | 46% → 48% | bulk-cli ec82205, 073ec21, ef84613, b8aba10. Windows x64 141 MB (valid PE, ORT + DirectML DLLs; never run; DirectML licence texts missing). Linux x64 180 MB, ran in Docker on the CPU, matches the Mac within 3/255 (needs libatomic1). macOS rebuilt identical. serve supports shadows with the site's ground shadow. |
+| 07:42 | Draft PR for the bulk tool | coordinator | 48% | kevinebaugh/goodbye.bg#5 (not for merging as is; for the sell-or-not decision). |
+| 07:43 | Phones: start the model download sooner (any touch/scroll, or a few seconds visible on a good connection) | background agent | 48% → | started |
 
 Check-in 23:46: weekly 28%, 5-hour window 6% (reset 04:30 UTC). About 4 weekly points in the first 45 min.
 
