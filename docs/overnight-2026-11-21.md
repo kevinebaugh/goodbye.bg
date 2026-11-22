@@ -60,6 +60,8 @@ Extra usage capped at $0. Stop starting new work at 85% weekly; never pass 90%.
 | 07:43 | Phones: start the model download sooner (any touch/scroll, or a few seconds visible on a good connection) | background agent | 48% → | started |
 | 07:50 | Zazzle money path check, read-only (Sonnet) | background agent | 47% → 47% | All 8 links build correctly; fallback carries rf=238003133086051540, CAP link has no rf by design; cap flow (PUT, GET, delete 20 s after fetch, expiry) passes locally. Zazzle returns a 403 bot wall to curl, so product pages could not be checked: Kevin should click one card. goodbye.bg is already a declared image domain (runbook covers it). |
 | 08:00 | Kevin: "Good call on localization! Ship when ready." (read as ship) | coordinator | 48% | PR #6 merges after the native-editor review and a rebase with both suites passing. |
+| 08:10 | Phones: model download starts sooner | background agent | 48% → 49% | 2d6377b: first touch or scroll, or 3 s visible on 4g / no Network Information API (iPhones); Save-Data and hidden tabs never. Tap at 16 s, 20 Mbps: first cut-out 68.5 → 55.5 s. Leaving at 10 s now costs 16.9 MB at 20 Mbps (was 0.5). |
+| 08:15 | Kevin: pull-to-refresh and pinch-zoom are back 👎 | coordinator | 49% | 6f499b1, live: overflow hidden + overscroll-behavior none on touch screens, touch-action pan-x pan-y, Safari gesture events cancelled; computers keep scrolling at 300–400% zoom. Cause: tonight's accessibility zoom fix (2354326) made the page scroll; pinch had been allowed since 2026-11-20. CLAUDE.md updated. |
 
 Check-in 23:46: weekly 28%, 5-hour window 6% (reset 04:30 UTC). About 4 weekly points in the first 45 min.
 
