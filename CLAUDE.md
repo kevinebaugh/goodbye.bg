@@ -176,6 +176,9 @@ Tested: headless Chrome (reload in a restarted browser, Back still from bfcache)
     1 to 3 photos, 165 px) no crop and no remove, 👍 👎 stay (Kevin, 2026-11-21: voting beats crop; moving remove into the
     picker was an overnight call on 2026-11-22, easy to reverse); 122 to 149 background, Download, remove; under 122
     background and Download. The picker drops swatches as it narrows (sage under 218, light aqua under 186, black under 122).
+    Cards without a picker (waiting, failed, animated GIFs) keep remove in the bar, in the background button's place, so
+    Download doesn't move when a card finishes. A background or crop change on a phone builds the PNG ahead only when no
+    batch or retry is running.
   - Short screens (height 520 px or less, a phone on its side): the wordmark sits left of the buttons (buttons go
     right), the privacy note is hidden, spacing tightens; the empty page shrinks the headline so the footer fits.
   - Download and Download all shimmer while a big PNG or the zip is built; repeat taps don't start it again. A failed

@@ -879,7 +879,7 @@ function makeCard(it) {
   crop.addEventListener("click", () => {
     it.crop = !it.crop; tick();
     for (const b of card.querySelectorAll(".crop")) b.setAttribute("aria-pressed", String(it.crop));
-    it.png = null; drawCard(it); if (PHONE) png(it); keep(it);
+    it.png = null; drawCard(it); if (PHONE && !running && !retrying) png(it); keep(it);
   });
   x.addEventListener("click", () => { dbg("removed"); clearInterval(it.quip); it.gen = -1;
     for (const u of [it.previewUrl, it.fullUrl, it.gifUrl]) if (u) URL.revokeObjectURL(u); items.splice(items.indexOf(it), 1);
@@ -961,7 +961,7 @@ function setBg(it, v, force = false) {
   if (!force && (v || null) === (it.bg || null)) return;
   it.bg = v || null;
   paintBg(it);
-  it.png = null; drawCard(it); if (PHONE) png(it); keep(it);
+  it.png = null; drawCard(it); if (PHONE && !running && !retrying) png(it); keep(it); // not next to a busy engine (iPhone memory)
 }
 // The trigger shows the current background; the picker marks it.
 function paintBg(it) {
@@ -1000,6 +1000,7 @@ function ready(it) {
   clearInterval(it.quip); it.el.card.classList.remove("queued", "working");
   it.el.busy.hidden = true; it.el.dl.disabled = false;
   for (const b of [it.anim ? null : it.el.crop, it.anim ? null : it.el.bgb, it.el.up, it.el.down]) if (b) b.style.visibility = "";
+  it.el.card.classList.toggle("picky", !it.anim); // has a background picker, so narrow bars may move remove into it
   for (const b of it.el.card.querySelectorAll(".crop")) b.setAttribute("aria-pressed", String(it.crop));
   paintBg(it);
   downLabel(it);
