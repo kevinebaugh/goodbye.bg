@@ -16,11 +16,15 @@ cpSync(join(root, "src"), dist, { recursive: true });
 // once the domain resolves (and 301 pages.dev to it; see docs/seo.md).
 const SITE = process.env.SITE || "https://goodbye-bg-git.pages.dev";
 // The text pages, English and translated (src/<lang>/<page>/index.html, see docs/i18n.md).
-const TEXT_PAGES = readdirSync(dist, { recursive: true }).filter((f) => /(^|\/)(remove-bg-alternative|how-to-remove-background)\/index\.html$/.test(f)).sort();
-// Each text page names all its translations (hreflang), English being the default.
+// A text page is any <slug>/index.html (or <lang>/<slug>/index.html) that holds the hreflang placeholder.
+const TEXT_PAGES = readdirSync(dist, { recursive: true }).filter((f) => /^([a-z-]+\/){1,2}index\.html$/.test(f) && readFileSync(join(dist, f), "utf8").includes("<!--%HREFLANG%-->")).sort();
+// Each text page names the translations it has (hreflang), English being the default. A page in English only names none.
 const { LANGS } = await import(join(root, "src/i18n.js"));
-const hreflang = (slug) => [["en", ""], ...Object.entries(LANGS).map(([code, l]) => [code, l.path + "/"]), ["x-default", ""]]
-  .map(([code, dir]) => `<link rel="alternate" hreflang="${code}" href="${SITE}/${dir}${slug}/">`).join("\n");
+const hreflang = (slug) => {
+  const langs = Object.entries(LANGS).filter(([, l]) => TEXT_PAGES.includes(`${l.path}/${slug}/index.html`));
+  return !langs.length ? "" : [["en", ""], ...langs.map(([code, l]) => [code, l.path + "/"]), ["x-default", ""]]
+    .map(([code, dir]) => `<link rel="alternate" hreflang="${code}" href="${SITE}/${dir}${slug}/">`).join("\n");
+};
 for (const f of ["index.html", "robots.txt", "sitemap.xml", ...TEXT_PAGES]) {
   const p = join(dist, f);
   let s = readFileSync(p, "utf8").replaceAll("%SITE%", SITE);
