@@ -285,7 +285,7 @@ partner with one variant (Printful, Printify) leaves the other reserved cells em
 and redirects; a POST there counts the card being shown ('adseen').
 - Ads fill the grid (Kevin, 2026-11-20: "always fill the grid"): up to 3 photos are laid out as 4 cells (1 photo + 3
   ads, 2 + 2, 3 + 1); more photos fill out their last row. Exception (Kevin's iPhone, 402 x 654, 2026-11-22): on touch
-  screens where 4 cells make cards too small for 👍 👎 (under 160 px), 1 or 2 photos keep 2 cells (1 + 1 ad, or 2 + 0). The cells are reserved from the start so photos don't
+  screens where 4 cells make cards too small for 👍 👎 and remove (under 204 px), 1 or 2 photos keep 2 cells (1 + 1 ad, or 2 + 0). The cells are reserved from the start so photos don't
   resize. Ads appear once the first cut-out is done, 1.1 s after it (`ADS_PAUSE`), one after another with a shimmering
   placeholder; the 3D code is fetched while the first photo is worked on.
 - Zazzle's 8 variants draw the visitor's cut-out on a product (mug, sticker, shirt, tote, ornament, phone case, pillow,

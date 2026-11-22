@@ -1958,7 +1958,7 @@ async function retry(it) {
 // Only past a minimum size (dozens of photos on a phone) does the grid scroll.
 // Cards are square and sized to fit the screen. Under MIN_PIC the grid scrolls (bulk: about 50 photos on a laptop);
 // 84 px still leaves Download 40 px next to the background button. A phone in portrait fits 12 (3 x 4).
-const GAP = 12, MIN_PIC = 84, MAX_PIC = 640, RATE_MIN = 160; // the bar shows 👍 👎 from 160 px (style.css, .rates)
+const GAP = 12, MIN_PIC = 84, MAX_PIC = 640, RATE_MIN = 160, X_MIN = 204; // the bar shows 👍 👎 from 160 px, remove from 204 (style.css container queries)
 // The bar's height by card width (style.css): cards up to 242 px use the small Download (--h-sm). ROW2: the second row a
 // roomy bar adds (32 px controls and a 4 px gap). FULL_BAR: the card width from which one row holds every control.
 const BAR_SM = 49, BAR_MD = 57, ROW2 = 36, FULL_BAR = 242, ROOMY_MIN = 154;
@@ -1985,9 +1985,9 @@ function layout() {
   const allH = all.hidden || all.parentNode !== g ? 0 : all.offsetHeight - (parseFloat(getComputedStyle(all).paddingTop) || 0) + GAP;
   const W = g.clientWidth, H = g.clientHeight - (parseFloat(getComputedStyle(g).paddingTop) || 0) - allH;
   // The bar's height depends on the card's width, so it is worked out for each candidate, not measured from the cards.
-  const fit = (k) => {
+  const fit = (k, from = 1) => {
     let b = { p: 0, c: 1 };
-    for (let c = 1; c <= k; c++) {
+    for (let c = from; c <= k; c++) {
       const r = Math.ceil(k / c), pw = (W - GAP * (c - 1)) / c, row = (H - GAP * (r - 1)) / r;
       let p = Math.min(pw, row - barFor(pw));
       if (barFor(p) !== barFor(pw)) p = Math.min(pw, FULL_BAR, row - barFor(p)); // height-bound: smaller cards, smaller bar
@@ -2001,7 +2001,12 @@ function layout() {
   let slots = adsOn() && n < 4 ? 4 : n, best = fit(slots);
   // A phone in portrait (Kevin's iPhone: 402 x 654): 1 or 2 photos in the 4 kept cells came out 136 px, too small for
   // 👍 👎. Then they keep 2 cells (1 photo + 1 ad, or 2 photos side by side), which leaves room for the bar's second row.
-  if (slots === 4 && n < 3 && COARSE.matches && best.p < RATE_MIN) { const two = fit(2); if (two.p >= RATE_MIN) { slots = 2; best = two; } }
+  // Also when the bar would hide remove (under 204 px, Kevin 2026-11-22: "I can't remove the last one"): 2 cells leave
+  // room for the second row, which holds crop, 👍 👎 and remove.
+  if (slots === 4 && n < 3 && COARSE.matches && best.p < X_MIN) {
+    const two = fit(2, 2); // side by side: stacked, a card came out 205 px with no room for remove and no second row
+    if (two.p >= ROOMY_MIN && two.p < FULL_BAR && two.row - barFor(two.p) - ROW2 >= two.p) { slots = 2; best = two; }
+  }
   const scroll = best.p < MIN_PIC;
   let p = Math.min(MAX_PIC, Math.max(best.p, MIN_PIC));
   // On its side the grid scrolls anyway: a row as tall as the screen allows (bars keep 👍 👎), not many tiny columns.
