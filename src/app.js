@@ -1102,6 +1102,7 @@ function closePick(refocus = false) {
   const { bar, bgb, pick } = it.el;
   const { opts } = it.el, inside = pick.contains(document.activeElement) || opts.contains(document.activeElement);
   bar.classList.remove("picking"); pick.hidden = true; opts.hidden = true; bgb.setAttribute("aria-expanded", "false");
+  if (PHONE && it.mask && !it.png && !it.anim && !running && !retrying) png(it); // the share sheet needs it ready at the tap
   if (refocus || inside) bgb.focus({ preventScroll: true });
 }
 // A tap anywhere else puts the bar back.
@@ -1190,7 +1191,7 @@ function paintOpts(it) {
 function setOut(it, patch) {
   it.out = { ...outOf(it), ...patch };
   it.png = null; paintOpts(it); fadeOpts(it.el.opts);
-  if (it.mask) { drawCard(it); if (PHONE && !running && !retrying) png(it); keep(it); } // not next to a busy engine (iPhone memory)
+  if (it.mask) { drawCard(it); keep(it); } // phones build the PNG ahead once the row closes (closePick), not once per change
 }
 // This photo's background and options for every photo, and for photos added later in this visit.
 function useForAll(from) {

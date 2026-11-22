@@ -208,6 +208,7 @@ body.moving main, body.moving main *, body.moving .foot, body.moving .foot * { v
 @media (hover: hover) { .osel:hover:not(:disabled), .onum:hover { border-color: var(--accent); } }
 .osel:focus-visible, .onum:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
 @container (max-width: 300px) { .opts { gap: var(--s1); } }
+@media (pointer: coarse) { .opts .osel, .opts .onum { font-size: 16px !important; } } /* under 16 px iPhones zoom the page on focus */
 @container (max-width: 240px) { .opts { padding: 0 6px; } .osel, .onum { font-size: 12px; } .osel { padding: 0 18px 0 var(--s2); } .omargin .osel { padding-left: 22px; } .omargin::before { left: 8px; } .selw::after { right: 7px; } .ochip { --px: var(--s2); } }
 .pcrop svg { width: 15px; height: 15px; }
 .rate.chosen { opacity: 1; filter: none; transform: scale(1.1); }
