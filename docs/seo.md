@@ -61,7 +61,7 @@ left for whoever owns that file. Recommended:
   at idle after load, returning visitors at once (details in CLAUDE.md, "First visit"). Adding the first photos used to shift
   the layout by 0.2 to 0.37 (the hero going away); it is now a View Transition with no layout shift.
 - **done** `404.html` (2026-11-21): unknown paths return a real 404 (they used to return the app with 200, a soft 404). `_redirects` sends `GET`/`POST /share` to `/` when the service worker didn't catch it (it was 405 for POST before).
-- Later: `hreflang` only if the page gets translated. Not before.
+- **done** on branch `i18n` (2026-11-22): the two text pages in de, es, fr, pt-BR and id under `/<lang>/...`, each with its own canonical and `hreflang` alternates (en, the five, x-default = English), all in the sitemap. The app page `/` is one URL that follows the browser language, so it has no hreflang. See `docs/i18n.md`.
 
 ## 5. Off-site (where most of the ranking comes from)
 
