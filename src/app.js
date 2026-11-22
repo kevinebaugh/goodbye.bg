@@ -117,6 +117,12 @@ const baseName = (s) => (s || "image").split(/[\\/?#]/).filter(Boolean).pop()?.r
    ?gpufail=birefnet-init|birefnet-oom|birefnet-slow|birefnet-slowrun a GPU too weak for BiRefNet. */
 
 const params = new URLSearchParams(location.search);
+// Test visits (a test switch in the address, or a browser driven by automation) mark what they send with t=1 / "t": 1,
+// and /go and /api/rate and /api/crash drop it, so the A/B, vote and crash data hold real visitors only. The page still
+// sends it (the smoke tests read those requests) and clicks still redirect. /api/count is left alone (Kevin: tests count).
+const TEST_SWITCHES = ["adtest", "adpartner", "adv", "engine", "gpufail", "model", "threads", "nowarm", "haze", "keepmax", "keepmb",
+  "maxbatch", "zazzlecap", "confetti", "debug"];
+const TEST = !!navigator.webdriver || TEST_SWITCHES.some((k) => params.has(k));
 
 // ?debug=1: report each step to /api/diag (server log only) to find where a phone crashes.
 // Step names and numbers only, never photo data. Off for everyone else.
@@ -293,7 +299,7 @@ function tick() {
   else if (navigator.userActivation?.hasBeenActive && matchMedia("(pointer: coarse)").matches) navigator.vibrate?.(8);
 }
 function working(step, it) {
-  note = { step, engine: engineTag(), dev: DEVICE, done: finished, mp: it ? +((it.w * it.h) / 1e6).toFixed(1) : 0 };
+  note = { step, engine: engineTag(), dev: DEVICE, done: finished, mp: it ? +((it.w * it.h) / 1e6).toFixed(1) : 0, ...(TEST && { t: 1 }) };
   saveNote();
 }
 function saveNote() { try { localStorage.setItem(CRASH_KEY, JSON.stringify({ ...note, trail: trail.join("\n") })); } catch {} }
@@ -301,7 +307,7 @@ function saveNote() { try { localStorage.setItem(CRASH_KEY, JSON.stringify({ ...
 // stepping down (see the GPU gate): sent at once.
 function report(step, e, it) {
   const note = { step, engine: engineTag(), dev: DEVICE, done: finished, mp: it ? +((it.w * it.h) / 1e6).toFixed(1) : 0,
-    error: String(e?.message || e).slice(0, 160), trail: trail.join("\n") };
+    error: String(e?.message || e).slice(0, 160), trail: trail.join("\n"), ...(TEST && { t: 1 }) };
   fetch("/api/crash", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(note), keepalive: true }).catch(() => {});
 }
 // Cleared only once nothing is working: no batch, no 👎 retry, no PNG being built.
@@ -1798,7 +1804,7 @@ function landing(change) {
    megapixels. Never the photo. 👎 then runs the model again, zoomed in on the subject, which gives
    it more pixels to work with. The retry can be rated too. */
 function sendRating(it, vote) {
-  const body = JSON.stringify({ vote, engine: it.engine || engineTag(), retry: !!it.retried, ms: it.ms || 0, mp: +((it.w * it.h) / 1e6).toFixed(1) });
+  const body = JSON.stringify({ vote, engine: it.engine || engineTag(), retry: !!it.retried, ms: it.ms || 0, mp: +((it.w * it.h) / 1e6).toFixed(1), ...(TEST && { t: 1 }) });
   fetch("/api/rate", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
 }
 
@@ -2057,7 +2063,7 @@ function placeAds(n, free) {
 function buildAd(i) {
   const p = adPartner, x = adVariants[i % adVariants.length], a = document.createElement("a");
   const ci = x.ctas?.length ? Math.min(adCta, x.ctas.length - 1) : -1, cta = ci >= 0 ? x.ctas[ci] : x.cta;
-  const q = `?v=${x.v}&l=${adLabel.toLowerCase()}${ci >= 0 ? `&c=${ci}` : ""}`;
+  const q = `?v=${x.v}&l=${adLabel.toLowerCase()}${ci >= 0 ? `&c=${ci}` : ""}${TEST ? "&t=1" : ""}`;
   a.className = "adcard loading"; a.href = `/go/${p.id}${q}`; a.target = "_blank"; a.rel = "sponsored noopener";
   a.innerHTML = '<div class="adpic"><span class="adtag"></span><span class="adicon" aria-hidden="true"></span><p class="adline"></p></div><div class="bar"><span class="btn adcta"></span></div>';
   let src = null;

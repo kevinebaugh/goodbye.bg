@@ -463,6 +463,13 @@ The footer: one GET `/api/count` on load (total + pace since a snapshot the row 
 locally at that pace with random gaps, no more requests (Kevin: "one accurate-ish number on load, then contrived growth";
 it can drift ahead of the real total). A visitor's own cut-out counts at once. Its line is always reserved, so it never moves
 the cards. Shown from the first cut-out (Kevin, 2026-11-20); tapping it throws confetti. Kevin: tests count toward the total, never reset it.
+Test traffic stays out of the A/B, vote and crash data (2026-11-22): a visit with a test switch (`TEST_SWITCHES` in app.js:
+adtest, adpartner, adv, engine, gpufail, model, threads, nowarm, haze, keepmax, keepmb, maxbatch, zazzlecap, confetti,
+debug; not ref/utm/url/share) or `navigator.webdriver` adds `t=1` to its `/go/` links and beacons and `"t": 1` to its
+`/api/rate` and `/api/crash` bodies (and to its crash note). `lib/test-traffic.mjs` drops those, and anything from a
+`HeadlessChrome` User-Agent, without writing; the answers are unchanged (204, and `/go/` still redirects). The page
+still sends them because the suites read those requests. `/api/count` (counter and page views) is not filtered. The
+local server never writes analytics (no RATINGS binding); only `/api/count` reaches production from the suites.
 Haptics: a light tick on result, crop, 👍/👎 and Download (Android vibrate; iOS 18+ hidden switch control).
 iPhone 16 MP PNG crash (crash step "png", one report): a full-size PNG built on iOS now first stops the engine if it is
 up and nothing is waiting for it (`fullBlob`, debug step `engine-png`); the export stays full size (the pages promise the

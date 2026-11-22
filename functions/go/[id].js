@@ -2,12 +2,14 @@
 // and sends the visitor on to that partner's affiliate link. POST /go/<partner> counts that the card was shown.
 import { PARTNERS, capLink } from "../../lib/partners.mjs";
 import { KEY } from "../api/cap/[key].js";
+import { isTest } from "../../lib/test-traffic.mjs";
 
 function device(request) {
   const ua = request.headers.get("User-Agent") || "";
   return /iPhone|iPad|iPod/.test(ua) ? "ios" : /Android/.test(ua) ? "android" : /Macintosh|Windows|Linux|CrOS/.test(ua) ? "desktop" : "other";
 }
 function log(env, kind, id, v, request) {
+  if (isTest(request)) return; // a test visit (lib/test-traffic.mjs): still redirected, not counted
   const q = new URL(request.url).searchParams;
   const l = q.get("l") === "sponsored" ? "sponsored" : "ad"; // label test
   const c = String(q.get("c") || "").replace(/[^a-z0-9-]/g, "").slice(0, 20); // button-wording test

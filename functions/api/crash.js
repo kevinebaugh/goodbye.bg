@@ -4,7 +4,9 @@
 // data point next to the ratings: which step it died in, the engine, the device kind, how many photos the
 // tab had finished and the photo's megapixels. Never the photo, never an IP address, no cookies.
 
-const STEPS = new Set(["load", "model", "retry", "png", "start-failed", "run-failed", "ad-failed", "mug-failed", "3d-failed", "gif", "gif-failed",
+import { isTest } from "../../lib/test-traffic.mjs";
+
+const STEPS =new Set(["load", "model", "retry", "png", "start-failed", "run-failed", "ad-failed", "mug-failed", "3d-failed", "gif", "gif-failed",
   // GPU tiers stepping down (the GPU gate in app.js); the engine field says which one failed.
   "birefnet-start-failed", "birefnet-run-failed", "birefnet-slow-start", "birefnet-slow-run", "gpu-start-failed", "gpu-run-failed"]);
 const DEVICES = new Set(["ios", "android", "desktop"]);
@@ -14,6 +16,7 @@ export async function onRequestPost({ request, env }) {
   if (site && site !== "same-origin") return new Response("Only for goodbye.bg.", { status: 403 });
   let b;
   try { b = await request.json(); } catch { return new Response("Bad request", { status: 400 }); }
+  if (isTest(request, b)) return new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } }); // a test visit (lib/test-traffic.mjs)
   const step = STEPS.has(b?.step) ? b.step : "other";
   const engine = ["gpu", "gpu-birefnet"].includes(b?.engine) ? b.engine : "cpu";
   const dev = DEVICES.has(b?.dev) ? b.dev : "other";
