@@ -18,7 +18,7 @@ I built it because remove.bg stops removing backgrounds on 1 December 2026.
 - Free. No account, no watermark.
 - PNG at the photo's own resolution, cropped to the subject (a toggle gives the whole frame), or a JPG on a colour, a
   blurred copy of the photo, or a photo of your own. Optional size presets, margin, ground shadow and WebP.
-- Up to 100 photos per drop on computers (50 on phones), or a ZIP or folder. Download all gives a zip.
+- Up to 100 photos per drop on computers with 8 GB or more (50 elsewhere), or a ZIP or folder. Download all gives a zip.
 - Reads JPG, PNG, WebP, AVIF, SVG, HEIC, TIFF, camera RAW (its embedded JPEG preview), ZIPs and animated GIFs.
 - Not there: an API, an edge brush.
 
