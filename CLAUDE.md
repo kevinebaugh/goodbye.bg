@@ -180,7 +180,9 @@ without a visit; private windows refuse Blobs, so nothing is kept there.
 
 ## UX decisions
 
-- One screen, no scrolling. No double-tap zoom; pinch-zoom is allowed for accessibility (Kevin, 2026-11-20). Cards are
+- One screen, no scrolling. No pull-to-refresh, no double-tap zoom, no pinch-zoom on touch screens (Kevin, 2026-11-22:
+  "Scroll to refresh and pinch to zoom seem to be back 👎"; this replaces 2026-11-20's "pinch-zoom is allowed").
+  `touch-action: pan-x pan-y`, `overscroll-behavior: none`, and early.js cancels Safari's gesture events. Cards are
   square and sized to fit; a batch appears at once, in the order picked, and processing goes top-left first. The grid
   fits down to 84 px cards (a phone in portrait fits 12, 3 x 4, with Download all in sight); past that it scrolls and
   Download all sticks to its bottom edge. The grid uses the window's width (up to 1800 px).
@@ -219,7 +221,7 @@ without a visit; private windows refuse Blobs, so nothing is kept there.
   `--s1..--s5` (4 px scale), heights `--h-sm/md/lg` (32/40/48), every button a size plus a variant (`.primary`,
   `.ghost`, plain). Set `--h`, `--px`, `--fs` instead of padding by hand. Whimsy: lift on hover, press on click.
 - Accessibility (audit 2026-11-22, `docs/history.md`): `announce()` reads out finished and failed photos; every
-  icon-only control has a `title`; ad motion stops after about 24 s; the page may scroll only at 300-400% zoom.
+  icon-only control has a `title`; ad motion stops after about 24 s; on computers the page may scroll at 300-400% browser zoom (touch screens never scroll the page).
 
 ## Card bar
 

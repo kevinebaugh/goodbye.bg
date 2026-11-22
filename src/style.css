@@ -383,17 +383,20 @@ body.undoing .foot, body.docked .foot { opacity: 0; }
 .page tbody th { font-weight: 600; color: var(--muted); }
 .page td:nth-child(2) { font-weight: 600; }
 
-/* The app is one screen: no page scrolling. Pinch-zoom works (accessibility); double-tap zoom does not.
-   The text pages (remove.bg alternative, how-to) scroll normally. */
-html:has(body.app) { height: 100%; overflow-x: hidden; overflow-y: auto; } /* scrolls only when zoomed in far enough that the page overflows (300 to 400%: Reflow) */
-body.app { height: 100dvh; min-height: 0; overflow-x: hidden; overflow-y: auto; }
-body.app, body.app * { touch-action: manipulation; } /* pinch-zoom and pan once zoomed; no double-tap zoom */
+/* The app is one screen: no page scrolling, no pull-to-refresh, no pinch or double-tap zoom on touch screens (Kevin,
+   2026-11-22). The text pages (remove.bg alternative, how-to) scroll normally. */
+html:has(body.app) { height: 100%; overflow: hidden; overscroll-behavior: none; }
+body.app { height: 100dvh; min-height: 0; overflow: hidden; overscroll-behavior: none; }
+body.app, body.app * { touch-action: pan-x pan-y; } /* no pinch, no double-tap zoom; early.js stops Safari's pinch */
+@media (pointer: fine) { /* a computer's browser zoom at 300 to 400% may still scroll the page (WCAG reflow) */
+  html:has(body.app), body.app { overflow-y: auto; }
+}
 body.app main { flex: 1; min-height: 0; display: flex; flex-direction: column; padding-bottom: 8px; }
 body.app.has-work main { max-width: 1800px; } /* the grid sizes its cards from both axes (app.js layout): a laptop is height-bound, not capped at 1100 px */
 body.app.has-work .grid { flex: 1; min-height: 0; grid-template-columns: repeat(var(--cols, 1), var(--p, 300px));
   grid-auto-rows: max-content; justify-content: center; align-content: start; gap: 12px; padding-top: 22px; } /* room under Choose photos / Paste */
 body.app .grid .pic { aspect-ratio: auto; height: var(--p, 300px); }
-body.app .grid.scroll { overflow-y: auto; align-content: start; }
+body.app .grid.scroll { overflow-y: auto; overscroll-behavior: contain; align-content: start; }
 body.app .grid.scroll .allrow { position: sticky; bottom: 0; z-index: 1; padding-top: var(--s2); background: var(--paper); } /* Download all stays in sight */
 /* A last row with empty cells sits in the middle (app.js centreLastRow); it glides aside when an ad fills a cell. */
 body.app .grid > .card, body.app .grid > .adcard { transition: translate .35s cubic-bezier(.2, .9, .3, 1); }
