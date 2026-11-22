@@ -3,11 +3,8 @@
 import { PARTNERS, capLink } from "../../lib/partners.mjs";
 import { KEY } from "../api/cap/[key].js";
 import { isTest } from "../../lib/test-traffic.mjs";
+import { crossSite, device } from "../../lib/request.mjs";
 
-function device(request) {
-  const ua = request.headers.get("User-Agent") || "";
-  return /iPhone|iPad|iPod/.test(ua) ? "ios" : /Android/.test(ua) ? "android" : /Macintosh|Windows|Linux|CrOS/.test(ua) ? "desktop" : "other";
-}
 function log(env, kind, id, v, request) {
   if (isTest(request)) return; // a test visit (lib/test-traffic.mjs): still redirected, not counted
   const q = new URL(request.url).searchParams;
@@ -22,7 +19,7 @@ function variant(p, request) {
   return x ? { v, url: x.url, product: x.product } : { v, url: p.url, product: p.product };
 }
 
-// Prototype (?zazzlecap=1): the visitor chose "Send to Zazzle", so the page is uploading the cut-out to /api/cap/<k>
+// A Zazzle card was clicked (off with ?zazzlecap=0), so the page is uploading the cut-out to /api/cap/<k>
 // while this tab opens. Wait for it (a few seconds at most), then send them to the product with it on.
 // If it never arrives, or the product has no template yet, they get the usual page.
 async function capTarget(p, x, request, env) {
@@ -51,8 +48,7 @@ export async function onRequestGet({ params, env, request }) {
 }
 
 export async function onRequestPost({ params, env, request }) {
-  const site = request.headers.get("Sec-Fetch-Site");
-  if (site && site !== "same-origin") return new Response(null, { status: 403 });
+  if (crossSite(request)) return new Response(null, { status: 403 });
   const p = PARTNERS.find((x) => x.id === params.id);
   if (p) try { log(env, "adseen", p.id, variant(p, request).v, request); } catch {}
   return new Response(null, { status: 204 });

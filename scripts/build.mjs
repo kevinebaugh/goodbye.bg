@@ -74,7 +74,9 @@ writeParts(join(rt, "wasm"), readFileSync(join(ortDist, "ort-wasm-simd-threaded.
 // Build ID: the page reloads itself when a tab left open is older than the live site (see freshen() in app.js).
 const BUILD = Date.now().toString(36);
 writeFileSync(join(dist, "version.txt"), BUILD);
-writeFileSync(join(dist, "app.js"), readFileSync(join(dist, "app.js"), "utf8").replaceAll("%BUILD%", BUILD));
+// Rewrites one built file in place.
+const edit = (f, fn) => writeFileSync(join(dist, f), fn(readFileSync(join(dist, f), "utf8")));
+edit("app.js", (s) => s.replaceAll("%BUILD%", BUILD));
 // BiRefNet lite (MIT), committed as parts: weights/birefnet/ for the GPU engine (1024, made by scripts/birefnet.sh) and
 // weights/birefnet640/ for the CPU engine (640, scripts/birefnet640.sh). Without them the engines run ISNet.
 // m/ is cached forever, so each folder is named after the model's hash: a new export never mixes with old parts.
@@ -85,10 +87,9 @@ const weights = (name) => {
   return { name, src, manifest, dir: `${name}-${manifest.sha256.slice(0, 8)}` };
 };
 const birefnet = weights("birefnet"), birefnet640 = weights("birefnet640");
-writeFileSync(join(dist, "engine.js"), readFileSync(join(dist, "engine.js"), "utf8").replaceAll("%ORT%", ORT)
-  .replaceAll("%BIREFNET640%", birefnet640.dir).replaceAll("%BIREFNET%", birefnet.dir));
+edit("engine.js", (s) => s.replaceAll("%ORT%", ORT).replaceAll("%BIREFNET640%", birefnet640.dir).replaceAll("%BIREFNET%", birefnet.dir));
 // The page remembers per device which GPU tier worked (see the GPU gate in app.js); a new runtime or model tries again.
-writeFileSync(join(dist, "app.js"), readFileSync(join(dist, "app.js"), "utf8").replaceAll("%ENGINE%", `${ORT}/${birefnet.dir}`));
+edit("app.js", (s) => s.replaceAll("%ENGINE%", `${ORT}/${birefnet.dir}`));
 
 // fflate (MIT) for "Download all" zips.
 mkdirSync(join(dist, "vendor"));
@@ -111,21 +112,22 @@ const dataDir = join(nm, "@imgly/background-removal-data/dist");
 const res = JSON.parse(readFileSync(join(dataDir, "resources.json"), "utf8"))["/models/medium"];
 const isnet = Buffer.concat(res.chunks.map((c) => readFileSync(join(dataDir, c.hash))));
 if (isnet.length !== res.size) throw new Error(`ISNet size mismatch: ${isnet.length} != ${res.size}`);
-// Photoreal product previews: src/render3d.js bundled with Three.js (MIT) into one minified file, loaded only
-// when ads show. The unbundled source isn't served.
+// src/<name>.js bundled with its packages into one minified dist/<name>.mjs; the unbundled source isn't served.
 const esbuild = await import("esbuild");
-await esbuild.build({ entryPoints: [join(root, "src/render3d.js")], bundle: true, format: "esm", minify: true, target: "es2022",
-  outfile: join(dist, "render3d.mjs"), legalComments: "none", logLevel: "warning" });
-rmSync(join(dist, "render3d.js"));
-// Animated GIFs: src/gif.js with gifuct-js and gifenc (both MIT), loaded only when an animated GIF is added.
-await esbuild.build({ entryPoints: [join(root, "src/gif.js")], bundle: true, format: "esm", minify: true, target: "es2022",
-  outfile: join(dist, "gif.mjs"), legalComments: "none", logLevel: "warning" });
-rmSync(join(dist, "gif.js"));
-// HEIC, TIFF and camera RAW: src/formats.js (a module Worker) with UTIF (MIT) and libheif (LGPL-3.0, wasm next to it,
-// with its licence), started only when such a file is added.
-await esbuild.build({ entryPoints: [join(root, "src/formats.js")], bundle: true, format: "esm", minify: true, target: "es2022",
-  outfile: join(dist, "formats.mjs"), legalComments: "none", logLevel: "warning", external: ["fs", "path", "crypto", "url", "module", "worker_threads"] }); // node-only branches
-rmSync(join(dist, "formats.js"));
+const bundle = async (name, extra = {}) => {
+  await esbuild.build({ entryPoints: [join(root, `src/${name}.js`)], bundle: true, format: "esm", minify: true, target: "es2022",
+    outfile: join(dist, `${name}.mjs`), legalComments: "none", logLevel: "warning", ...extra });
+  rmSync(join(dist, `${name}.js`));
+};
+await Promise.all([
+  // Photoreal product previews: Three.js (MIT), loaded only when ads show.
+  bundle("render3d"),
+  // Animated GIFs: gifuct-js and gifenc (both MIT), loaded only when an animated GIF is added.
+  bundle("gif"),
+  // HEIC, TIFF and camera RAW (a module Worker): UTIF (MIT) and libheif (LGPL-3.0, wasm next to it, with its licence),
+  // started only when such a file is added.
+  bundle("formats", { external: ["fs", "path", "crypto", "url", "module", "worker_threads"] }), // node-only branches
+]);
 cpSync(join(nm, "libheif-js/libheif-wasm/libheif.wasm"), join(dist, "libheif.wasm"));
 cpSync(join(nm, "libheif-js/LICENSE"), join(dist, "libheif-LICENSE.txt"));
 
@@ -138,7 +140,7 @@ const partnersJson = JSON.stringify(PARTNERS.map(({ id, name, emoji, v = "a", pr
 })));
 writeFileSync(join(dist, "partners.json"), partnersJson);
 // Also inside app.js, so the first layout knows which grid cells the ads take (no fetch to wait for).
-writeFileSync(join(dist, "app.js"), readFileSync(join(dist, "app.js"), "utf8").replace('"%PARTNERS%"', () => JSON.stringify(partnersJson)));
+edit("app.js", (s) => s.replace('"%PARTNERS%"', () => JSON.stringify(partnersJson)));
 
 console.log("Model:");
 writeParts(join(dist, "m", "isnet"), isnet, "isnet");
@@ -158,9 +160,11 @@ for (const w of [birefnet, birefnet640]) {
 // top-level names; early.js is a classic script, so its names stay (no format given).
 const minify = async (f, opts) => writeFileSync(join(dist, f), (await esbuild.transform(readFileSync(join(dist, f), "utf8"), { minify: true, legalComments: "none", ...opts })).code);
 if (!process.env.NO_MINIFY) {
-  for (const f of ["app.js", "engine.js"]) await minify(f, { loader: "js", format: "esm", target: "es2022" });
-  await minify("early.js", { loader: "js", target: "es2022" });
-  await minify("style.css", { loader: "css" });
+  await Promise.all([
+    ...["app.js", "engine.js"].map((f) => minify(f, { loader: "js", format: "esm", target: "es2022" })),
+    minify("early.js", { loader: "js", target: "es2022" }),
+    minify("style.css", { loader: "css" }),
+  ]);
 }
 
 // The service worker's version list (src/sw.js). Shell: the app page's files with a hash each, so an update keeps

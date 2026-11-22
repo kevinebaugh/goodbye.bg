@@ -3,6 +3,8 @@
 // and the recent pace, so the footer can tick at a realistic speed. The row also keeps the total from
 // 10 to 20 minutes ago for that pace. One number and a timestamp: no photo, no IP address, no cookies.
 
+import { crossSite, device } from "../../lib/request.mjs";
+
 const WINDOW = 10 * 60 * 1000; // move the pace snapshot forward every 10 minutes
 const json = (o) => new Response(JSON.stringify(o), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
 
@@ -11,10 +13,8 @@ const json = (o) => new Response(JSON.stringify(o), { headers: { "Content-Type":
 function countView(request, env) {
   const url = new URL(request.url);
   if (url.searchParams.get("view") !== "1" || !env.RATINGS) return;
-  const ua = request.headers.get("User-Agent") || "";
-  const dev = /iPhone|iPad|iPod/.test(ua) ? "ios" : /Android/.test(ua) ? "android" : /Macintosh|Windows|Linux|CrOS/.test(ua) ? "desktop" : "other";
   const from = (url.searchParams.get("from") || "").toLowerCase().replace(/^www\./, "").replace(/[^a-z0-9.-]/g, "").slice(0, 80);
-  env.RATINGS.writeDataPoint({ blobs: ["view", dev, from, request.cf?.country || ""], doubles: [1], indexes: ["view"] });
+  env.RATINGS.writeDataPoint({ blobs: ["view", device(request), from, request.cf?.country || ""], doubles: [1], indexes: ["view"] });
 }
 
 export async function onRequestGet({ request, env }) {
@@ -28,8 +28,7 @@ export async function onRequestGet({ request, env }) {
 }
 
 export async function onRequestPost({ request, env }) {
-  const site = request.headers.get("Sec-Fetch-Site");
-  if (site && site !== "same-origin") return new Response("Only for goodbye.bg.", { status: 403 });
+  if (crossSite(request)) return new Response("Only for goodbye.bg.", { status: 403 });
   if (!env.COUNTER) return json({ n: 0, confetti: false });
   const now = Date.now();
   const row = await env.COUNTER.prepare(

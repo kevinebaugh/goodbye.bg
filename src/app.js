@@ -99,7 +99,7 @@ function tell(msg, at = $("pick").parentElement, ms = 4500) {
   const t = $("tell");
   t.textContent = msg; t.hidden = false; t.at = at;
   placeTell();
-  t.classList.remove("in"); void t.offsetWidth; t.classList.add("in");
+  replay(t, "in");
   clearTimeout(t.timer); t.timer = setTimeout(() => (t.hidden = true), ms);
 }
 // Placed again whenever the layout moves (the first photos, a resized window), so it never points at empty space.
@@ -124,6 +124,11 @@ addEventListener("resize", placeTell);
 let lastStatus = "";
 function status(msg) { if (msg !== lastStatus) console.info(`goodbye.bg: ${(lastStatus = msg)}`); }
 const nextFrame = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Restarts a CSS animation that a class starts.
+const replay = (el, c) => { el.classList.remove(c); void el.offsetWidth; el.classList.add(c); };
+// Media queries read live (.matches) where they matter.
+const REDUCED = matchMedia("(prefers-reduced-motion: reduce)"), DARK = matchMedia("(prefers-color-scheme: dark)");
 const baseName = (s) => (s || "image").split(/[\\/?#]/).filter(Boolean).pop()?.replace(/\.[^.]+$/, "").slice(0, 80) || "image";
 
 /* ---------- model ----------
@@ -176,13 +181,17 @@ const jobs = new Map();
 // BiRefNet peaks at about 3 GB of GPU memory (ISNet about 1 GB): only computers with a mouse or trackpad get it.
 // Phones and tablets with WebGPU (Android) keep ISNet on the GPU.
 const DESKTOP = matchMedia("(any-pointer: fine)").matches;
+const COARSE = matchMedia("(pointer: coarse)"); // touch
+// Phones save through the share sheet ("Save Image" puts it in Photos) instead of downloading to Files.
+// The share sheet only opens straight from a tap, so phones make each PNG as soon as the cut is done.
+const PHONE = COARSE.matches && "canShare" in navigator;
 const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 const THREADS = +params.get("threads") || (IOS ? 2 : 4);
 // Photos per drop or paste: 100 on computers with 8 GB or more, else 50 (phones, tablets: memory). Each finished photo
 // holds about 10 MB (preview bitmap, mask, edge colours): measured 0.8 GB for 50, 2.2 GB for 200 in Chrome. Only the
 // newest KEEP_MAX (50) are kept on the device; the rest are cut out and go into Download all, and are gone after a
 // reload. ?maxbatch=N to test.
-const MAX_BATCH = +params.get("maxbatch") || (DESKTOP && !IOS && !matchMedia("(pointer: coarse)").matches && (navigator.deviceMemory || 8) >= 8 ? 100 : 50);
+const MAX_BATCH = +params.get("maxbatch") || (DESKTOP && !IOS && !COARSE.matches && (navigator.deviceMemory || 8) >= 8 ? 100 : 50);
 
 /* ---------- GPU gate ----------
    Adapter limits can't tell a weak GPU from a strong one, so the gate acts at run time. Three tiers:
@@ -330,28 +339,30 @@ $("count").addEventListener("click", (e) => { if (e.currentTarget.classList.cont
 document.querySelector(".mark").addEventListener("click", (e) => {
   e.preventDefault();
   const wave = e.currentTarget.querySelector(".wave");
-  wave.classList.remove("again"); void wave.offsetWidth; wave.classList.add("again"); // restart the wave
+  replay(wave, "again"); // restart the wave
   tick();
 });
 
 function tick() {
   if (tickSwitch) tickSwitch.click();
-  else if (navigator.userActivation?.hasBeenActive && matchMedia("(pointer: coarse)").matches) navigator.vibrate?.(8);
+  else if (navigator.userActivation?.hasBeenActive && COARSE.matches) navigator.vibrate?.(8);
 }
+const mpOf = (it) => +((it.w * it.h) / 1e6).toFixed(1);
+const noteFor = (step, it) => ({ step, engine: engineTag(), dev: DEVICE, done: finished, mp: it ? mpOf(it) : 0, ...(TEST && { t: 1 }) });
+const postJSON = (url, body) => fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
 function working(step, it) {
-  note = { step, engine: engineTag(), dev: DEVICE, done: finished, mp: it ? +((it.w * it.h) / 1e6).toFixed(1) : 0, ...(TEST && { t: 1 }) };
+  note = noteFor(step, it);
   saveNote();
 }
 // The GPU's maker and family ("apple metal-3", "nvidia ampere"), as the browser names them: the first line of a report's
 // trail, so GPU failures can be told apart by hardware. Coarse on purpose; it names no device and no person.
 let gpuInfo = "";
-function saveNote() { try { localStorage.setItem(CRASH_KEY, JSON.stringify({ ...note, trail: (gpuInfo ? `gpu ${gpuInfo}\n` : "") + trail.join("\n") })); } catch {} }
+const trailText = () => (gpuInfo ? `gpu ${gpuInfo}\n` : "") + trail.join("\n");
+function saveNote() { try { localStorage.setItem(CRASH_KEY, JSON.stringify({ ...note, trail: trailText() })); } catch {} }
 // Errors the page survives but the person sees (the engine would not start, or a photo failed), and GPU tiers
 // stepping down (see the GPU gate): sent at once.
 function report(step, e, it) {
-  const note = { step, engine: engineTag(), dev: DEVICE, done: finished, mp: it ? +((it.w * it.h) / 1e6).toFixed(1) : 0,
-    error: String(e?.message || e).slice(0, 160), trail: (gpuInfo ? `gpu ${gpuInfo}\n` : "") + trail.join("\n"), ...(TEST && { t: 1 }) };
-  fetch("/api/crash", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(note), keepalive: true }).catch(() => {});
+  postJSON("/api/crash", JSON.stringify({ ...noteFor(step, it), error: String(e?.message || e).slice(0, 160), trail: trailText() }));
 }
 // Cleared only once nothing is working: no batch, no 👎 retry, no PNG being built.
 let retrying = 0, pngBusy = 0;
@@ -360,7 +371,7 @@ addEventListener("pagehide", () => { note = null; try { localStorage.removeItem(
 (() => {
   let note = null;
   try { note = localStorage.getItem(CRASH_KEY); localStorage.removeItem(CRASH_KEY); } catch {}
-  if (note) fetch("/api/crash", { method: "POST", headers: { "Content-Type": "application/json" }, body: note, keepalive: true }).catch(() => {});
+  if (note) postJSON("/api/crash", note);
 })();
 
 async function pickEngine() {
@@ -405,7 +416,7 @@ function idle() {
 async function startEngine(name, want = "") {
   killWorker("Engine restarted");
   const wait = engineFree - performance.now();
-  if (wait > 0) { dbg("engine-wait", { ms: Math.round(wait) }); await new Promise((r) => setTimeout(r, wait)); }
+  if (wait > 0) { dbg("engine-wait", { ms: Math.round(wait) }); await sleep(wait); }
   engineName = name; engineModel = ""; engineWant = want;
   const w = worker = new Worker("engine.js", { type: "module" });
   return new Promise((resolve, reject) => {
@@ -446,7 +457,7 @@ async function startEngine(name, want = "") {
 // different model waits for the jobs on this one, then replaces it (after the same 3 s as the idle shutdown on iPhones).
 async function switchModel(want) {
   await engineReady.catch(() => {});
-  while (jobs.size) await new Promise((r) => setTimeout(r, 200));
+  while (jobs.size) await sleep(200);
   if (engineReady && want !== engineWant) { // not stopped or switched meanwhile
     dbg("engine-switch", { to: want || "default" });
     stopEngine("switch"); if (IOS) engineFree = performance.now() + 3000;
@@ -464,7 +475,7 @@ function loadModel(want = "") {
           // The CPU engine can fail to start when memory is short (a tab that just crashed, or an engine that
           // was just shut down and not yet freed). Report it, wait a moment, try once more.
           report("start-failed", e); dbg("cpu-start-failed", { error: String(e?.message || e).slice(0, 200) });
-          await new Promise((r) => setTimeout(r, 3000));
+          await sleep(3000);
           await startEngine("cpu", want);
           status(`Ready.`); dbg("ready", { engine: engineName });
           return;
@@ -516,16 +527,16 @@ async function segment(bitmap, edge = true, want = "") { // edge: false skips re
   if (first && birefnet && hides === h0 && !document.hidden && !params.has("model") && !params.has("nowarm") && res.ms > BIREFNET_RUN_LIMIT
     && stepDown("slow-run", new Error(`First photo took ${res.ms} ms`))) { stopEngine("BiRefNet too slow"); loadModel().catch(() => {}); }
   const m = res.mask;
-  const id = new ImageData(RES, RES);
+  const id = new ImageData(RES, RES), d = id.data;
   for (let i = 0; i < n; i++) {
     const k = i * 4;
-    id.data[k] = id.data[k + 1] = id.data[k + 2] = 255;
-    id.data[k + 3] = Math.max(0, Math.min(255, m[i] * 255));
+    d[k] = d[k + 1] = d[k + 2] = 255;
+    d[k + 3] = Math.max(0, Math.min(255, m[i] * 255));
   }
   despeck(id);
   if (engineModel === "isnet" && params.get("haze") !== "0") hardenHaze(id); // ISNet only (tuned on its masks); ?haze=0 shows it without
   let box = subjectBox(id);
-  for (let i = 3; i < id.data.length; i += 4) id.data[i] = LUT[id.data[i]]; // soften the edge once, here
+  for (let i = 3; i < d.length; i += 4) d[i] = LUT[d[i]]; // soften the edge once, here
   // BiRefNet only, 1024 and 640 (on ISNet it changed next to nothing; 640: 8 better, 0 worse held out): the guided filter
   // on hair and fur. Not on GIF frames: their transparency is on/off, so the soft edge it redraws is thrown away, and a
   // GIF has up to 100 frames.
@@ -559,10 +570,10 @@ function onBackdrop(px) {
 // 1024 px, and return it as a layer drawn over the photo before the mask cuts it out: fully opaque pixels keep the
 // photo's own detail, the more see-through a pixel, the more its color comes from the estimate. About 4 MB a photo.
 function edgeColors(px, md) {
-  const n = RES * RES, a = new Float32Array(n);
+  const n = RES * RES, a = new Float32Array(n), t = new Float32Array(n); // t: blur's row pass, filled before each read
   for (let i = 0; i < n; i++) a[i] = md[i * 4 + 3] / 255;
   const blur = (src, r, out) => { // box blur, separable running sums, edges clamped
-    const t = new Float32Array(n), k = 1 / (2 * r + 1);
+    const k = 1 / (2 * r + 1);
     for (let y = 0; y < RES; y++) {
       const o = y * RES; let s = src[o] * (r + 1);
       for (let x = 1; x <= r; x++) s += src[o + Math.min(x, RES - 1)];
@@ -597,9 +608,10 @@ function edgeColors(px, md) {
 
 // The subject's bounding box (mostly opaque pixels), as fractions of the image. null if nothing is left.
 function subjectBox(img) {
+  const d = img.data;
   let x0 = RES, y0 = RES, x1 = -1, y1 = -1;
   for (let y = 0; y < RES; y++) for (let x = 0; x < RES; x++) {
-    if (img.data[(y * RES + x) * 4 + 3] < 128) continue;
+    if (d[(y * RES + x) * 4 + 3] < 128) continue;
     if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
   }
   return x1 < 0 ? null : { x0: x0 / RES, y0: y0 / RES, x1: (x1 + 1) / RES, y1: (y1 + 1) / RES };
@@ -804,9 +816,11 @@ function despeck(img) {
     while (sp) {
       const j = stack[--sp]; cnt++;
       const x = j % RES, y = (j / RES) | 0;
-      for (const k of [x > 0 ? j - 1 : -1, x < RES - 1 ? j + 1 : -1, y > 0 ? j - RES : -1, y < RES - 1 ? j + RES : -1]) {
-        if (k >= 0 && !lab[k] && on(k)) { lab[k] = L; stack[sp++] = k; }
-      }
+      let k; // the four neighbours, written out (no array per pixel)
+      if (x > 0 && !lab[(k = j - 1)] && on(k)) { lab[k] = L; stack[sp++] = k; }
+      if (x < RES - 1 && !lab[(k = j + 1)] && on(k)) { lab[k] = L; stack[sp++] = k; }
+      if (y > 0 && !lab[(k = j - RES)] && on(k)) { lab[k] = L; stack[sp++] = k; }
+      if (y < RES - 1 && !lab[(k = j + RES)] && on(k)) { lab[k] = L; stack[sp++] = k; }
     }
     sizes.push(cnt);
   }
@@ -889,7 +903,7 @@ function holdFull(it) {
 
 // The background wipes away, then the view eases in to the crop.
 function reveal(it) {
-  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return drawCard(it);
+  if (REDUCED.matches) return drawCard(it);
   it.el.pic.classList.remove("still"); it.gen = (it.gen || 0) + 1;
   const c = it.el.canvas, x = c.getContext("2d");
   const K = Math.min(1, PREVIEW_SIDE / Math.max(it.w, it.h)), W = Math.round(it.w * K), H = Math.round(it.h * K);
@@ -958,9 +972,6 @@ async function fullBlob(it) {
   } finally { pngBusy--; rested(); }
 }
 
-// Phones save through the share sheet ("Save Image" puts it in Photos) instead of downloading to Files.
-// The share sheet only opens straight from a tap, so phones make each PNG as soon as the cut is done.
-const PHONE = matchMedia("(pointer: coarse)").matches && "canShare" in navigator; // touch
 let pngChain = Promise.resolve();
 // One full-size PNG at a time: several at once can run a phone out of memory.
 // A failed one is forgotten, so the next tap tries again instead of failing forever.
@@ -982,6 +993,7 @@ const outName = (it) => `${it.name}-goodbye-bg.${ext(it)}`;
 const maxFrames = async () => (engineName === "cpu" || (await pickEngine()) === "cpu" ? 16 : 100);
 let gifMod = null;
 const loadGif = () => (gifMod ||= import("./gif.mjs"));
+const readAnim = async (blob) => (await loadGif()).readGif(await blob.arrayBuffer(), await maxFrames());
 async function animate(it) {
   const { frames, w, h } = it.anim;
   clearInterval(it.quip);
@@ -1093,7 +1105,7 @@ async function openOne(it, src) {
     const { blob, name } = await toBlob(src);
     named(it, baseName(name));
     if (/gif/i.test(blob.type) || /\.gif$/i.test(name || "")) { // animated: every frame gets cut out
-      try { const g = (await loadGif()).readGif(await blob.arrayBuffer(), await maxFrames()); if (g) { it.anim = g; dbg("gif", { frames: g.frames.length, total: g.total }); } }
+      try { const g = await readAnim(blob); if (g) { it.anim = g; dbg("gif", { frames: g.frames.length, total: g.total }); } }
       catch (e) { console.warn("GIF frames skipped", e); }
     }
     dbg("decode", { bytes: blob.size, type: blob.type });
@@ -1274,7 +1286,6 @@ function announce(msg) {
   sr.textContent = ""; requestAnimationFrame(() => (sr.textContent = msg));
 }
 
-// A removed photo: ad cards showing it move on to another cut-out, and its preview bitmap is freed (iPhone memory).
 /* ---------- undo a removal ----------
    Remove takes the card off at once and offers Undo for a few seconds: a ring on the button runs down (hover or focus
    pauses it). The stored copy is deleted at once and written again on Undo, so a tab closed meanwhile can't bring a
@@ -1331,7 +1342,7 @@ function undoRemove() {
   else if (it.unfinished && it.mask) { it.unfinished = false; ready(it); keep(it); drawCard(it); } // removed while the model was on it
   else if (it.unfinished) { // a GIF cut short: read its frames again, then it goes back in the queue
     it.unfinished = false; it.hold = true; it.el.card.classList.remove("working"); it.el.card.classList.add("queued");
-    (async () => { try { it.anim = (await loadGif()).readGif(await it.blob.arrayBuffer(), await maxFrames()) || null; } catch { it.anim = null; } it.hold = false; run(); })();
+    (async () => { try { it.anim = await readAnim(it.blob) || null; } catch { it.anim = null; } it.hold = false; run(); })();
   }
   else if (it.mask) drawCard(it); else if (!it.failed) run();
   it.el.card.querySelector(".x")?.focus({ preventScroll: true });
@@ -1390,7 +1401,7 @@ async function run() {
     const next = () => [...$("grid").children].map((card) => items.find((i) => i.el.card === card))
       .find((i) => i && !i.mask && !i.failed && i.bmp && !i.hold);
     for (let it; (it = next()); ) {
-      if (cutIn) { while (cutIn) await new Promise((r) => setTimeout(r, 200)); continue; } // a 👎 on the other model goes first (retry); then pick again
+      if (cutIn) { while (cutIn) await sleep(200); continue; } // a 👎 on the other model goes first (retry); then pick again
       startQuips(it);
       await nextFrame();
       if (cutIn) { clearInterval(it.quip); it.el.card.classList.remove("working"); it.el.card.classList.add("queued"); continue; } // a 👎 came in meanwhile: this one waits, still
@@ -1408,7 +1419,6 @@ async function run() {
       ready(it); dbg("shown"); keep(it);
       { const left = items.filter((i) => i.bmp && !i.mask && !i.failed).length; announce(left ? t("{name}: background removed. {n} to go.", { name: it.name, n: left }) : t("{name}: background removed.", { name: it.name })); }
       dbg("reveal"); reveal(it); sync(); tick(); milestone(it);
-      it.el.card.dataset.ms = lastMs;
     }
   } finally { running = false; rested(); }
   if (items.some((i) => i.bmp && !i.mask && !i.failed)) return run();
@@ -1429,7 +1439,7 @@ function say(it, text) {
   const el = it.el.say;
   it.el.card.classList.add("working");
   el.textContent = text;
-  el.classList.remove("rise"); void el.offsetWidth; el.classList.add("rise");
+  replay(el, "rise");
 }
 
 function show() { document.body.classList.add("has-work"); }
@@ -1441,7 +1451,7 @@ function landing(change) {
   const b = document.body;
   if (b.classList.contains("has-work")) return change();
   const swap = () => { change(); b.classList.add("moving"); requestAnimationFrame(() => requestAnimationFrame(() => b.classList.remove("moving"))); };
-  if (!document.startViewTransition || document.hidden || matchMedia("(prefers-reduced-motion: reduce)").matches) return swap();
+  if (!document.startViewTransition || document.hidden || REDUCED.matches) return swap();
   return document.startViewTransition(swap).updateCallbackDone.catch((e) => { console.warn(e); if (!b.classList.contains("has-work")) swap(); });
 }
 /* ---------- ratings ----------
@@ -1449,8 +1459,8 @@ function landing(change) {
    megapixels. Never the photo. 👎 then runs the model again, zoomed in on the subject, which gives
    it more pixels to work with. The retry can be rated too. */
 function sendRating(it, vote) {
-  const body = JSON.stringify({ vote, engine: it.engine || engineTag(), retry: !!it.retried, ms: it.ms || 0, mp: +((it.w * it.h) / 1e6).toFixed(1), ...(TEST && { t: 1 }) });
-  fetch("/api/rate", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
+  const body = JSON.stringify({ vote, engine: it.engine || engineTag(), retry: !!it.retried, ms: it.ms || 0, mp: mpOf(it), ...(TEST && { t: 1 }) });
+  postJSON("/api/rate", body);
 }
 
 // One vote per result: the chosen one stays lit, the other steps aside (keeping its place in the bar).
@@ -1458,7 +1468,7 @@ function showVote(it, vote) {
   const { up, down, dl, card } = it.el;
   // A keyboard vote keeps focus on the card: on Download, or on the card itself while a 👎 retry runs (it used to fall to <body>).
   if (document.activeElement === up || document.activeElement === down) {
-    const retrying = vote === "down" && !it.retried && !it.anim && (zoomRect(it) || retryModel(it));
+    const retrying = vote === "down" && canRetry(it);
     if (retrying) { card.tabIndex = -1; card.focus({ preventScroll: true }); } else dl.focus({ preventScroll: true });
   }
   up.disabled = down.disabled = true;
@@ -1470,7 +1480,7 @@ async function rate(it, vote) {
   showVote(it, (it.vote = vote));
   sendRating(it, vote); keep(it);
   if (vote !== "down") return;
-  if (!it.retried && !it.anim) return retry(it); // a GIF's 👎 is a vote only
+  if (canRetry(it)) return retry(it); // a GIF's 👎, or one on a photo that is mostly subject, is a vote only
   if (it.first) { // 👎 on the retry: put the first result back, so a retry never leaves things worse
     Object.assign(it, { mask: it.first.mask, maskRect: it.first.rect, png: null });
     it.first = null; drawCard(it); if (PHONE) png(it); keep(it);
@@ -1526,9 +1536,11 @@ function zoomRect(it) {
 function retryModel(it) {
   return it.engine === "cpu-birefnet640" && !it.anim && !params.has("model") ? "isnet" : "";
 }
+// Whether a 👎 tries again (zoomed, or on the other model) or is a vote only.
+const canRetry = (it) => !it.retried && !!(zoomRect(it) || retryModel(it));
 // The 👎 label says what it will do.
 function downLabel(it) {
-  const label = t(!it.retried && (zoomRect(it) || retryModel(it)) ? "Bad result, try again" : "Bad result");
+  const label = t(canRetry(it) ? "Bad result, try again" : "Bad result");
   it.el.down.setAttribute("aria-label", label); it.el.down.title = label;
 }
 
@@ -1548,7 +1560,7 @@ async function retry(it) {
   await pngChain.catch(() => {});
   // The other model replaces the engine. A 👎 cuts in line (Kevin, 2026-11-22): the photo being worked on finishes,
   // the batch waits, the engine swaps for this one photo (about 15 s more on an iPhone), then swaps back.
-  if (want) { cutIn++; while (inPhoto) await new Promise((r) => setTimeout(r, 100)); }
+  if (want) { cutIn++; while (inPhoto) await sleep(100); }
   try {
     const sx = Math.round(x0 * it.w), sy = Math.round(y0 * it.h), sw = Math.max(1, Math.round((x1 - x0) * it.w)), sh = Math.max(1, Math.round((y1 - y0) * it.h));
     let m;
@@ -1881,7 +1893,7 @@ function canvasFor(c) {
   const k = Math.min(2, devicePixelRatio || 1), W = c.clientWidth || 200, H = c.clientHeight || 150;
   c.width = Math.round(W * k); c.height = Math.round(H * k);
   const x = c.getContext("2d"); x.scale(k, k);
-  return { x, k, W, H, dark: matchMedia("(prefers-color-scheme: dark)").matches };
+  return { x, k, W, H, dark: DARK.matches };
 }
 const sizeOf = (src) => [src.naturalWidth || src.width, src.naturalHeight || src.height];
 
@@ -1953,7 +1965,7 @@ let r3d = null;
 const load3d = () => (r3d ||= import("./render3d.mjs").catch((e) => { report("3d-failed", e); return null; }));
 const product = (kind, draw2d) => async (c, src) => {
   const m = await load3d();
-  if (m) try { m.render(kind, c, src, matchMedia("(prefers-color-scheme: dark)").matches); return; }
+  if (m) try { m.render(kind, c, src, DARK.matches); return; }
   catch (e) { console.warn("3D render failed", e); report("3d-failed", e); r3d = Promise.resolve(null); }
   draw2d(c, src);
 };
@@ -1961,7 +1973,7 @@ const PRODUCTS = { mug: product("mug", drawMug), sticker: product("sticker", dra
   ornament: product("ornament", drawSticker), phonecase: product("phonecase", drawSticker), pillow: product("pillow", drawSticker), keychain: product("keychain", drawSticker) };
 
 // Light or dark changed: redraw the product in the other color.
-matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => {
+DARK.addEventListener?.("change", () => {
   for (const a of adEls) if (a.art) try { a.art.draw(a.querySelector(".adart"), a.art.src); } catch {}
 });
 
@@ -1994,7 +2006,7 @@ const onScreen = () => adEls.some((a) => a.onScreen);
 // the mouse still works, since the visitor makes it move.
 const MOTION_MS = 24000;
 let tiltRaf = 0, motionFrom = 0, swaps = 0;
-function tiltGo() { if (!tiltRaf && !matchMedia("(prefers-reduced-motion: reduce)").matches) { motionFrom ||= performance.now(); tiltRaf = requestAnimationFrame(tiltLoop); } }
+function tiltGo() { if (!tiltRaf && !REDUCED.matches) { motionFrom ||= performance.now(); tiltRaf = requestAnimationFrame(tiltLoop); } }
 function tiltLoop(t) {
   const sway = Math.min(1, Math.max(0, (motionFrom + MOTION_MS - t) / 4000)); // fades out over the last 4 s
   const live = adEls.filter((a) => a.onScreen && a.tilt);
@@ -2020,7 +2032,7 @@ function beat() {
 // the photo?"). One photo: the product changes. Several: they take turns. A tapped photo stays on the cards
 // (pinnedArt), and the products keep changing around it.
 function nextArt() {
-  if (document.hidden || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  if (document.hidden || REDUCED.matches) return;
   const done = finishedCuts();
   if (!adEls.length || swaps >= MOTION_MS / BEAT) return;
   const canPhoto = done.length >= 2 && !pinnedArt, canProduct = adVariants.length > adEls.length;
@@ -2082,15 +2094,12 @@ function mugArt(it) {
 // each column of the picture lands where it would on a cylinder (narrower toward the edges) and sits lower
 // the further forward it is, so straight lines curve like the rim's ellipse. Then shading.
 function drawMug(c, src) {
-  const k = Math.min(2, devicePixelRatio || 1), W = c.clientWidth || 200, H = c.clientHeight || 150;
-  c.width = Math.round(W * k); c.height = Math.round(H * k);
-  const x = c.getContext("2d"); x.scale(k, k);
+  const { x, k, W, H, dark } = canvasFor(c), [sw, sh] = sizeOf(src); // dark: a black mug in dark mode, a white one in light
   // ry/R sets how far we look down on the mug: 0.36 shows the rim as an open ellipse, so the print visibly
   // curves around the body (at 0.24 it looked flat, like a card standing inside the mug).
   const mh = H * 0.9, mw = Math.min(W * 0.6, mh * 0.8), R = mw / 2, ry = R * 0.36;
   // Light from the front left: brightness by the angle of the surface (Lambert), plus a soft highlight.
   const LIGHT = -0.45, lit = (th) => Math.max(0, Math.cos(th - LIGHT)), shine = (th) => Math.exp(-(((th - LIGHT) / 0.22) ** 2));
-  const dark = matchMedia("(prefers-color-scheme: dark)").matches; // a black mug in dark mode, a white one in light
   const across = (g, f) => { for (let i = 0; i <= 24; i++) { const th = -Math.PI / 2 + (Math.PI * i) / 24; g.addColorStop(0.5 + Math.sin(th) / 2, f(th)); } return g; };
   const cx = W / 2 - mw * 0.1, top = (H - mh) / 2, rimY = top + ry, bot = top + mh - ry;
   // Soft shadow to set it down on the panel (light mode especially)
@@ -2109,7 +2118,6 @@ function drawMug(c, src) {
   });
   x.fill(body);
   // Print: fits the visible front of the cylinder, wrapped column by column
-  const sw = src.naturalWidth || src.width, sh = src.naturalHeight || src.height;
   // The print's edges curve exactly like the rim and the base (both drop by ry at the front), so it can use
   // nearly the whole body height between them.
   const maxArc = 2 * Math.asin(0.97) * R, maxH = (bot - rimY) * 0.86;
@@ -2177,15 +2185,15 @@ $("all").addEventListener("click", async () => {
 async function saveAll() {
   // In the order on screen (newest batch first), not the order they were added: the zip lists them as the grid shows them.
   const done = [...$("grid").children].map((card) => items.find((i) => i.el.card === card)).filter((i) => i?.mask), used = new Set();
+  const names = done.map((it) => { // photos with the same name get -2, -3, ...
+    let name = outName(it);
+    for (let k = 2; used.has(name); k++) name = `${it.name}-goodbye-bg-${k}.${ext(it)}`;
+    used.add(name); return name;
+  });
   if (PHONE) {
     const list = [];
-    for (const it of done) {
-      let name = outName(it);
-      for (let k = 2; used.has(name); k++) name = `${it.name}-goodbye-bg-${k}.${ext(it)}`;
-      used.add(name); list.push({ name, blob: await png(it) });
-    }
+    for (const [n, it] of done.entries()) list.push({ name: names[n], blob: await png(it) });
     if (await share(list)) return;
-    used.clear();
   }
   // Streamed: each file goes into the zip and is let go, and the zip is gathered as Blob parts (a browser can keep
   // big ones on disk), so 200 photos don't sit in memory twice.
@@ -2198,12 +2206,9 @@ async function saveAll() {
   });
   for (const [n, it] of done.entries()) {
     $("all").textContent = t("Preparing {i} of {n}…", { i: n + 1, n: done.length }); // on the button itself (sync puts its label back)
-    let name = outName(it);
-    for (let k = 2; used.has(name); k++) name = `${it.name}-goodbye-bg-${k}.${ext(it)}`;
-    used.add(name);
     // An animated cut-out is its GIF (fullBlob would draw one still PNG); a PNG already made is reused. The rest are
     // built fresh and not kept (memory).
-    const f = new ZipPassThrough(name); zip.add(f);
+    const f = new ZipPassThrough(names[n]); zip.add(f);
     f.push(new Uint8Array(await (await (it.anim || it.png ? png(it) : fullBlob(it))).arrayBuffer()), true);
     if (bad) throw bad;
   }
@@ -2214,8 +2219,8 @@ async function saveAll() {
   save(`goodbye-bg-${done.length}-images.zip`, new Blob(parts, { type: "application/zip" }));
 }
 
-// No double-tap zoom: it fired on quick taps and threw the layout off. Pinch-zoom stays (people with low
-// vision rely on it). Safari ignores touch-action for double taps, so a second tap within 350 ms is
+// No double-tap zoom: it fired on quick taps and threw the layout off. Pinch-zoom is off on touch
+// screens too (early.js; Kevin, 2026-11-22). Safari ignores touch-action for double taps, so a second tap within 350 ms is
 // swallowed here; a press that is held is not.
 let lastTap = 0;
 document.addEventListener("touchend", (e) => {
@@ -2257,7 +2262,9 @@ function tx(db, mode, fn) {
 }
 const queueKeep = (fn) => (keepChain = keepChain.then(fn).catch((e) => console.warn("Not kept:", e)));
 function keep(it) { queueKeep(() => writeKept(it)); }
-function forget(it) { if (it.key != null) queueKeep(async () => { const db = await kdb(); await tx(db, "readwrite", (f, s) => { f.delete(it.key); s.delete(it.key); }); }); }
+function forget(it) { if (it.key != null) queueKeep(async () => dropKept(await kdb(), [it.key])); }
+// Deletes kept photos from both stores.
+const dropKept = (db, ids) => tx(db, "readwrite", (f, s) => { for (const id of ids) { f.delete(id); s.delete(id); } });
 
 const maskBlobs = new WeakMap(); // mask -> its PNGs, so a vote doesn't encode it again
 function maskRec(m) {
@@ -2303,7 +2310,7 @@ async function trim(db, extra = 0, spare = null) {
   // A photo bigger than the whole limit is never kept, and doesn't push the others out.
   const drop = all.filter((r) => r.bytes > KEEP_BYTES || (n++, (bytes += r.bytes || 0), n > KEEP_MAX || bytes > KEEP_BYTES)).map((r) => r.id);
   for (const r of [...all].reverse()) if (extra > 0 && r.id !== spare && !drop.includes(r.id)) { drop.push(r.id); extra--; }
-  if (drop.length) await tx(db, "readwrite", (f, s) => { for (const id of drop) { f.delete(id); s.delete(id); } });
+  if (drop.length) await dropKept(db, drop);
   return drop.length;
 }
 
@@ -2339,7 +2346,7 @@ async function restore() {
     items.push(it); list.push(it);
   }
   orphans.push(...byId.keys());
-  if (orphans.length) tx(db, "readwrite", (f, s) => { for (const id of orphans) { f.delete(id); s.delete(id); } }).catch(() => {});
+  if (orphans.length) dropKept(db, orphans).catch(() => {});
   if (!list.length) { unrestore(); return []; }
   dbg("restore", { n: list.length });
   show();
@@ -2370,7 +2377,7 @@ async function fillRestored(list) {
     try {
       const bmp = await createImageBitmap(it.prev);
       if (st.anim && st.gif) { it.anim = { frames: [], w: it.w, h: it.h }; it.png = Promise.resolve(st.gif); it.gifUrl = URL.createObjectURL(st.gif); }
-      else if (st.anim && !st.mask) try { it.anim = (await loadGif()).readGif(await it.blob.arrayBuffer(), await maxFrames()) || null; } catch {}
+      else if (st.anim && !st.mask) try { it.anim = await readAnim(it.blob) || null; } catch {}
       it.mask = await maskFrom(st.mask);
       if (st.first) it.first = { rect: st.first.rect, mask: await maskFrom(st.first.mask) };
       if (!items.includes(it)) { bmp.close(); continue; }

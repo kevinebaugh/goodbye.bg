@@ -15,7 +15,7 @@ import { onRequestGet as capGet, onRequestHead as capHead } from "../functions/c
 import { ZAZZLE_CAP } from "../lib/partners.mjs";
 // Local only: CAP_TEST_MEMBER=<id> CAP_TEST_PD=<pd> fills every product's template, to try the redirect.
 if (process.env.CAP_TEST_PD) { ZAZZLE_CAP.member ||= process.env.CAP_TEST_MEMBER || "000000000000000000"; for (const k in ZAZZLE_CAP.pd) ZAZZLE_CAP.pd[k] ||= process.env.CAP_TEST_PD; }
-// In-memory stand-in for the R2 bucket (binding CAP) behind the ?zazzlecap=1 prototype.
+// In-memory stand-in for the R2 bucket (binding CAP) behind the Zazzle hand-off (off with ?zazzlecap=0).
 const capStore = new Map();
 const capObj = (k) => { const o = capStore.get(k); return o && { key: k, size: o.body.byteLength, customMetadata: o.meta, body: new Blob([o.body]).stream() }; };
 const CAP = {

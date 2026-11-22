@@ -5,8 +5,8 @@
 // One WebGL context for all cards: each product renders offscreen and is copied into the card's canvas.
 import {
   ACESFilmicToneMapping, Box3, CanvasTexture, CatmullRomCurve3, Color, CylinderGeometry, DataTexture, DirectionalLight,
-  DoubleSide, Group, LatheGeometry, LinearMipmapLinearFilter, Mesh, MeshDepthMaterial, MeshBasicMaterial, MeshPhysicalMaterial,
-  MeshStandardMaterial, PerspectiveCamera, PlaneGeometry, PMREMGenerator, RGBADepthPacking,
+  DoubleSide, Group, LatheGeometry, LinearMipmapLinearFilter, Mesh, MeshBasicMaterial, MeshPhysicalMaterial,
+  MeshStandardMaterial, PerspectiveCamera, PlaneGeometry, PMREMGenerator,
   CircleGeometry, RepeatWrapping, RGBAFormat, Scene, SRGBColorSpace, TorusGeometry, TubeGeometry, Vector2, Vector3,
   WebGLRenderer,
 } from "three";
@@ -101,8 +101,6 @@ function camera(w, h, target, halfW, halfH, dir, fill = 0.92) {
   return cam;
 }
 
-function castAll(group) { group.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } }); }
-
 // ---------- mug: a lathe-turned 11 oz mug with a real handle, the print wrapped around the front ----------
 function mug(art, dark) {
   const R = 1, H = 2.3, wall = 0.075, scene = studio(0, dark ? 0.45 : 0.28), g = new Group();
@@ -137,7 +135,6 @@ function mug(art, dark) {
   const print = new Mesh(new CylinderGeometry(R + 0.002, R + 0.002, ph, 128, 1, true, -L / 2, L), printMat);
   print.position.y = 0.1 + (H - 0.16) / 2;
   g.add(print);
-  castAll(g); print.castShadow = false;
   g.rotation.y = -0.18; // a quarter-turn hint, so the handle reads as 3D
   scene.add(g);
   // Centre the camera on the body (not body + handle): the handle hangs off to the side.
@@ -147,11 +144,7 @@ function mug(art, dark) {
 // ---------- sticker: die-cut vinyl with a white border, lying on the floor with one corner lifting ----------
 function sticker(art, dark) {
   // The die-cut art: cut-out plus a white border following its outline (built in 2D, then mapped onto vinyl).
-  const pad = Math.round(Math.max(art.width, art.height) * 0.06), w = art.width + pad * 2, h = art.height + pad * 2;
-  const c = new OffscreenCanvas(w, h), x = c.getContext("2d");
-  for (let i = 0; i < 32; i++) { const t = (i / 32) * Math.PI * 2; x.drawImage(art, pad + Math.cos(t) * pad * 0.8, pad + Math.sin(t) * pad * 0.8); }
-  x.globalCompositeOperation = "source-in"; x.fillStyle = "#fbfbf8"; x.fillRect(0, 0, w, h);
-  x.globalCompositeOperation = "source-over"; x.drawImage(art, pad, pad);
+  const c = dieCut(art), w = c.width, h = c.height;
   const map = texture(c), scene = studio(0, dark ? 0.5 : 0.3);
   const S = 2.6, sw = (S * w) / Math.max(w, h), sh = (S * h) / Math.max(w, h);
   const geo = new PlaneGeometry(sw, sh, 48, 48), pos = geo.attributes.position;
@@ -162,9 +155,7 @@ function sticker(art, dark) {
   geo.computeVertexNormals();
   const vinyl = new MeshPhysicalMaterial({ map, alphaTest: 0.5, side: DoubleSide, roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.12 });
   const m = new Mesh(geo, vinyl);
-  m.customDepthMaterial = new MeshDepthMaterial({ depthPacking: RGBADepthPacking, map, alphaTest: 0.5 });
   m.rotation.x = -Math.PI / 2; m.rotation.z = 0.12; m.position.y = 0.01;
-  m.castShadow = true;
   scene.add(m);
   return { scene, target: new Vector3(0, 0, 0), halfW: S * 0.62, halfH: S * 0.5, dir: new Vector3(0, 2.2, 1.1) };
 }
@@ -188,19 +179,13 @@ function tote(art, dark) {
   const front = panel(0.05, 1), back = panel(-0.05, -1);
   g.add(new Mesh(front, cloth), new Mesh(back, cloth));
   // Print: the same front surface, a hair forward, with the art (ink sits in the weave: rough, a touch of bump).
-  const aspect = art.width / art.height, maxW = W * 0.72, maxH = H * 0.66;
-  let pw = maxW, ph = pw / aspect; if (ph > maxH) { ph = maxH; pw = ph * aspect; }
+  const [pw, ph] = fit(art, W * 0.72, H * 0.66);
   const pgeo = front.clone(), ppos = pgeo.attributes.position, uv = pgeo.attributes.uv;
   for (let i = 0; i < ppos.count; i++) {
     ppos.setZ(i, ppos.getZ(i) + 0.003);
     uv.setXY(i, (ppos.getX(i) + pw / 2) / pw, (ppos.getY(i) + 0.04 + ph / 2) / ph);
   }
-  const ink = texture(art); ink.wrapS = ink.wrapT = 1001; // clamp: ClampToEdgeWrapping
-  const printMat = new MeshStandardMaterial({ map: ink, transparent: true, alphaTest: 0.02, roughness: 0.9, normalMap: weave, normalScale: new Vector2(0.3, 0.3) });
-  printMat.onBeforeCompile = (s) => { // only inside the print rectangle
-    s.fragmentShader = s.fragmentShader.replace("#include <map_fragment>", "#include <map_fragment>\nif (vMapUv.x < 0.0 || vMapUv.x > 1.0 || vMapUv.y < 0.0 || vMapUv.y > 1.0) discard;");
-  };
-  g.add(new Mesh(pgeo, printMat));
+  g.add(new Mesh(pgeo, inkMaterial(art, { roughness: 0.9, normalMap: weave, normalScale: new Vector2(0.3, 0.3) })));
   // Straps: flat bands rising from the top hem, one on the front, one on the back.
   const strap = (z, rise) => {
     const curve = new CatmullRomCurve3([
@@ -212,7 +197,6 @@ function tote(art, dark) {
     return m;
   };
   g.add(strap(0.06, 0.95), strap(-0.06, 1.05));
-  castAll(g);
   g.rotation.y = 0.22;
   scene.add(g);
   return { scene, target: new Vector3(0, 0.5, 0), halfW: W * 0.6, halfH: 1.62, dir: new Vector3(0, 0.25, 1) }; // bag + straps
@@ -236,10 +220,8 @@ function shirt(art, dark) {
   weave.repeat.set(14, 14);
   const fabric = new MeshStandardMaterial({ color: new Color(dark ? 0x1b1e1f : 0xf6f6f3), alphaMap: mask, alphaTest: 0.5, roughness: 0.92, normalMap: weave, normalScale: new Vector2(0.45, 0.45), side: DoubleSide });
   const tee = new Mesh(geo, fabric);
-  tee.customDepthMaterial = new MeshDepthMaterial({ depthPacking: RGBADepthPacking, alphaMap: mask, alphaTest: 0.5 });
   // Print on the chest: same folded sheet, a hair above it, UVs covering only the chest area.
-  const aspect = art.width / art.height, maxW = 0.48, maxH = 0.5;
-  let pw = maxW, ph = pw / aspect; if (ph > maxH) { ph = maxH; pw = ph * aspect; }
+  const [pw, ph] = fit(art, 0.48, 0.5);
   const top = 0.18; // from the collar down, as a fraction of the sheet
   const pgeo = geo.clone(), ppos = pgeo.attributes.position, uv = pgeo.attributes.uv;
   for (let i = 0; i < ppos.count; i++) {
@@ -247,14 +229,9 @@ function shirt(art, dark) {
     ppos.setZ(i, ppos.getZ(i) + 0.004);
     uv.setXY(i, (u - (0.5 - pw / 2)) / pw, 1 - (v - top) / ph);
   }
-  const printMat = new MeshStandardMaterial({ map: texture(art), transparent: true, alphaTest: 0.02, roughness: 0.85, normalMap: weave, normalScale: new Vector2(0.25, 0.25) });
-  printMat.onBeforeCompile = (s) => {
-    s.fragmentShader = s.fragmentShader.replace("#include <map_fragment>", "#include <map_fragment>\nif (vMapUv.x < 0.0 || vMapUv.x > 1.0 || vMapUv.y < 0.0 || vMapUv.y > 1.0) discard;");
-  };
-  const print = new Mesh(pgeo, printMat);
+  const print = new Mesh(pgeo, inkMaterial(art, { roughness: 0.85, normalMap: weave, normalScale: new Vector2(0.25, 0.25) }));
   const g = new Group(); g.add(tee, print);
   g.rotation.x = -Math.PI / 2; g.rotation.z = 0.06; g.position.y = 0.06;
-  tee.castShadow = true; tee.receiveShadow = true; print.receiveShadow = true;
   scene.add(g);
   return { scene, target: new Vector3(0, 0, 0.05), halfW: S * 0.5, halfH: S * 0.5, dir: new Vector3(0, 2.6, 0.9) };
 }
@@ -280,7 +257,6 @@ function ornament(art, dark) {
   ], true), 64, 0.035, 8, true), new MeshPhysicalMaterial({ color: 0x1f6f7a, roughness: 0.35, sheen: 1, sheenColor: new Color(0x8fd3dc) }));
   ribbon.scale.z = 0.3;
   g.add(cap, loop, ribbon);
-  castAll(g);
   g.rotation.y = 0.32;
   scene.add(g);
   return { scene, target: new Vector3(0, 0.3, 0), halfW: 1.2, halfH: 1.6, dir: new Vector3(0, 0.12, 1) };
@@ -307,7 +283,6 @@ function phonecase(art, dark) {
     r.position.set(bump.position.x + x, bump.position.y + y, D / 2 + 0.05); l.position.copy(r.position); l.position.z += 0.002;
     g.add(r, l);
   }
-  castAll(g);
   g.rotation.set(-0.06, -0.42, 0.05);
   scene.add(g);
   return { scene, target: new Vector3(0, 0, 0), halfW: 0.75, halfH: H * 0.56, dir: new Vector3(0, 0.15, 1) };
@@ -334,7 +309,6 @@ function pillow(art, dark) {
   const [pw, ph] = fit(art, S * 0.62, S * 0.62), pgeo = front.clone(), pp = pgeo.attributes.position, uv = pgeo.attributes.uv;
   for (let i = 0; i < pp.count; i++) { pp.setZ(i, pp.getZ(i) + 0.003); uv.setXY(i, (pp.getX(i) + pw / 2) / pw, (pp.getY(i) + ph / 2) / ph); }
   g.add(new Mesh(pgeo, inkMaterial(art, { roughness: 0.9, normalMap: weave, normalScale: new Vector2(0.3, 0.3) })));
-  castAll(g);
   g.rotation.set(-0.1, 0.42, 0.03); // turned a little, so its plumpness and pinched corners show
   scene.add(g);
   // Centred on what the camera sees (the turned pillow's box), not its pivot, so it sits in the middle of the card.
@@ -362,7 +336,6 @@ function keychain(art, dark) {
   const holeY = ch / 2 - (tab * 1.4 / c.height) * ch;
   const ring = new Mesh(new TorusGeometry(0.3, 0.03, 16, 64), steel); ring.rotation.y = Math.PI / 2; ring.position.set(0, holeY + 0.27, 0);
   g.add(ring);
-  castAll(g);
   g.rotation.set(0, 0.3, 0.05);
   scene.add(g);
   return { scene, target: new Vector3(0, 0.15, 0), halfW: cw * 0.62, halfH: ch * 0.62 + 0.15, dir: new Vector3(0, 0.12, 1) };
@@ -386,7 +359,7 @@ function groundShadow(scene) {
     blobTex = new CanvasTexture(c);
   }
   const blob = new Mesh(new PlaneGeometry(1, 1), new MeshBasicMaterial({ color: 0x000000, map: blobTex, transparent: true, opacity: f.opacity * 1.6, depthWrite: false, toneMapped: false }));
-  blob.material.map = blobTex; blob.userData.shared = true;
+  blob.userData.shared = true;
   blob.rotation.x = -Math.PI / 2;
   const flat = size.y < 0.3 * Math.max(size.x, size.z), grow = flat ? 1.06 : 1.3; // lying flat: a tight edge, not a halo
   blob.scale.set(Math.max(0.6, size.x * grow), Math.max(0.5, size.z * grow), 1);

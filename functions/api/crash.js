@@ -5,20 +5,21 @@
 // tab had finished and the photo's megapixels. Never the photo, never an IP address, no cookies.
 
 import { isTest } from "../../lib/test-traffic.mjs";
+import { crossSite, engineOf } from "../../lib/request.mjs";
 
-const STEPS =new Set(["load", "model", "retry", "png", "start-failed", "run-failed", "ad-failed", "mug-failed", "3d-failed", "gif", "gif-failed",
+const STEPS = new Set(["load", "model", "retry", "png", "start-failed", "run-failed", "ad-failed", "mug-failed", "3d-failed", "gif", "gif-failed",
   // GPU tiers stepping down (the GPU gate in app.js); the engine field says which one failed.
   "birefnet-start-failed", "birefnet-run-failed", "birefnet-slow-start", "birefnet-slow-run", "gpu-start-failed", "gpu-run-failed"]);
 const DEVICES = new Set(["ios", "android", "desktop"]);
+const ok = () => new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } });
 
 export async function onRequestPost({ request, env }) {
-  const site = request.headers.get("Sec-Fetch-Site");
-  if (site && site !== "same-origin") return new Response("Only for goodbye.bg.", { status: 403 });
+  if (crossSite(request)) return new Response("Only for goodbye.bg.", { status: 403 });
   let b;
   try { b = await request.json(); } catch { return new Response("Bad request", { status: 400 }); }
-  if (isTest(request, b)) return new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } }); // a test visit (lib/test-traffic.mjs)
+  if (isTest(request, b)) return ok(); // a test visit (lib/test-traffic.mjs)
   const step = STEPS.has(b?.step) ? b.step : "other";
-  const engine = ["gpu", "gpu-birefnet", "cpu-birefnet640"].includes(b?.engine) ? b.engine : "cpu";
+  const engine = engineOf(b?.engine);
   const dev = DEVICES.has(b?.dev) ? b.dev : "other";
   const done = Math.max(0, Math.min(1000, Number(b?.done) || 0));
   const mp = Math.max(0, Math.min(1000, Number(b?.mp) || 0));
@@ -29,5 +30,5 @@ export async function onRequestPost({ request, env }) {
   const point = { blobs: ["crash", engine, step, dev, error, trail], doubles: [done, mp], indexes: ["crash"] };
   if (env.RATINGS) env.RATINGS.writeDataPoint(point);
   else console.log("crash (no RATINGS binding):", JSON.stringify(point));
-  return new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } });
+  return ok();
 }

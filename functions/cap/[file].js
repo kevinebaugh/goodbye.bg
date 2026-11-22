@@ -1,12 +1,13 @@
-// GET /cap/<key>.png   (prototype, only used with ?zazzlecap=1)
-// Serves a cut-out the visitor chose to send to Zazzle, so Zazzle's server can fetch it. Zazzle copies the image
+// GET /cap/<key>.png   (a Zazzle ad card click; off with ?zazzlecap=0)
+// Serves the cut-out a Zazzle card click sent, so Zazzle's server can fetch it. Zazzle copies the image
 // the moment the link opens (tested 2026-11-21: the product page comes back with Zazzle's own image ID), so our copy
 // is deleted 20 s after the first full fetch (a little slack for a retry). Never fetched: gone after the TTL (an
 // expired one is deleted when asked for, or on the next send; an R2 lifecycle rule deletes leftovers after a day).
 // Not logged, not cached by Cloudflare or browsers, not indexed.
 import { KEY } from "../api/cap/[key].js";
+import { fail } from "../../lib/request.mjs";
 
-const gone = () => new Response("Not found", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
+const gone = () => fail(404, "Not found");
 
 async function get({ params, env, request, waitUntil }, head) {
   const m = String(params.file || "").match(/^(.+)\.png$/);

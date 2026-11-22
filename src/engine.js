@@ -32,7 +32,7 @@ const dbg = (step, data = {}) => debug && postMessage({ type: "dbg", step, data 
 async function fetchParts(dir, progress) {
   const manifest = await (await fetch(dir + "manifest.json")).json();
   const out = new Uint8Array(manifest.size);
-  let got = 0;
+  let got = 0, tenth = -1; // progress goes out in tenths: the page shows no finer steps
   for (const p of manifest.parts) {
     for (let attempt = 1; ; attempt++) {
       let partGot = 0;
@@ -45,14 +45,15 @@ async function fetchParts(dir, progress) {
           if (done) break;
           if (got + partGot + value.length > out.length) throw new Error(`${p} is larger than the manifest says`);
           out.set(value, got + partGot); partGot += value.length;
-          progress?.((got + partGot) / manifest.size);
+          const f = (got + partGot) / manifest.size;
+          if (progress && Math.floor(f * 10) !== tenth) { tenth = Math.floor(f * 10); progress(f); }
         }
         got += partGot; // a retry starts this part over at the same place
         break;
       } catch (e) {
         if (attempt >= 4) throw e;
         console.warn(`Retrying ${dir}${p}`, e);
-        await new Promise((r) => setTimeout(r, 1000 * attempt));
+        await sleep(1000 * attempt);
       }
     }
   }

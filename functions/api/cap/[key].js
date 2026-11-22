@@ -1,20 +1,19 @@
-// PUT /api/cap/<key>   (prototype, only used with ?zazzlecap=1)
-// The visitor chose "Send it to Zazzle" on an ad card: the page puts that one cut-out here so Zazzle can
-// fetch it from /cap/<key>.png and show it on the product. Off by default; nothing else ever comes here.
+// PUT /api/cap/<key>   (a Zazzle ad card click; off with ?zazzlecap=0)
+// The visitor clicked a Zazzle product card: the page puts that one cut-out here so Zazzle can
+// fetch it from /cap/<key>.png and show it on the product. Nothing else ever comes here.
 // Stored in R2 (binding CAP), deleted after TTL_MS. No IP, no cookies, no identifiers: the key is a random
 // 128-bit name the page made for this one click and never reuses.
+import { crossSite, fail } from "../../../lib/request.mjs";
+
 export const TTL_MS = 60 * 60 * 1000; // 1 hour. Whether Zazzle copies the image or keeps fetching it is not known yet (docs/zazzle-cap.md)
 export const MAX_BYTES = 20 * 1024 * 1024;
 export const KEY = /^[A-Za-z0-9_-]{22}$/; // 16 random bytes, base64url
 const PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
-const fail = (status, message) =>
-  new Response(message, { status, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
-
 export async function onRequestPut({ request, env, params, waitUntil }) {
   // Only the app itself may upload. Browsers send Sec-Fetch-Site; older ones at least send Origin.
   const site = request.headers.get("Sec-Fetch-Site"), origin = request.headers.get("Origin");
-  if (site && site !== "same-origin") return fail(403, "Only for goodbye.bg.");
+  if (crossSite(request)) return fail(403, "Only for goodbye.bg.");
   if (!site && origin && origin !== new URL(request.url).origin) return fail(403, "Only for goodbye.bg.");
   if (!env.CAP) return fail(503, "Not set up.");
   const key = String(params.key || "");

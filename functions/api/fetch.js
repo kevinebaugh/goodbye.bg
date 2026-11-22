@@ -4,16 +4,14 @@
 // function instead. Nothing is stored or logged here; the bytes pass straight through.
 // Photos from the visitor's device never come here: only links they paste.
 
+import { crossSite, fail } from "../../lib/request.mjs";
+
 const MAX_BYTES = 30 * 1024 * 1024;
 const TIMEOUT_MS = 15_000;
 
-const fail = (status, message) =>
-  new Response(message, { status, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
-
 export async function onRequestGet({ request }) {
   // Only the app itself may use this. Blocks hotlinking and cross-site abuse.
-  const site = request.headers.get("Sec-Fetch-Site");
-  if (site && site !== "same-origin") return fail(403, "This endpoint is only for goodbye.bg.");
+  if (crossSite(request)) return fail(403, "This endpoint is only for goodbye.bg.");
 
   let url;
   try { url = new URL(new URL(request.url).searchParams.get("url") || ""); }
