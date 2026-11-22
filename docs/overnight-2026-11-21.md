@@ -46,12 +46,39 @@ Extra usage capped at $0. Stop starting new work at 85% weekly; never pass 90%.
 | 04:37 | Bulk CLI as a single binary + shipping doc + rembg comparison (branch bulk-cli) | background agent | 40% → 42% | bulk-cli e188135, ddc2c10, 78dd4c9. macOS arm64 binary (scratchpad, 169 MB, 67 MB zipped), BiRefNet only, runs on the GPU without Node. On 40 photos with true masks: rembg's BiRefNet lite 0.981 vs ours 0.977 (rembg default 0.815); Apple Vision (likely Finder) 0.932 at 25 ms; ours ~15x faster than rembg on CPU. Suggests $29 once, no keys, curl install. Found onnxruntime-node's built-in telemetry (likely Windows-only), now turned off in the CLI. A Gatekeeper test dialog may still be on screen. |
 | 05:05 | Refresh the launch kit for tonight's new features | background agent | 41% → 43% | 355eba0: new PH gallery, square social and demo showing blur, seller presets, batch; copy covers backgrounds, sizes, margin, shadow, Apply to all, 100 per drop (8 GB+); Show HN adds the GPU fallback; offline still not claimed (checklist step after Kevin's Safari check). Blur shot uses a corgi: no CC0 portrait without Kevin's OK. og.png unchanged. |
 | 05:12 | Final QA sweep of production with fixes | background agent | 42% → 44% | 0dfbaa1, 4a78dd5 (copy only): FAQ said the Zazzle copy lives "an hour at most" (unfetched ones are unreadable after an hour, deleted within a day); README model-caching, batch-limit and fallback wording. No code regressions at four sizes, both themes, all features, production and local; tests 21/21 + 41/41. Launch kit had the same "hour" wording: fixed. For Kevin: ?adtest traffic counts in ad data (~40 shows tonight); review items #5, #7; dark theme-color. |
-| 05:47 | Quality on product photos and high-res phone-style photos (all 4 pipelines) | background agent | 43% → | started |
-| 05:55 | Local web window for the bulk tool (branch bulk-cli) | background agent | 44% → | started |
+| 05:47 | Quality on product photos and high-res phone-style photos (all 4 pipelines) | background agent | 43% → 44% | 871c1ac docs/quality-products.md, 800 photos. Mean IoU, phone-size 8 MP+ / thin products / seller shots: BiRefNet 0.971 / 0.926 / 0.971; ISNet 0.851 / 0.933 / 0.965; BiRefNet 640 0.950 / 0.865 (worse on 172 of 200) / 0.947; ?pp=1 same as BiRefNet (no regressions). All keep mirror reflections. Phone-size and thin sets may overlap BiRefNet's training data. |
+| 05:55 | Local web window for the bulk tool (branch bulk-cli) | background agent | 44% → 45% | bulk-cli c8aeb71, 49daefd: `goodbye-bg` with no arguments opens a local page (drop folder, background, format, size, margin, progress with thumbnails). Same speed and byte-identical output as the CLI; works in the 169 MB binary; 32 Playwright checks. Verdict: a browser window covers non-terminal users; a native app (Dock icon, notarized .dmg) only once copies sell. |
 | 05:58 | Draft PRs for the preview branches | coordinator | 44% | kevinebaugh/goodbye.bg#2 mask editing, #3 phone model, #4 hair/fur filter (drafts; Kevin merges). |
 
 Check-in 23:46: weekly 28%, 5-hour window 6% (reset 04:30 UTC). About 4 weekly points in the first 45 min.
 
 ## Findings
 
-## Morning summary
+## Morning summary (06:30, weekly 44%)
+
+About 100 commits landed on main tonight, all deployed. Both test suites pass (`npm run test` 21, `npm run test:x` 41).
+
+**Shipped on main**
+- Background choice: see-through, white, black, palette colours, any colour, blur (2 strengths), your own photo. JPG when solid; WebP where supported.
+- Seller options: size presets (Square, 4:5, 16:9, custom), margin, ground shadow, Apply to all. 100 photos per drop on 8 GB+ computers.
+- Reload jitter gone (CLS 0 in every case measured); first photos animate in; phones download the model only on intent (a visitor who leaves uses 0.1 MB, was 116 MB).
+- Weak-GPU fallback: BiRefNet trouble → ISNet on the GPU → CPU, remembered per device.
+- iPhone memory: engine-restart peak 3.3–4.6 GB → 2.0 GB (headless Chrome, iPhone settings).
+- Offline after the first cut-out and installable (not claimed on the site yet).
+- Two design reviews, accessibility audit (all serious and moderate fixed), code review (4 bugs fixed), cross-browser suite (WebKit, iPhone profile, Firefox), format fixes, real 404, SEO title and pages, honest remove.bg comparison, README, launch kit (`docs/launch/`), domain runbook (`docs/domain-cutover.md`), parity audit (`docs/removebg-parity.md`).
+
+**Waiting on you (draft PRs, previews live)**
+- kevinebaugh/goodbye.bg#2 Mask editing (tap pieces, erase/restore brush, undo).
+- kevinebaugh/goodbye.bg#3 BiRefNet 640 on phones: much better on people, pets and phone photos (0.950 vs 0.851 on 8 MP+), worse on thin products (0.865 vs 0.933). Run the iPhone test in `docs/phone-birefnet640.md` first.
+- kevinebaugh/goodbye.bg#4 Hair/fur guided filter (`?pp=1`): 12 better, 0 worse; no product regressions. Safe to turn on after a phone timing check.
+- Branch `bulk-cli`: local bulk tool with a browser window and a remove.bg-API drop-in; 213 photos/min on this Mac's GPU. Sell it? (`docs/bulk-cli.md` suggests $29 once.)
+
+**Decisions for you**
+- Zazzle commission answer (api.help@zazzle.com): decides whether the cut-out hand-off earns anything.
+- Ads: 1 photo still gets 3 ad cards (your fill-the-grid rule); reviewers found it heavy.
+- Phones: model downloads on intent. A first-time phone visitor who waits 16 s before tapping gets the first cut-out ~19 s later. One line to go back.
+- Offline claim: check Safari, then add "Works offline after your first cut-out".
+- New UI choices: second bar row on phones with 1–4 photos, the ringing background button, unopenable files shown as a bubble instead of a card.
+- Launch: Show HN Tue 24 Nov 8–9:30 am ET, Product Hunt Tue 1 Dec 12:01 am PT (`docs/launch/README.md`). Domain still waiting on Netim.
+
+**Not tested anywhere tonight:** a real iPhone or Android, real Safari, a real weak GPU. Tests added ~200 to the public cut-out count and ~40 ad shows (`?adtest`).
