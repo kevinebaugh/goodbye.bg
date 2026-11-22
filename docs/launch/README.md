@@ -48,7 +48,7 @@ Honest notes about the captures:
   BiRefNet (fails, runs out of memory, starts in over 10 s or takes over 2 s for the first photo) steps down to ISNet on
   the GPU (and to the CPU if that fails too), and remembers it. The page's CSP allows network only to its own origin.
 - What leaves the device: the cut-out on a Zazzle product card, only when that card is clicked (deleted once Zazzle
-  has it, an hour at most). A pasted link is fetched by our server. Anonymous counts (views, votes, crashes, cut-outs),
+  has it; if Zazzle never fetches it, no one can open it after an hour and it is deleted within a day). A pasted link is fetched by our server. Anonymous counts (views, votes, crashes, cut-outs),
   no cookies, no IP addresses, no third-party scripts. So say "cut out on your device", never "nothing is ever
   uploaded" or "no analytics".
 - Out: a PNG at the photo's own resolution (output capped at 16 MP on iPhone, 64 MP elsewhere), cropped to the subject
