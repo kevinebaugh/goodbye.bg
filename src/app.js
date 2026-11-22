@@ -727,8 +727,8 @@ const outName = (it) => `${it.name}-goodbye-bg.${ext(it)}`;
    into exactly W x H. Margin is a share of the subject's longer side. The shadow is a soft ellipse under the subject. */
 const OUT0 = { size: "orig", cw: 2000, ch: 2000, margin: 0.04, shadow: false, fmt: null };
 const RATIOS = { "1:1": 1, "4:5": 0.8, "16:9": 16 / 9 };
-const OUT_MAX = IOS ? 4096 : 5000; // a custom side; and no output over 16 MP on iPhones (Safari's canvas limit), 36 elsewhere
-const OUT_PX = IOS ? 16e6 : 36e6;
+const OUT_MAX = IOS ? 4096 : 5000; // a custom side; and no output over 16 MP on iPhones (Safari's canvas limit), 64 elsewhere
+const OUT_PX = IOS ? 16e6 : 64e6;
 const outOf = (it) => ({ ...OUT0, ...it.out });
 const plainOut = (it) => { if (it.anim) return true; const o = outOf(it); return o.size === "orig" && o.margin === OUT0.margin && !o.shadow; };
 let WEBP = false; // browsers that can't encode WebP hand back a PNG instead (Safari): then the option isn't offered
