@@ -233,7 +233,8 @@ Tested: headless Chrome (reload in a restarted browser, Back still from bfcache)
     and remove are never lost (card widths): 218+ px everything; 186 to 217 no crop; 150 to 185 (a phone in portrait with
     1 to 3 photos, 165 px) no crop and no remove, 👍 👎 stay (Kevin, 2026-11-21: voting beats crop; moving remove into the
     picker was an overnight call on 2026-11-22, easy to reverse); 122 to 149 background, Download, remove; under 122
-    background and Download. The picker drops swatches as it narrows (sage under 218, light aqua under 186, black under 122).
+    background and Download. The picker drops swatches as it narrows (sage and light aqua under 218, black under 150, any colour
+    under 122; measured to fit at 96 to 420 px with the sliders button).
     Cards without a picker (waiting, failed, animated GIFs) keep remove in the bar, in the background button's place, so
     Download doesn't move when a card finishes. A background or crop change on a phone builds the PNG ahead only when no
     batch or retry is running.
@@ -251,6 +252,20 @@ Tested: headless Chrome (reload in a restarted browser, Back still from bfcache)
     partner-ad save follow it; a solid background downloads as a JPG (0.92), see-through stays PNG. Ad card art and the
     cut-out sent to Zazzle stay see-through. Not for animated GIFs (no button). Kept in IndexedDB (`bg` in the state record).
     Your own photo as a background: not built (a second full-size image is the iPhone memory problem again).
+  - Output options (2026-11-22, sellers, parity items 5 and 7): the picker's last button (sliders) swaps the swatches
+    for a second row at the bar's height: Size (native select: Original, Square, 4:5, 16:9, Custom W x H up to 5000 px,
+    4096 on iPhones), Margin (0, 4%, 10%, 20% of the subject's longer side; 4% is the old crop), a ground shadow toggle,
+    All, WebP. Narrow cards scroll the row sideways with a fade at the end (most used first). All off by default, and then
+    the output is byte-for-byte the old one. Original never goes past the photo's edges; a ratio grows the canvas around
+    the subject at the photo's own resolution (no resampling); Custom scales into exactly W x H; centred; the margin is
+    see-through or the background colour (the cut-out is clipped to the subject's box). The shadow is a radial-gradient
+    ellipse under the subject's bottom edge (no canvas filter: Safari). Output capped at 16 MP on iPhones, 64 elsewhere.
+    WebP only where the browser encodes it (a 1x1 test at load; Safari doesn't, so it isn't offered there), quality 0.9,
+    keeps transparency. Card, Download, long press, Download all and the partner-ad save follow; the Zazzle upload and ad
+    art stay the plain see-through crop (`fullBlob(it, true)`). All copies this photo's background and options to every
+    other photo (not GIFs) and to photos added later in this visit (memory only, not across visits). Kept in IndexedDB
+    (`out` in the state record). A see-through Square looks like Original on the card (the checkerboard fills the cell);
+    with a colour the frame shows. No marketplace names in the UI: a see-through square doesn't meet Amazon's white rule.
   - Removing a photo frees its bitmap and moves any ad card showing it to another cut-out; focus goes to the next card.
 - Buttons follow one small system in style.css (Kevin, 2026-11-21: "a mature design system"): spacing tokens
   `--s1..--s5` (4 px scale), heights `--h-sm/md/lg` (32/40/48), every button a size plus a variant (`.primary`,
