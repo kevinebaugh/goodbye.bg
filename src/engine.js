@@ -22,12 +22,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const dbg = (step, data = {}) => debug && postMessage({ type: "dbg", step, data });
 
 // Fetch a split file (Cloudflare Pages allows 25 MiB per file). Each part retries on its own.
+// Straight into one buffer of the final size: chunks plus a Blob plus its copy held the model three times over.
 async function fetchParts(dir, progress) {
   const manifest = await (await fetch(dir + "manifest.json")).json();
-  let got = 0; const parts = [];
+  const out = new Uint8Array(manifest.size);
+  let got = 0;
   for (const p of manifest.parts) {
     for (let attempt = 1; ; attempt++) {
-      const chunks = []; let partGot = 0;
+      let partGot = 0;
       try {
         const res = await fetch(dir + p);
         if (!res.ok) throw new Error(`Could not load ${p} (${res.status})`);
@@ -35,10 +37,11 @@ async function fetchParts(dir, progress) {
         for (;;) {
           const { done, value } = await reader.read();
           if (done) break;
-          chunks.push(value); partGot += value.length;
+          if (got + partGot + value.length > out.length) throw new Error(`${p} is larger than the manifest says`);
+          out.set(value, got + partGot); partGot += value.length;
           progress?.((got + partGot) / manifest.size);
         }
-        parts.push(...chunks); got += partGot;
+        got += partGot; // a retry starts this part over at the same place
         break;
       } catch (e) {
         if (attempt >= 4) throw e;
@@ -47,7 +50,8 @@ async function fetchParts(dir, progress) {
       }
     }
   }
-  return new Uint8Array(await new Blob(parts).arrayBuffer());
+  if (got !== out.length) throw new Error(`${dir} is ${got} bytes, the manifest says ${out.length}`);
+  return out;
 }
 
 // RGBA pixels (RES x RES) to the model's planar float input.
