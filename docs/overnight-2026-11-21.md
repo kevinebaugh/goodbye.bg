@@ -65,6 +65,7 @@ Extra usage capped at $0. Stop starting new work at 85% weekly; never pass 90%.
 | 08:30 | Translations shipped (Kevin: ship when ready) | coordinator | 49% | Native-editor review 94014c2 (de du, es tú, fr vous, pt-BR você, id Anda). Rebased onto main (kept both early.js changes: zoom block and language), tests 25/25 + 44/44, merged kevinebaugh/goodbye.bg#6 (f1820c3..b699a48). Production: German, Spanish and English browsers get their language with no errors; /de/, /es/, /pt-br/ pages 200. A native speaker should still read each language. |
 | 08:50 | Kevin: wrap it up | coordinator | 49% | Check-in timer deleted; tl;dr added to the summary artifact. Last running item: rebase of PRs #2–#4 onto main (branches only). |
 | 08:55 | Kevin: "Skip the bulk tool for now. Merge the rest and we'll test forward." | coordinator | 49% | PRs #4, #3, #2 merge in that order after rebase and both suites; #5 stays a draft. |
+| 09:25 | Merged #4, #3, #2 (Kevin: test forward) | background agent | 49% → 51% | 55dd4d7 (#4), 6345b90 (#3), d48833a (#2, squashed). Tests 26/27/29 + 44 before each merge. Production: filter runs and ?pp=0 skips it; iPhone-UA votes cpu-birefnet640; editor opens via a new pencil button (in the picker on narrow cards), erase + Done saves. Filter now also on 640. 10 new English strings await translation (docs/i18n.md). Then fixed the remove.bg pages (6 languages) and README: 👎 on phones runs a second model over the whole photo, not a zoom. |
 
 Check-in 23:46: weekly 28%, 5-hour window 6% (reset 04:30 UTC). About 4 weekly points in the first 45 min.
 

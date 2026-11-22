@@ -134,7 +134,7 @@ Weak spots:
 - The test photos are not phone camera rolls: median 1.7 MP, mostly well lit, no low light. One grader graded by
   eye, once. BiRefNet may have seen some of the test photos in training. Not tested: the retry on a thumbs
   down, GIFs, a real iPhone.
-- The 👎 button retries zoomed in on the subject. A second pass that zooms in on every photo was measured and made
+- The 👎 button retries: on a computer, zoomed in on a small subject; on the CPU engine (phones), with ISNet over the whole photo. A second pass that zooms in on every photo was measured and made
   results worse, so it is not on.
 
 ## Privacy
