@@ -790,7 +790,9 @@ const OUT_PX = IOS ? 16e6 : 64e6;
 const outOf = (it) => ({ ...OUT0, ...it.out });
 const plainOut = (it) => { if (it.anim) return true; const o = outOf(it); return o.size === "orig" && o.margin === OUT0.margin && !o.shadow; };
 let WEBP = false; // browsers that can't encode WebP hand back a PNG instead (Safari): then the option isn't offered
-(() => { const c = new OffscreenCanvas(1, 1); c.getContext("2d"); return c.convertToBlob({ type: "image/webp" }); })().then((b) => { WEBP = b.type === "image/webp"; }, () => {});
+// An async function, so a browser without OffscreenCanvas (Safari before 16.4) gets a rejected promise here, not a
+// thrown error that stops the whole page; it hears what to do once the page is up (see the end of this file).
+(async () => { const c = new OffscreenCanvas(1, 1); c.getContext("2d"); return c.convertToBlob({ type: "image/webp" }); })().then((b) => { WEBP = b.type === "image/webp"; }, () => {});
 let outAll = null; // after "All": photos added later in this visit get the same background and options
 
 // Where things go on the output canvas, in its pixels: a photo pixel p lands at p * k + (tx, ty); clip is the subject's
@@ -951,7 +953,8 @@ async function useBack(it, file) {
    Each frame goes through the model (the first one already has), is cut out at the GIF's size, and the frames
    are written back as an animated GIF. Long GIFs keep every n-th frame (the timing stays): phones run the model
    on the CPU, about 5 s a frame. */
-const MAX_FRAMES = IOS || !navigator.gpu ? 16 : 100;
+// By the engine that will run them, not by whether navigator.gpu exists (Firefox has it and still runs the CPU engine).
+const maxFrames = async () => (engineName === "cpu" || (await pickEngine()) === "cpu" ? 16 : 100);
 let gifMod = null;
 const loadGif = () => (gifMod ||= import("./gif.mjs"));
 async function animate(it) {
@@ -1030,7 +1033,7 @@ async function addSources(list, origin = "") {
       const { blob, name } = await toBlob(src);
       named(it, baseName(name));
       if (/gif/i.test(blob.type) || /\.gif$/i.test(name || "")) { // animated: every frame gets cut out
-        try { const g = (await loadGif()).readGif(await blob.arrayBuffer(), MAX_FRAMES); if (g) { it.anim = g; it.crop = false; it.bg = null; it.out = null; dbg("gif", { frames: g.frames.length, total: g.total }); } }
+        try { const g = (await loadGif()).readGif(await blob.arrayBuffer(), await maxFrames()); if (g) { it.anim = g; it.crop = false; it.bg = null; it.out = null; dbg("gif", { frames: g.frames.length, total: g.total }); } }
         catch (e) { console.warn("GIF frames skipped", e); }
       }
       dbg("decode", { bytes: blob.size, type: blob.type });
@@ -2323,7 +2326,7 @@ async function fillRestored(list) {
     try {
       const bmp = await createImageBitmap(it.prev);
       if (st.anim && st.gif) { it.anim = { frames: [], w: it.w, h: it.h }; it.png = Promise.resolve(st.gif); it.gifUrl = URL.createObjectURL(st.gif); }
-      else if (st.anim && !st.mask) try { it.anim = (await loadGif()).readGif(await it.blob.arrayBuffer(), MAX_FRAMES) || null; } catch {}
+      else if (st.anim && !st.mask) try { it.anim = (await loadGif()).readGif(await it.blob.arrayBuffer(), await maxFrames()) || null; } catch {}
       it.mask = await maskFrom(st.mask);
       if (st.first) it.first = { rect: st.first.rect, mask: await maskFrom(st.first.mask) };
       if (!items.includes(it)) { bmp.close(); continue; }
@@ -2468,3 +2471,5 @@ function startModel() { // a declaration, with no outside let: ?url= calls addSo
     }
   }
 }
+// Safari before 16.4 (iOS 16.3 and older) has no OffscreenCanvas, which every cut-out needs: say so instead of failing.
+if (typeof OffscreenCanvas === "undefined") tell("This browser is too old for goodbye.bg. Update it, then come back.", $("pick").parentElement, 60_000);
