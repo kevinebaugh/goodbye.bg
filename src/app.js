@@ -11,7 +11,6 @@ const RES = 1024;            // model input size
 const MAX_SIDE = 8192;       // larger images are scaled down to fit in memory
 // Safari (Mac, iPhone, and every iOS browser) can't hold a canvas over about 16.7 megapixels.
 const MAX_PIXELS = navigator.vendor === "Apple Computer, Inc." ? 16_000_000 : 64_000_000;
-const MAX_BATCH = 50;        // images per drop or paste
 const PREVIEW_SIDE = 900;    // card preview size
 const CUTOFF = 0.5, SOFTNESS = 0.6;
 const ADS = false;           // EthicalAds; turn on per docs/ads.md
@@ -141,6 +140,11 @@ const jobs = new Map();
 const DESKTOP = matchMedia("(any-pointer: fine)").matches;
 const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 const THREADS = +params.get("threads") || (IOS ? 2 : 4);
+// Photos per drop or paste: 100 on computers with 8 GB or more, else 50 (phones, tablets: memory). Each finished photo
+// holds about 10 MB (preview bitmap, mask, edge colours): measured 0.8 GB for 50, 2.2 GB for 200 in Chrome. Only the
+// newest KEEP_MAX (50) are kept on the device; the rest are cut out and go into Download all, and are gone after a
+// reload. ?maxbatch=N to test.
+const MAX_BATCH = +params.get("maxbatch") || (DESKTOP && !IOS && !matchMedia("(pointer: coarse)").matches && (navigator.deviceMemory || 8) >= 8 ? 100 : 50);
 
 /* ---------- GPU gate ----------
    Adapter limits can't tell a weak GPU from a strong one, so the gate acts at run time. Three tiers:
@@ -1004,6 +1008,7 @@ async function addSources(list, origin = "") {
     }
     list = out;
   }
+  if (list.length > MAX_BATCH) tell(`Added the first ${MAX_BATCH}. Add the rest once these are done.`);
   list = list.slice(0, MAX_BATCH);
   if (!list.length) { if (!zipFailed) tell("No image found there. Try a photo file, a copied image, or an image link."); return; } // a broken ZIP already said so
   await restoring; // kept photos go in first, so this batch lands on top of them
@@ -2117,7 +2122,7 @@ $("all").addEventListener("click", async () => {
   finally { zipping = false; $("all").removeAttribute("aria-busy"); }
 });
 async function saveAll() {
-  const done = items.filter((i) => i.mask), files = {}, used = new Set();
+  const done = items.filter((i) => i.mask), used = new Set();
   if (PHONE) {
     const list = [];
     for (const it of done) {
@@ -2128,6 +2133,15 @@ async function saveAll() {
     if (await share(list)) return;
     used.clear();
   }
+  // Streamed: each file goes into the zip and is let go, and the zip is gathered as Blob parts (a browser can keep
+  // big ones on disk), so 200 photos don't sit in memory twice.
+  const { Zip, ZipPassThrough } = await loadZip();
+  const parts = [], chunks = []; let held = 0, bad = null;
+  const zip = new Zip((err, chunk) => {
+    if (err) { bad = err; return; }
+    chunks.push(chunk); held += chunk.length;
+    if (held > 32 * 2 ** 20) { parts.push(new Blob(chunks.splice(0))); held = 0; }
+  });
   for (const [n, it] of done.entries()) {
     $("all").textContent = `Preparing ${n + 1} of ${done.length}…`; // on the button itself (sync puts its label back)
     let name = outName(it);
@@ -2135,11 +2149,15 @@ async function saveAll() {
     used.add(name);
     // An animated cut-out is its GIF (fullBlob would draw one still PNG); a PNG already made is reused. The rest are
     // built fresh and not kept (memory).
-    files[name] = [new Uint8Array(await (await (it.anim || it.png ? png(it) : fullBlob(it))).arrayBuffer()), { level: 0 }];
+    const f = new ZipPassThrough(name); zip.add(f);
+    f.push(new Uint8Array(await (await (it.anim || it.png ? png(it) : fullBlob(it))).arrayBuffer()), true);
+    if (bad) throw bad;
   }
-  const { zipSync } = await loadZip();
+  zip.end();
+  if (bad) throw bad;
+  parts.push(new Blob(chunks));
   sync();
-  save(`goodbye-bg-${done.length}-images.zip`, new Blob([zipSync(files)], { type: "application/zip" }));
+  save(`goodbye-bg-${done.length}-images.zip`, new Blob(parts, { type: "application/zip" }));
 }
 
 // No double-tap zoom: it fired on quick taps and threw the layout off. Pinch-zoom stays (people with low
@@ -2162,10 +2180,11 @@ document.addEventListener("dblclick", (e) => e.preventDefault(), { passive: fals
    Per photo: the original file (Download and 👎 need full size), a preview (JPEG, or PNG when the file can be
    see-through) so cards come back without decoding the original, and each mask as a PNG. */
 // ?keepmax=N and ?keepmb=N lower the limits to test them.
-const KEEP_MAX = +params.get("keepmax") || MAX_BATCH, KEEP_BYTES = (+params.get("keepmb") || (DESKTOP && !IOS ? 1024 : 400)) * 2 ** 20;
+const KEEP_MAX = +params.get("keepmax") || 50, KEEP_BYTES = (+params.get("keepmb") || (DESKTOP && !IOS ? 1024 : 400)) * 2 ** 20;
 // Keys sort in grid order: a newer batch gets smaller keys, and its photos count up in the order picked.
 let lastStamp = 0;
-const keyBase = () => -(lastStamp = Math.max(Date.now(), lastStamp + 1)) * 64; // MAX_BATCH < 64
+// x1024 leaves room for a batch of up to 1024 (it was x64; older keys stay larger, so they still sort after newer ones).
+const keyBase = () => -(lastStamp = Math.max(Date.now(), lastStamp + 1)) * 1024;
 let keepDb = null, keepChain = Promise.resolve();
 function kdb() {
   return (keepDb ||= new Promise((res, rej) => {
@@ -2198,6 +2217,7 @@ const seeThrough = (b) => /png|webp|gif|svg|avif|tiff|icon|bmp/i.test(b.type) ||
 let persisted = false;
 async function writeKept(it) {
   if (!items.includes(it) || !it.bmp || !it.blob || it.key == null) return;
+  if (items.filter((i) => i.key != null && i.key < it.key).length >= KEEP_MAX) return; // past the newest KEEP_MAX: trim would drop it
   // Asks the browser not to clear this site's storage when space runs low. Not in Firefox: there it asks the visitor.
   if (!persisted) { persisted = true; if (!/Firefox/.test(navigator.userAgent)) navigator.storage?.persist?.().catch(() => {}); }
   if (!it.prev) {
