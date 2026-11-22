@@ -43,6 +43,13 @@ function report(name, status, ms, note) {
   console.log(`${status.padEnd(4)}  ${name}${ms ? ` (${(ms / 1000).toFixed(1)} s)` : ""}${note ? `  ${note}` : ""}`);
 }
 const assert = (ok, msg) => { if (!ok) throw new Error(msg); };
+// The rows in the bar's place show one page at a time: turn to the page holding sel (as a person presses ›).
+async function onPage(p, sel) {
+  for (let i = 0; i < 8; i++) {
+    const r = await p.evaluate((s) => { const e = document.querySelector(s); if (!e) return "missing"; if (!e.classList.contains("off")) return "shown"; e.parentElement.querySelector(".pgnext").click(); return "turned"; }, sel);
+    if (r !== "turned") return r;
+  }
+}
 const magic = (b) => b.subarray(0, 4).toString("hex");
 const kind = (b) => (magic(b) === "89504e47" ? "png" : magic(b).startsWith("ffd8ff") ? "jpg" : magic(b) === "504b0304" ? "zip" : b.subarray(0, 3).toString() === "GIF" ? "gif" : magic(b) === "52494646" && b.subarray(8, 12).toString() === "WEBP" ? "webp" : "?" + magic(b));
 const gifFrames = (b) => { let n = 0; for (let i = 0; i < b.length - 3; i++) if (b[i] === 0x21 && b[i + 1] === 0xf9 && b[i + 2] === 4) n++; return n; };
@@ -190,30 +197,33 @@ async function target(name, t, base) {
 
   await check(pre + "background picker: White gives a JPG; colour input", async () => {
     await p.click("#grid > .card .bgb");
-    await p.waitForSelector("#grid > .card .bgs:not([hidden])");
-    await p.click(`#grid > .card .bgs [data-bg="#ffffff"]`);
+    await p.waitForSelector(":is(#grid > .card, #dock) .bgs:not([hidden])");
+    await onPage(p, `:is(#grid > .card, #dock) .bgs [data-bg="#ffffff"]`);
+    await p.click(`:is(#grid > .card, #dock) .bgs [data-bg="#ffffff"]`);
     await p.waitForFunction(() => document.querySelector("#grid > .card").classList.contains("solid"));
     const [f] = await save(t, p, () => p.click("#grid > .card .dl"));
     assert(f.kind === "jpg" && f.name === "one-goodbye-bg.jpg", `${f.name} ${f.kind}`);
     await p.click("#grid > .card .bgb");
-    await p.locator("#grid > .card .bgs input[type=color]").fill("#ff0000"); // input + change, as the system picker does
+    await onPage(p, ":is(#grid > .card, #dock) .bgs .custom");
+    await p.locator(":is(#grid > .card, #dock) .bgs input[type=color]").fill("#ff0000"); // input + change, as the system picker does
     await p.waitForFunction(() => document.querySelector("#grid > .card .bgb").getAttribute("aria-label") === "Background: #ff0000", null, { timeout: 3000 });
   });
 
   await check(pre + "options row: Square, WebP only where it encodes, 16 px on touch", async () => {
     await p.click("#grid > .card .bgb");
-    await p.click("#grid > .card .bgs .more");
-    await p.waitForSelector("#grid > .card .opts:not([hidden])");
+    await onPage(p, ":is(#grid > .card, #dock) .bgs .more");
+    await p.click(":is(#grid > .card, #dock) .bgs .more");
+    await p.waitForSelector(":is(#grid > .card, #dock) .opts:not([hidden])");
     const st = await p.evaluate(() => {
-      const o = document.querySelector("#grid > .card .opts"), w = o.querySelector(".owebp");
-      return { webpShown: getComputedStyle(w).display !== "none", fs: [...o.querySelectorAll("select, input")].map((e) => parseFloat(getComputedStyle(e).fontSize)),
+      const o = document.querySelector(":is(#grid > .card, #dock) .opts"), w = o.querySelector(".owebp");
+      return { webpShown: !w.hidden, fs: [...o.querySelectorAll("select, input")].map((e) => parseFloat(getComputedStyle(e).fontSize)),
         h: o.getBoundingClientRect().height, bar: o.parentElement.getBoundingClientRect().height, sel: getComputedStyle(o.querySelector("select")).width };
     });
     const canWebp = !isWebKit;
     assert(st.webpShown === canWebp, `WebP button ${st.webpShown ? "shown" : "hidden"}; this browser ${canWebp ? "encodes" : "cannot encode"} WebP`);
     if (t.phone) assert(st.fs.every((x) => x >= 16), "under 16 px on a phone (iOS zooms on focus): " + st.fs.join(", "));
-    await p.selectOption("#grid > .card .osize select", "1:1");
-    if (canWebp) await p.click("#grid > .card .owebp");
+    await p.selectOption(":is(#grid > .card, #dock) .osize select", "1:1");
+    if (canWebp) { await onPage(p, ":is(#grid > .card, #dock) .owebp"); await p.click(":is(#grid > .card, #dock) .owebp"); }
     await p.mouse.click(5, 5); // close the row (phones build the file then)
     const [f] = await save(t, p, () => p.click("#grid > .card .dl"));
     const want = canWebp ? "webp" : "jpg";

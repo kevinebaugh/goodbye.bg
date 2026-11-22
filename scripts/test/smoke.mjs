@@ -403,13 +403,13 @@ try {
     await o.go(app());
     await addPhotos(o, ["sq1", "sq2"]);
     await allDone(o, 2, 120000);
-    const card = (n) => `#grid > .card:nth-child(${n})`;
+    const card = (n) => `#grid > .card:nth-child(${n})`, row = (n) => `:is(${card(n)}, #dock)`; // a narrow card opens its rows in the dock
     const pickSel = (sel, v) => o.ev(`(() => { const s = document.querySelector(${JSON.stringify(sel)}); s.value = ${JSON.stringify(v)}; s.dispatchEvent(new Event("change", { bubbles: true })); return true; })()`);
     await click(o, `${card(1)} .bgb`);
-    await click(o, `${card(1)} .bgs .more`);
-    await o.until(`!document.querySelector("${card(1)} .opts").hidden`, 3000, "the options row open");
-    await pickSel(`${card(1)} .osize select`, "1:1");
-    await pickSel(`${card(1)} .omargin select`, "0.2");
+    await click(o, `${row(1)} .bgs .more`);
+    await o.until(`!document.querySelector("${row(1)} .opts").hidden`, 3000, "the options row open");
+    await pickSel(`${row(1)} .osize select`, "1:1");
+    await pickSel(`${row(1)} .omargin select`, "0.2");
     const f = await download(c6, () => click(o, `${card(1)} .dl`));
     assert(f.kind === "png" && f.name === "sq1-goodbye-bg.png", `${f.kind} ${f.name}`);
     const w = f.bytes.readUInt32BE(16), h = f.bytes.readUInt32BE(20);
@@ -424,16 +424,16 @@ try {
       return { ring, mid: d[((H >> 1) * W + (W >> 1)) * 4 + 3] };
     })()`);
     assert(a.ring === 0 && a.mid > 200, `margin alpha ${a.ring}, middle alpha ${a.mid}`);
-    await click(o, `${card(1)} .oshadow`);
-    await click(o, `${card(1)} .oall`);
+    await click(o, `${row(1)} .oshadow`);
+    await click(o, `${row(1)} .oall`);
     await o.until(`(${KEPT}).then((k) => k.length === 2 && k.every((s) => s.out && s.out.size === "1:1" && s.out.margin === 0.2 && s.out.shadow))`, 10000, "both kept as Square, 20%, shadow").catch(async (e) => {
       throw new Error(e.message + ": " + JSON.stringify(await kept(o)));
     });
     const g = await download(c6, () => click(o, `${card(2)} .dl`));
     assert(g.kind === "png" && g.bytes.readUInt32BE(16) === g.bytes.readUInt32BE(20), `second photo after All: ${g.kind} ${g.bytes.readUInt32BE(16)} x ${g.bytes.readUInt32BE(20)}`);
     let webp = "WebP not offered";
-    if (await o.ev(`!document.querySelector("${card(1)} .owebp").hidden`)) {
-      await click(o, `${card(1)} .owebp`);
+    if (await o.ev(`!document.querySelector("${row(1)} .owebp").hidden`)) {
+      await click(o, `${row(1)} .owebp`);
       const v = await download(c6, () => click(o, `${card(1)} .dl`));
       assert(v.kind === "webp" && v.name === "sq1-goodbye-bg.webp", `${v.kind} ${v.name}`);
       webp = `${v.name} ${(v.bytes.length / 1024).toFixed(0)} KB vs PNG ${(g.bytes.length / 1024).toFixed(0)} KB`;
@@ -476,8 +476,10 @@ try {
     await addStriped(o, ["blurry"]);
     await allDone(o, 1, 90000);
     await click(o, "#grid > .card .bgb");
-    await click(o, "#grid > .card .bgs .blur"); // soft
-    await click(o, "#grid > .card .bgs .blur"); // strong
+    await click(o, "#grid > .card .bgs .blur.b1"); // soft: closes the row like every swatch
+    await o.until(`document.querySelector("#grid > .card .bgb").getAttribute("aria-label") === "Background: Soft blur" && document.querySelector("#grid > .card .bgs").hidden`, 3000, "soft blur chosen, row closed");
+    await click(o, "#grid > .card .bgb");
+    await click(o, "#grid > .card .bgs .blur.b2"); // strong
     await o.until(`document.querySelector("#grid > .card .bgb").getAttribute("aria-label") === "Background: Strong blur"`, 3000, "strong blur chosen");
     assert(await o.ev(`document.querySelector("#grid > .card .crop").getAttribute("aria-pressed") === "false"`), "blur did not switch to the whole frame");
     const f = await download(c7, () => click(o, "#grid > .card .dl"));
@@ -506,12 +508,12 @@ try {
     await o.go(app());
     await addPhotos(o, ["ph1", "ph2"]);
     await allDone(o, 2, 120000);
-    const card = (n) => `#grid > .card:nth-child(${n})`;
+    const card = (n) => `#grid > .card:nth-child(${n})`, row = (n) => `:is(${card(n)}, #dock)`; // a narrow card opens its rows in the dock
     await click(o, `${card(1)} .bgb`);
     await o.ev(`(async () => { const c = document.createElement("canvas"); c.width = 1600; c.height = 1000; const x = c.getContext("2d");
       x.fillStyle = "#1a7f5a"; x.fillRect(0, 0, 1600, 1000);
       const b = await new Promise((r) => c.toBlob(r, "image/jpeg", 0.9)), dt = new DataTransfer(); dt.items.add(new File([b], "green.jpg", { type: "image/jpeg" }));
-      const i = document.querySelector("${card(1)} .bgs .photo input"); i.files = dt.files; i.dispatchEvent(new Event("change", { bubbles: true })); return true; })()`);
+      const i = document.querySelector("${row(1)} .bgs .photo input"); i.files = dt.files; i.dispatchEvent(new Event("change", { bubbles: true })); return true; })()`);
     await o.until(`document.querySelector("${card(1)} .bgb").getAttribute("aria-label") === "Background: Your photo"`, 10000, "the photo as background");
     const f = await download(c8, () => click(o, `${card(1)} .dl`));
     assert(f.kind === "jpg" && f.name === "ph1-goodbye-bg.jpg", `${f.kind} ${f.name}`);
@@ -520,8 +522,8 @@ try {
     assert(Math.abs(g0 - 0x1a) < 25 && Math.abs(g1 - 0x7f) < 25 && Math.abs(g2 - 0x5a) < 25, `corner is not the photo: ${r.at[0]}`);
     assert(r.at[1][0] > 150 && r.at[1][1] < 90, `subject missing: ${r.at[1]}`);
     await click(o, `${card(1)} .bgb`);
-    await click(o, `${card(1)} .bgs .more`);
-    await click(o, `${card(1)} .oall`);
+    await click(o, `${row(1)} .bgs .more`);
+    await click(o, `${row(1)} .oall`);
     const backs = `indexedDB.databases().then(() => new Promise((ok) => { const r = indexedDB.open("goodbye-bg"); r.onsuccess = () => { const db = r.result; if (!db.objectStoreNames.contains("backs")) { db.close(); return ok(-1); } const q = db.transaction("backs").objectStore("backs").count(); q.onsuccess = () => { db.close(); ok(q.result); }; }; }))`;
     await o.until(`(${KEPT}).then((k) => k.length === 2 && k.every((s) => s.bg && s.bg === k[0].bg && s.bg.startsWith("img:")))`, 10000, "both kept with the same photo").catch(async (e) => {
       throw new Error(e.message + ": " + JSON.stringify(await kept(o)));

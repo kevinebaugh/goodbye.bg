@@ -1214,7 +1214,7 @@ function makeCard(it) {
   const say = document.createElement("p"); say.className = "say"; // the quip while this photo is worked on: in the bar, never on the photo
   bar.append(crop, bgb, dl, rates, say, x, pick, opts);
   card.append(pic, bar);
-  bgb.addEventListener("click", () => { tick(); if (bar.classList.contains("picking")) closePick(); else openPick(it); });
+  bgb.addEventListener("click", () => { tick(); if (picking === it) closePick(); else openPick(it); });
 
   crop.addEventListener("click", () => {
     it.crop = !it.crop; tick();
@@ -1251,27 +1251,25 @@ function makeCard(it) {
    The picker takes the bar's place, so it never covers the photo; on narrow cards it also holds the controls the
    bar had no room for (crop, remove). */
 const BGS = [[null, "See-through"], ["#ffffff", "White"], ["#000000", "Black"], ["#a7dbd8", "Light aqua"], ["#e0e4cc", "Sage"]];
+const BLURS = [["blur:1", "Soft blur"], ["blur:2", "Strong blur"]];
+const CHEV = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>';
 let picking = null;
+// Every swatch is one tap: it sets the background and closes the row (your photo once the picture is picked).
 function bgPicker(it, crop, x) {
   const pick = document.createElement("div"); pick.className = "bgs"; pick.hidden = true;
   pick.setAttribute("role", "group"); pick.setAttribute("aria-label", "Background");
-  const pcrop = crop.cloneNode(true); pcrop.className = "swb crop pcrop"; pcrop.style.visibility = "";
+  const pcrop = crop.cloneNode(true); pcrop.className = "swb crop pcrop pg"; pcrop.style.visibility = "";
   pcrop.addEventListener("click", () => crop.click());
   pick.append(pcrop);
-  BGS.forEach(([v, label], i) => {
-    const b = document.createElement("button"); b.type = "button"; b.className = `swb sw${i}`; b.dataset.bg = v || "";
+  const swatch = (v, label, cls) => {
+    const b = document.createElement("button"); b.type = "button"; b.className = `swb pg ${cls}`; b.dataset.bg = v || "";
     b.setAttribute("aria-label", label); b.title = label;
     b.innerHTML = '<span class="sw"></span>';
-    if (v) b.firstChild.style.background = v;
     b.addEventListener("click", () => { setBg(it, v); closePick(); });
-    pick.append(b);
-  });
-  // Blur: the first tap blurs the photo's own background, the next ones switch soft and strong. The row stays open,
-  // so the card above shows each step.
-  const blur = document.createElement("button"); blur.type = "button"; blur.className = "swb blur";
-  blur.innerHTML = '<span class="sw"></span>';
-  blur.addEventListener("click", () => setBg(it, it.bg === "blur:1" ? "blur:2" : "blur:1"));
-  const own = document.createElement("label"); own.className = "swb custom"; own.title = "Any colour";
+    return b;
+  };
+  BGS.forEach(([v, label], i) => { const b = swatch(v, label, `sw${i}`); if (v) b.firstChild.style.background = v; pick.append(b); });
+  const own = document.createElement("label"); own.className = "swb custom pg"; own.title = "Any colour";
   own.innerHTML = '<span class="sw"></span><input type="color" value="#69d2e7" aria-label="Any colour">';
   const input = own.querySelector("input");
   let raf = 0;
@@ -1280,30 +1278,112 @@ function bgPicker(it, crop, x) {
     cancelAnimationFrame(raf); raf = requestAnimationFrame(() => drawCard(it));
   });
   input.addEventListener("change", () => { cancelAnimationFrame(raf); setBg(it, input.value, true); closePick(); });
+  pick.append(own);
+  // Blur: the photo's own background, soft or strong (the subject stays sharp).
+  BLURS.forEach(([v, label], i) => pick.append(swatch(v, label, `blur b${i + 1}`)));
   // Your own picture behind the subject: picked here or dropped on the row (see the drop handler). Never uploaded.
-  const photo = document.createElement("label"); photo.className = "swb photo"; photo.title = "Your photo";
+  const photo = document.createElement("label"); photo.className = "swb photo pg"; photo.title = "Your photo";
   photo.innerHTML = '<span class="sw"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 16 5-5 4 4 3-3 6 6"/></svg></span><input type="file" accept="image/*" aria-label="Your photo as the background">';
   const file = photo.querySelector("input");
   file.addEventListener("change", () => { const f = file.files[0]; file.value = ""; if (f) useBack(it, f); });
-  pick.append(own, blur, photo);
-  const more = document.createElement("button"); more.type = "button"; more.className = "swb more";
+  pick.append(photo);
+  const more = document.createElement("button"); more.type = "button"; more.className = "swb more pg";
   more.setAttribute("aria-label", "Size, margin, shadow"); more.title = "Size, margin, shadow";
   more.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>';
   more.addEventListener("click", () => { tick(); openOpts(it); });
   pick.append(more);
-  const px = x.cloneNode(true); px.className = "swb px"; px.addEventListener("click", () => x.click());
-  pick.append(px);
+  const px = x.cloneNode(true); px.className = "swb px pg"; px.addEventListener("click", () => x.click());
+  pick.append(px, pager(pick));
   [...pick.children].forEach((c, i) => c.style.setProperty("--i", i));
   pick.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); closePick(true); } });
   return pick;
 }
+/* Pages: a row in the bar's place (swatches, options) never scrolls and never cuts a control off. What doesn't fit
+   goes on the next page; › at the end turns the page, and on the last page it points back to the first. */
+function pager(row) {
+  const b = document.createElement("button"); b.type = "button"; b.className = "swb pgnext"; b.innerHTML = CHEV; b.hidden = true;
+  b.addEventListener("click", () => { tick(); showPage(row, (row.page + 1) % row.pages.length, true); });
+  return b;
+}
+const overflows = (row) => row.scrollWidth > row.clientWidth + 1 || row.scrollHeight > row.clientHeight + 1;
+function pageRow(row, at = 0) {
+  const next = row.querySelector(".pgnext"), done = row.querySelector(".odone");
+  done?.classList.remove("pg");
+  row.classList.add("measuring");
+  for (let pass = 0; pass < 2; pass++) {
+    const items = [...row.querySelectorAll(":scope > .pg")];
+    for (const e of items) e.classList.remove("off");
+    const shown = items.filter((e) => getComputedStyle(e).display !== "none");
+    next.hidden = true;
+    let pages = [shown];
+    if (overflows(row)) {
+      next.hidden = false; pages = [];
+      for (const e of shown) e.classList.add("off");
+      let cur = [];
+      for (const e of shown) {
+        e.classList.remove("off");
+        if (cur.length && overflows(row)) { for (const o of cur) o.classList.add("off"); pages.push(cur); cur = []; }
+        cur.push(e);
+      }
+      pages.push(cur);
+      for (const e of shown) e.classList.add("off");
+    }
+    row.pages = pages;
+    // Too narrow for Done, a control and ›: Done becomes the last control of the last page.
+    const tight = done && !pass && pages.some((pg) => { for (const e of pg) e.classList.remove("off"); const o = overflows(row); for (const e of pg) e.classList.add("off"); return o; });
+    if (!tight) break;
+    done.classList.add("pg");
+  }
+  row.classList.remove("measuring");
+  showPage(row, typeof at === "number" ? at : Math.max(0, row.pages.findIndex((pg) => pg.includes(at))));
+}
+function showPage(row, i, focus = false) {
+  const n = row.pages.length, next = row.querySelector(".pgnext");
+  row.page = Math.min(i, n - 1);
+  row.pages.forEach((pg, k) => { for (const e of pg) e.classList.toggle("off", k !== row.page); });
+  const last = row.page === n - 1 && n > 1;
+  next.classList.toggle("back", last);
+  const label = last ? "Back to the first" : "More"; next.setAttribute("aria-label", label); next.title = label;
+  if (focus) (row.pages[row.page][0] || next).focus({ preventScroll: true });
+}
+// The background button is easy to miss: on a device's first cut-out it rings twice, until the picker has been opened.
+const HINT_KEY = "gb-bg-seen";
+let hinted = false;
+function hintBg(it) {
+  if (hinted) return;
+  hinted = true;
+  try { if (localStorage.getItem(HINT_KEY)) return; } catch { return; }
+  it.el.bgb.classList.add("hint");
+}
 function openPick(it) {
   closePick();
   picking = it;
-  const { bar, bgb, pick } = it.el;
+  hinted = true; try { localStorage.setItem(HINT_KEY, "1"); } catch {}
+  for (const b of document.querySelectorAll(".bgb.hint")) b.classList.remove("hint");
+  const { bgb, pick } = it.el;
   paintBg(it);
-  bar.classList.add("picking"); pick.hidden = false; bgb.setAttribute("aria-expanded", "true");
-  (pick.querySelector('[aria-pressed="true"]:not(.pcrop)') || pick.querySelector(".swb:not(.pcrop)"))?.focus({ preventScroll: true });
+  // What the bar has no room for (crop, remove) rides along in the picker.
+  pick.classList.toggle("wantcrop", getComputedStyle(it.el.crop).display === "none");
+  pick.classList.toggle("wantx", getComputedStyle(it.el.bar.querySelector(":scope > .x")).display === "none");
+  pick.hidden = false; bgb.setAttribute("aria-expanded", "true");
+  const on = pick.querySelector('[aria-pressed="true"]:not(.pcrop)');
+  seat(it, pick, on || 0); // on the page with the current background
+  (on && !on.classList.contains("off") ? on : pick.querySelector(".pg:not(.off)"))?.focus({ preventScroll: true });
+}
+/* A row goes in the bar's place when it fits on two pages there. A narrower card (a dozen photos) would need many
+   pages of 32 px buttons, so the row opens in the dock instead: a strip in the footer's place (the footer steps back
+   meanwhile) with the card ringed. Either way nothing covers a photo and no card moves. */
+const PAGES_MAX = 2;
+function seat(it, row, at = 0) {
+  const dock = $("dock");
+  if (!dock.contains(row)) { it.el.bar.classList.add("picking"); pageRow(row, at); if (row.pages.length <= PAGES_MAX) return; }
+  it.el.bar.classList.remove("picking"); it.el.card.classList.add("editing"); document.body.classList.add("docked");
+  dock.append(it.el.pick, it.el.opts); dock.hidden = false;
+  placeDock(); pageRow(row, at);
+}
+function placeDock() {
+  const dock = $("dock"), f = document.querySelector(".foot").getBoundingClientRect();
+  dock.style.bottom = `${Math.max(8, Math.round(innerHeight - f.bottom + (f.height - dock.offsetHeight) / 2))}px`;
 }
 function closePick(refocus = false) {
   const it = picking; picking = null;
@@ -1311,11 +1391,18 @@ function closePick(refocus = false) {
   const { bar, bgb, pick } = it.el;
   const { opts } = it.el, inside = pick.contains(document.activeElement) || opts.contains(document.activeElement);
   bar.classList.remove("picking"); pick.hidden = true; opts.hidden = true; bgb.setAttribute("aria-expanded", "false");
+  if ($("dock").contains(pick)) { bar.append(pick, opts); $("dock").hidden = true; it.el.card.classList.remove("editing"); document.body.classList.remove("docked"); }
   if (PHONE && items.includes(it) && it.mask && !it.png && !it.anim && !running && !retrying) png(it); // the share sheet needs it ready at the tap
   if (refocus || inside) bgb.focus({ preventScroll: true });
 }
+// After a layout (photos added or removed, a resized window) the open row is measured again; a docked one stays docked.
+function repick() {
+  if (!picking) return;
+  const it = picking, row = it.el.opts.hidden ? it.el.pick : it.el.opts, at = row.pages?.[row.page]?.[0] || 0;
+  if ($("dock").contains(row)) { placeDock(); pageRow(row, at); } else seat(it, row, at);
+}
 // A tap anywhere else puts the bar back.
-document.addEventListener("pointerdown", (e) => { if (picking && !picking.el.bar.contains(e.target)) closePick(); }, true);
+document.addEventListener("pointerdown", (e) => { if (picking && !picking.el.bar.contains(e.target) && !$("dock").contains(e.target)) closePick(); }, true);
 function setBg(it, v, force = false) {
   tick();
   if (!force && (v || null) === (it.bg || null)) return;
@@ -1330,7 +1417,7 @@ function wholeForBlur(it, v) {
   it.crop = false;
   for (const b of it.el?.card.querySelectorAll(".crop") || []) b.setAttribute("aria-pressed", "false");
 }
-const bgName = (v) => { const k = bgKind(v); return k === "blur" ? (v === "blur:2" ? "Strong blur" : "Blur") : k === "img" ? "Your photo" : BGS.find(([c]) => c === (v || null))?.[1] || v; };
+const bgName = (v) => { const k = bgKind(v); return k === "blur" ? (v === "blur:2" ? "Strong blur" : "Soft blur") : k === "img" ? "Your photo" : BGS.find(([c]) => c === (v || null))?.[1] || v; };
 // The trigger shows the current background; the picker marks it.
 function paintBg(it) {
   const { bgb, pick } = it.el, v = it.bg || null, kind = bgKind(v), own = kind === "color" && !BGS.some(([c]) => c === v);
@@ -1343,24 +1430,28 @@ function paintBg(it) {
   c.classList.toggle("set", !!own); c.setAttribute("aria-pressed", String(!!own));
   c.firstChild.style.background = own ? v : "";
   if (own) c.querySelector("input").value = v;
-  const bl = pick.querySelector(".blur"), blabel = v === "blur:1" ? "More blur" : v === "blur:2" ? "Less blur" : "Blur the background";
-  bl.setAttribute("aria-pressed", String(kind === "blur")); bl.classList.toggle("b2", v === "blur:2");
-  bl.setAttribute("aria-label", blabel); bl.title = blabel;
   const ph = pick.querySelector(".photo"), psw = ph.firstChild;
   ph.setAttribute("aria-pressed", String(kind === "img")); ph.classList.toggle("set", !!back?.thumb);
   psw.style.backgroundImage = back?.thumb ? `url("${back.thumb}")` : "";
-  bgb.setAttribute("aria-label", `Background: ${bgName(v)}`);
+  const label = `Background: ${bgName(v)}`;
+  bgb.setAttribute("aria-label", label); bgb.title = label;
 }
 
-/* The second row: size, margin, shadow, WebP, and "All", which gives every photo this one's background and options.
-   Like the swatches it takes the bar's place at the bar's height (narrow cards scroll it sideways). */
+/* The second row: size, margin, shadow, WebP, and "Apply to all", which gives every photo this one's background and
+   options. Like the swatches it takes the bar's place at the bar's height; Done (first) puts the bar back, and what
+   doesn't fit goes on the next page (Custom's width and height come up on their own page when they don't fit). */
 const SIZES = [["orig", "Original"], ["1:1", "Square"], ["4:5", "4:5"], ["16:9", "16:9"], ["custom", "Custom"]];
 const MARGINS = [[0, "0%"], [0.04, "4%"], [0.1, "10%"], [0.2, "20%"]];
+const CHECK = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
+const COPY = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 4H6a2 2 0 0 0-2 2v10"/></svg>';
 function optsRow(it) {
   const o = document.createElement("div"); o.className = "opts"; o.hidden = true;
   o.setAttribute("role", "group"); o.setAttribute("aria-label", "Size, margin, shadow");
+  const done = document.createElement("button"); done.type = "button"; done.className = "swb odone"; done.innerHTML = CHECK;
+  done.setAttribute("aria-label", "Done"); done.title = "Done";
+  done.addEventListener("click", () => { tick(); closePick(true); });
   const sel = (cls, label, list) => {
-    const w = document.createElement("span"); w.className = "selw " + cls;
+    const w = document.createElement("span"); w.className = "selw pg " + cls;
     const s = document.createElement("select"); s.className = "osel"; s.setAttribute("aria-label", label);
     for (const [v, t] of list) { const op = document.createElement("option"); op.value = String(v); op.textContent = t; s.append(op); }
     w.title = label; w.append(s); return w;
@@ -1374,47 +1465,55 @@ function optsRow(it) {
     n.addEventListener("change", () => { const v = Math.round(Math.min(OUT_MAX, Math.max(16, +n.value || OUT0[key]))); n.value = v; setOut(it, { [key]: v }); });
     return n;
   };
-  const cw = num("ocw", "Width in pixels", "cw"), ch = num("och", "Height in pixels", "ch");
+  const dim = document.createElement("span"); dim.className = "odim pg";
   const by = document.createElement("span"); by.className = "oby"; by.textContent = "×"; by.setAttribute("aria-hidden", "true");
-  const shadow = document.createElement("button"); shadow.type = "button"; shadow.className = "ico oshadow";
-  shadow.setAttribute("aria-label", "Shadow under the subject"); shadow.title = "Shadow under the subject";
-  shadow.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><ellipse cx="12" cy="19" rx="8" ry="2.2" fill="currentColor" opacity=".35"/><rect x="8" y="5" width="8" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
+  dim.append(num("ocw", "Width in pixels", "cw"), by, num("och", "Height in pixels", "ch"));
+  // On/off chips show a check mark when on; "Apply to all" is an action (its own icon, never "on").
+  const chip = (cls, text, label) => {
+    const b = document.createElement("button"); b.type = "button"; b.className = `btn ochip pg ${cls}`; b.title = label;
+    b.innerHTML = `${CHECK}<span>${text}</span>`; b.setAttribute("aria-pressed", "false"); return b;
+  };
+  const shadow = chip("oshadow", "Shadow", "Shadow under the subject");
   shadow.addEventListener("click", () => { tick(); setOut(it, { shadow: !outOf(it).shadow }); });
-  const webp = document.createElement("button"); webp.type = "button"; webp.className = "btn ochip owebp"; webp.textContent = "WebP";
-  webp.title = "Save as WebP (smaller files)";
+  const webp = chip("owebp", "WebP", "Save as WebP (smaller files)");
   webp.addEventListener("click", () => { tick(); setOut(it, { fmt: outOf(it).fmt ? null : "webp" }); });
-  const all = document.createElement("button"); all.type = "button"; all.className = "btn ochip oall"; all.textContent = "All";
-  all.setAttribute("aria-label", "Use for all photos"); all.title = "Use this background and these options for all photos";
-  all.addEventListener("click", () => { tick(); useForAll(it); all.textContent = "✓"; setTimeout(() => (all.textContent = "All"), 1200); });
-  o.append(size, cw, by, ch, margin, shadow, all, webp); // most used first: narrow cards scroll to the rest
-  o.addEventListener("scroll", () => fadeOpts(o), { passive: true });
+  const all = document.createElement("button"); all.type = "button"; all.className = "btn ochip oall pg";
+  all.title = "Use this background and these options for every photo";
+  all.innerHTML = `${COPY}<span>Apply to all</span>`;
+  all.addEventListener("click", () => {
+    tick(); useForAll(it);
+    all.innerHTML = `${CHECK}<span>Applied</span>`; clearTimeout(all.t);
+    all.t = setTimeout(() => (all.innerHTML = `${COPY}<span>Apply to all</span>`), 1400);
+  });
+  o.append(done, size, dim, margin, shadow, all, webp, pager(o)); // most used first
   [...o.children].forEach((c, i) => c.style.setProperty("--i", i));
   o.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); closePick(true); } });
   return o;
 }
 function openOpts(it) {
   const { pick, opts } = it.el;
+  pick.hidden = true; opts.hidden = false;
   paintOpts(it);
-  pick.hidden = true; opts.hidden = false; opts.scrollLeft = 0; fadeOpts(opts);
+  seat(it, opts, 0);
   opts.querySelector(".osel")?.focus({ preventScroll: true });
 }
-// More to the right: the row fades out at its end.
-const fadeOpts = (o) => o.classList.toggle("fade", o.scrollLeft + o.clientWidth < o.scrollWidth - 2);
 function paintOpts(it) {
   const o = outOf(it), el = it.el.opts; if (!el) return;
-  const q = (s) => el.querySelector(s), custom = o.size === "custom";
+  const q = (s) => el.querySelector(s), custom = o.size === "custom", dimWas = !q(".odim").hidden;
   q(".osize select").value = o.size;
   q(".omargin select").value = String(MARGINS.some(([v]) => v === o.margin) ? o.margin : OUT0.margin);
   q(".omargin select").disabled = o.size === "orig" && !it.crop; // the whole photo: nothing to add room around
   q(".ocw").value = o.cw; q(".och").value = o.ch;
-  for (const s of [".ocw", ".och", ".oby"]) q(s).hidden = !custom;
+  q(".odim").hidden = !custom;
   q(".oshadow").setAttribute("aria-pressed", String(!!o.shadow));
   q(".owebp").setAttribute("aria-pressed", String(o.fmt === "webp")); q(".owebp").hidden = !WEBP;
   if (it.mask) { const p = plainOut(it) ? frame(it) : outPlan(it), w = p.W || p.w, h = p.H || p.h; q(".osize select").title = `${w} × ${h} px`; }
+  // Custom chosen or dropped while the row is open: measure the pages again, and show the width and height.
+  if (!el.hidden && el.pages && custom !== dimWas) pageRow(el, custom ? q(".odim") : q(".osize"));
 }
 function setOut(it, patch) {
   it.out = { ...outOf(it), ...patch };
-  it.png = null; paintOpts(it); fadeOpts(it.el.opts);
+  it.png = null; paintOpts(it);
   if (it.mask) { drawCard(it); keep(it); } // phones build the PNG ahead once the row closes (closePick), not once per change
 }
 // This photo's background and options for every photo, and for photos added later in this visit.
@@ -1517,6 +1616,7 @@ function ready(it) {
   it.el.busy.hidden = true; it.el.dl.disabled = false;
   for (const b of [it.anim ? null : it.el.crop, it.anim ? null : it.el.bgb, it.el.up, it.el.down]) if (b) b.style.visibility = "";
   it.el.card.classList.toggle("picky", !it.anim); // has a background picker, so narrow bars may move remove into it
+  if (!it.anim) hintBg(it);
   for (const b of it.el.card.querySelectorAll(".crop")) b.setAttribute("aria-pressed", String(it.crop));
   paintBg(it);
   downLabel(it);
@@ -1705,18 +1805,27 @@ async function retry(it) {
 
 // Everything fits on one screen: cards are square and sized so they all fit the space left.
 // Only past a minimum size (dozens of photos on a phone) does the grid scroll.
-const GAP = 12, MIN_PIC = 96, MAX_PIC = 640;
+// Cards are square and sized to fit the screen. Under MIN_PIC the grid scrolls (bulk: about 50 photos on a laptop);
+// 84 px still leaves Download 40 px next to the background button. A phone in portrait fits 12 (3 x 4).
+const GAP = 12, MIN_PIC = 84, MAX_PIC = 640;
+// The bar's height by card width (style.css): cards up to 242 px use the small Download (--h-sm). ROW2: the second row a
+// roomy bar adds (32 px controls and a 4 px gap). FULL_BAR: the card width from which one row holds every control.
+const BAR_SM = 49, BAR_MD = 57, ROW2 = 36, FULL_BAR = 242, ROOMY_MIN = 154;
+const barFor = (p) => (p <= FULL_BAR ? BAR_SM : BAR_MD);
 function layout() {
   const g = $("grid"), n = g.querySelectorAll(".card").length, all = $("tools");
   if (!n) { placeAds(0, 0); hugFooter(0); return; } // the last photo was removed: the ads go with it
   try { if (adsOn()) load3d(); } catch {} // fetch the 3D code while the first photo is still being worked on, so ads draw at once
-  // The tallest bar, ads included: an ad's outlined button can make its bar a few px taller than a photo's.
-  const bar = Math.max(0, ...[...g.querySelectorAll(".bar")].map((b) => b.offsetHeight)) || 52, W = g.clientWidth, H = g.clientHeight - (parseFloat(getComputedStyle(g).paddingTop) || 0) - (all.hidden ? 0 : all.offsetHeight + GAP); // "Download all" sits under the cards
+  const W = g.clientWidth, H = g.clientHeight - (parseFloat(getComputedStyle(g).paddingTop) || 0) - (all.hidden ? 0 : all.offsetHeight + GAP); // "Download all" sits under the cards
+  // The bar's height depends on the card's width, so it is worked out for each candidate, not measured from the cards.
   const fit = (k) => {
     let b = { p: 0, c: 1 };
     for (let c = 1; c <= k; c++) {
-      const r = Math.ceil(k / c), p = Math.floor(Math.min((W - GAP * (c - 1)) / c, (H - GAP * (r - 1)) / r - bar));
-      if (p > b.p) b = { p, c };
+      const r = Math.ceil(k / c), pw = (W - GAP * (c - 1)) / c, row = (H - GAP * (r - 1)) / r;
+      let p = Math.min(pw, row - barFor(pw));
+      if (barFor(p) !== barFor(pw)) p = Math.min(pw, FULL_BAR, row - barFor(p)); // height-bound: smaller cards, smaller bar
+      p = Math.floor(p);
+      if (p > b.p) b = { p, c, row };
     }
     return b;
   };
@@ -1727,15 +1836,33 @@ function layout() {
   let p = Math.min(MAX_PIC, Math.max(best.p, MIN_PIC));
   const c = scroll ? Math.max(1, Math.floor((W + GAP) / (p + GAP))) : best.c;
   if (scroll) p = Math.min(MAX_PIC, Math.floor((W - GAP * (c - 1)) / c)); // scrolling anyway: the columns use the full width
-  g.classList.toggle("scroll", scroll);
-  $("main").style.setProperty("--cols", c); $("main").style.setProperty("--p", `${p}px`); // grid and tools row share them
+  // Roomy: the cards fill the width before the height (a phone in portrait, 1 to 4 photos) and their bar has no room
+  // for every control. The bar takes a second row (crop, 👍 👎, remove) instead of hiding them in the picker.
+  const roomy = !scroll && p >= ROOMY_MIN && p < FULL_BAR && best.row - barFor(p) - ROW2 >= p;
+  g.classList.toggle("scroll", scroll); g.classList.toggle("roomy", roomy);
+  const m = $("main").style;
+  m.setProperty("--cols", c); m.setProperty("--p", `${p}px`); // grid and tools row share them
+  m.setProperty("--bar", `${barFor(p) + (roomy ? ROW2 : 0)}px`); // every bar, ads too, so the cards in a row line up
   placeAds(n, scroll ? 0 : Math.ceil(slots / c) * c - n);
+  centreLastRow(scroll ? 0 : c, p);
+  repick();
   requestAnimationFrame(() => {
     hugFooter(scroll ? 0 : Math.ceil(slots / c)); // rows, the cells kept for ads included
+    placeTell(); // the buttons it points at may have moved (the hero stepped aside)
     // Kept photos measured and the first row drawn: show them a frame later, once the footer sits in place (no slide
     // in from the bottom) and the ads have their cards (no empty cells that fill a moment later).
     if (restoredDrawn && document.body.classList.contains("restoring")) requestAnimationFrame(() => document.body.classList.remove("restoring"));
   });
+}
+// A last row with empty cells (one photo before its ads arrive, or no ads at all) sits in the middle, under the
+// centred buttons, not on the left. A translate, so nothing is laid out again; it glides aside when an ad fills a cell.
+function centreLastRow(c, p) {
+  const cells = [...$("grid").children].filter((e) => e.matches(".card, .adcard"));
+  for (const e of cells) e.style.translate = "";
+  const inRow = c ? cells.length % c : 0;
+  if (!inRow) return;
+  const dx = ((c - inRow) * (p + GAP)) / 2;
+  for (const e of cells.slice(-inRow)) e.style.translate = `${dx}px 0`;
 }
 // When the cards fill the width before the height (a phone in portrait), the grid has empty space under them. The
 // footer moves up to sit under the cards and the spare space goes to the bottom of the screen. A transform, so the
