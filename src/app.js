@@ -1064,8 +1064,8 @@ const mimeOf = (n) => ({ jpg: "image/jpeg", jpeg: "image/jpeg", jfif: "image/jpe
 const isPicture = (f) => !(f instanceof Blob) || !f.type || f.type.startsWith("image/") || IMG_EXT.test(f.name || "") || isZip(f);
 function skipped(bad) {
   if (!bad.length) return;
-  const msg = bad.length === 1 ? (bad[0].msg ? `${bad[0].name}: ${bad[0].msg}` : t("{name} isn’t an image goodbye.bg can open.", { name: bad[0].name }))
-    : t("Skipped {n} files goodbye.bg can’t open: {names}.", { n: bad.length, names: bad.map((b) => b.name).join(", ") });
+  const msg = bad.length === 1 ? (bad[0].msg ? `${bad[0].name}: ${bad[0].msg}` : t("Can’t open {name}.", { name: bad[0].name }))
+    : t("Can’t open {n} files: {names}.", { n: bad.length, names: bad.map((b) => b.name).join(", ") });
   tell(msg, $("pick").parentElement, 8000); // #tell is a status region: read out once
 }
 function unopened(it) {
@@ -1096,7 +1096,7 @@ async function addSources(list, origin = "") {
   }
   const over = list.length > MAX_BATCH;
   list = list.slice(0, MAX_BATCH);
-  if (!list.length) { if (bad.length) skipped(bad); else if (!zipFailed) tell(t("No image found there. Try a photo file, a copied image, or an image link.")); return; } // a broken ZIP already said so
+  if (!list.length) { if (bad.length) skipped(bad); else if (!zipFailed) tell(t("No image found. Try a photo, a copied image, or an image link.")); return; } // a broken ZIP already said so
   await restoring; // kept photos go in first, so this batch lands on top of them
   adsStraight = adsQuiet = false; // a new batch's ads wait for its reveal, as usual
   const top = keyBase();
@@ -1196,11 +1196,11 @@ async function decodeElsewhere(blob) {
     const buf = await blob.arrayBuffer();
     const r = await new Promise((res, rej) => {
       w.onmessage = (e) => res(e.data);
-      w.onerror = (e) => { e.preventDefault?.(); rej(new Error(t("Could not open this image. Check your connection and try again."))); };
+      w.onerror = (e) => { e.preventDefault?.(); rej(new Error(t("Could not open this image. Check your connection."))); };
       w.postMessage({ buf, name: blob.name || "", type: blob.type || "" }, [buf]);
     });
     if (r.bitmap) return r.bitmap;
-    throw new Error(r.say ? t(r.error) : t(r.raw ? "This RAW file has no full-size preview inside. Export it as JPG first." : "This file isn’t an image goodbye.bg can open."));
+    throw new Error(r.say ? t(r.error) : t(r.raw ? "This RAW file has no full-size preview inside. Export it as JPG first." : "Can’t open this file."));
   } finally { w.terminate(); }
 }
 
@@ -1437,7 +1437,7 @@ let cutIn = 0, inPhoto = false; // 👎 retries waiting to swap the model in; th
 // page comes back into view, and every 20 s (some networks never say). The bubble at Choose photos says why they wait.
 let noModel = false, modelTimer = 0;
 function waitForModel() {
-  tell(t("Could not load. Check your connection and reload."), $("pick").parentElement, 10_000);
+  tell(t("Could not load. Check your connection."), $("pick").parentElement, 10_000);
   clearTimeout(modelTimer); modelTimer = setTimeout(run, 20_000);
 }
 addEventListener("online", () => { if (noModel) run(); });
@@ -1465,7 +1465,7 @@ async function run() {
         console.error(e); report("run-failed", e, it); fail(it, t("Could not process this image.")); continue;
       }
       finally { inPhoto = false; }
-      if (!it.mask.box) { it.mask = null; fail(it, t("No clear subject in this photo.")); continue; }
+      if (!it.mask.box) { it.mask = null; fail(it, t("No clear subject.")); continue; }
       it.ms = lastMs; it.engine = lastEngine;
       // Removed meanwhile: Undo finishes it (undoRemove). A GIF cut short starts over (its frames were let go).
       if (!items.includes(it)) { it.unfinished = true; if (it.anim) it.mask = null; continue; }
@@ -2241,7 +2241,7 @@ $("all").addEventListener("click", async () => {
   if (zipping) return; // a second tap while it works would build it all again
   zipping = true; $("all").setAttribute("aria-busy", "true");
   try { await saveAll(); }
-  catch (e) { console.error(e); report("zip-failed", e); tell(t("Could not save them all. Try again, or save them one by one."), $("all")); }
+  catch (e) { console.error(e); report("zip-failed", e); tell(t("Could not save them all. Try again, or save one by one."), $("all")); }
   finally { zipping = false; $("all").removeAttribute("aria-busy"); }
 });
 async function saveAll() {
@@ -2558,7 +2558,7 @@ function startModel() { // a declaration, with no outside let: ?url= calls addSo
   if (p === startModel.asked) return;
   startModel.asked = p;
   p.then(() => { try { localStorage.setItem("gb-model", "1"); } catch {} },
-    (e) => { console.error(e); tell(t("Could not load. Check your connection and reload."), $("pick").parentElement, 10_000); });
+    (e) => { console.error(e); tell(t("Could not load. Check your connection."), $("pick").parentElement, 10_000); });
 }
 {
   let seen = false; try { seen = !!localStorage.getItem("gb-model") || +localStorage.getItem("gb-kept") > 0; } catch {}
@@ -2588,4 +2588,4 @@ function startModel() { // a declaration, with no outside let: ?url= calls addSo
   }
 }
 // Safari before 16.4 (iOS 16.3 and older) has no OffscreenCanvas, which every cut-out needs: say so instead of failing.
-if (typeof OffscreenCanvas === "undefined") tell(t("This browser is too old for goodbye.bg. Update it, then come back."), $("pick").parentElement, 60_000);
+if (typeof OffscreenCanvas === "undefined") tell(t("This browser is too old. Update it, then come back."), $("pick").parentElement, 60_000);

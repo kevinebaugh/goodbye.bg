@@ -54,7 +54,8 @@ Actions. The old upload-only project `goodbye-bg` can be deleted.
   server (votes, crashes, cut-outs, page views): no IP addresses, no identifiers. The one image the page uploads is
   the cut-out on a clicked Zazzle ad (functions/api/cap): R2, random one-time key, deleted once Zazzle has it.
 - Dark/light follows the system. No toggle.
-- Copy: plain, short, active voice. Quips are the one place for playful text; everything else is plain and only what
+- Copy: plain, short, active voice. Kevin, 2026-11-22: "Shorter is always better as long as understanding is preserved.
+  Make every word and every character count." Try the shortest version of any string first, in all six languages. Quips are the one place for playful text; everything else is plain and only what
   people need.
 - Every claim on the site must stay true, including once ads run.
 - Palette: the cool side of Giant Goldfish only (aqua, deep teal, sage). No orange; red only for errors.
