@@ -78,7 +78,7 @@ writeFileSync(join(fx, "pair.zip"), zipSync({ "b-second.png": pngBytes(320, 400,
 
 // What a downloaded file is.
 const magic = (b) => b.subarray(0, 4).toString("hex");
-const kind = (b) => (magic(b) === "89504e47" ? "png" : magic(b).startsWith("ffd8ff") ? "jpg" : magic(b) === "504b0304" ? "zip" : b.subarray(0, 3).toString() === "GIF" ? "gif" : "?" + magic(b));
+const kind = (b) => (magic(b) === "89504e47" ? "png" : magic(b).startsWith("ffd8ff") ? "jpg" : magic(b) === "504b0304" ? "zip" : b.subarray(0, 3).toString() === "GIF" ? "gif" : magic(b) === "52494646" && b.subarray(8, 12).toString() === "WEBP" ? "webp" : "?" + magic(b));
 const gifFrames = (b) => { let n = 0; for (let i = 0; i < b.length - 3; i++) if (b[i] === 0x21 && b[i + 1] === 0xf9 && b[i + 2] === 4) n++; return n; }; // graphic control extensions
 
 /* ---------- server and Chrome ---------- */
@@ -222,7 +222,7 @@ const names = (p) => p.ev(`${CARDS}.map((c) => c.getAttribute("aria-label"))`);
 // Never opens a database the app hasn't made (that would create an empty one the app can't upgrade).
 const KEPT = `indexedDB.databases().then((l) => l.some((d) => d.name === "goodbye-bg")).then((has) => !has ? [] : new Promise((ok) => { const r = indexedDB.open("goodbye-bg"); r.onerror = () => ok([]);
   r.onsuccess = () => { const db = r.result; if (!db.objectStoreNames.contains("state")) return ok([]);
-    const q = db.transaction("state").objectStore("state").getAll(); q.onsuccess = () => { db.close(); ok(q.result.map((s) => ({ name: s.name, bg: s.bg, mask: !!s.mask, anim: s.anim }))); }; q.onerror = () => ok([]); }; }))`;
+    const q = db.transaction("state").objectStore("state").getAll(); q.onsuccess = () => { db.close(); ok(q.result.map((s) => ({ name: s.name, bg: s.bg, out: s.out || null, mask: !!s.mask, anim: s.anim }))); }; q.onerror = () => ok([]); }; }))`;
 const kept = (p) => p.ev(KEPT);
 const noErrors = (p, allow = []) => {
   const bad = p.errors.filter((e) => !allow.some((a) => a.test(e)));
@@ -395,6 +395,58 @@ try {
     return n.join(", ");
   });
   await q.close();
+
+
+  // Output options (sellers): Square with a margin, a shadow, WebP, "All" for the other photo, kept over a reload.
+  await check(`output: Square with a margin, All, WebP, reload (${engine})`, async () => {
+    const c6 = await context(), o = await page(c6);
+    await o.go(app());
+    await addPhotos(o, ["sq1", "sq2"]);
+    await allDone(o, 2, 120000);
+    const card = (n) => `#grid > .card:nth-child(${n})`;
+    const pickSel = (sel, v) => o.ev(`(() => { const s = document.querySelector(${JSON.stringify(sel)}); s.value = ${JSON.stringify(v)}; s.dispatchEvent(new Event("change", { bubbles: true })); return true; })()`);
+    await click(o, `${card(1)} .bgb`);
+    await click(o, `${card(1)} .bgs .more`);
+    await o.until(`!document.querySelector("${card(1)} .opts").hidden`, 3000, "the options row open");
+    await pickSel(`${card(1)} .osize select`, "1:1");
+    await pickSel(`${card(1)} .omargin select`, "0.2");
+    const f = await download(c6, () => click(o, `${card(1)} .dl`));
+    assert(f.kind === "png" && f.name === "sq1-goodbye-bg.png", `${f.kind} ${f.name}`);
+    const w = f.bytes.readUInt32BE(16), h = f.bytes.readUInt32BE(20);
+    assert(w === h && w > 100, `not square: ${w} x ${h}`);
+    // The margin is see-through all round (20% of the subject's longer side is 14% of the square), the middle is not.
+    const a = await o.ev(`(async () => {
+      const b = await createImageBitmap(new Blob([Uint8Array.from(atob(${JSON.stringify(f.bytes.toString("base64"))}), (c) => c.charCodeAt(0))]));
+      const c = new OffscreenCanvas(b.width, b.height), x = c.getContext("2d"); x.drawImage(b, 0, 0);
+      const d = x.getImageData(0, 0, b.width, b.height).data, W = b.width, H = b.height, e = Math.floor(W * 0.1);
+      let ring = 0;
+      for (let i = 0; i < W; i += 3) for (const [px, py] of [[i, 0], [i, H - 1], [0, i], [W - 1, i], [i, e], [i, H - 1 - e], [e, i], [W - 1 - e, i]]) ring = Math.max(ring, d[(py * W + px) * 4 + 3]);
+      return { ring, mid: d[((H >> 1) * W + (W >> 1)) * 4 + 3] };
+    })()`);
+    assert(a.ring === 0 && a.mid > 200, `margin alpha ${a.ring}, middle alpha ${a.mid}`);
+    await click(o, `${card(1)} .oshadow`);
+    await click(o, `${card(1)} .oall`);
+    await o.until(`(${KEPT}).then((k) => k.length === 2 && k.every((s) => s.out && s.out.size === "1:1" && s.out.margin === 0.2 && s.out.shadow))`, 10000, "both kept as Square, 20%, shadow").catch(async (e) => {
+      throw new Error(e.message + ": " + JSON.stringify(await kept(o)));
+    });
+    const g = await download(c6, () => click(o, `${card(2)} .dl`));
+    assert(g.kind === "png" && g.bytes.readUInt32BE(16) === g.bytes.readUInt32BE(20), `second photo after All: ${g.kind} ${g.bytes.readUInt32BE(16)} x ${g.bytes.readUInt32BE(20)}`);
+    let webp = "WebP not offered";
+    if (await o.ev(`!document.querySelector("${card(1)} .owebp").hidden`)) {
+      await click(o, `${card(1)} .owebp`);
+      const v = await download(c6, () => click(o, `${card(1)} .dl`));
+      assert(v.kind === "webp" && v.name === "sq1-goodbye-bg.webp", `${v.kind} ${v.name}`);
+      webp = `${v.name} ${(v.bytes.length / 1024).toFixed(0)} KB vs PNG ${(g.bytes.length / 1024).toFixed(0)} KB`;
+    }
+    await o.until(`(${KEPT}).then((k) => k[0]?.out?.fmt === "webp" || ${JSON.stringify(webp)} === "WebP not offered")`, 10000, "WebP kept");
+    o.errors.length = 0;
+    await o.reload();
+    await allDone(o, 2, 20000);
+    await o.until(`[...document.querySelectorAll("#grid > .card img")].every((i) => i.naturalWidth > 0 && i.naturalWidth === i.naturalHeight)`, 10000, "both cards square after the reload");
+    noErrors(o); await cspClean(o);
+    await o.close();
+    return `${w} x ${h}; ${webp}`;
+  });
 
   // Phone width, a slow connection: the case that jittered before (jitter-design: CLS 0.24 with 2 photos at 300 ms).
   await check("reload at phone width, 300 ms latency: CLS 0", async () => {
