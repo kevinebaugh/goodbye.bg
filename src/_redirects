@@ -2,4 +2,4 @@
 # send the visitor to the app instead of a 404 or 405 page.
 /share / 303
 # Browsers and crawlers that ask for the old default icon path get the real one instead of a 404.
-/favicon.ico /favicon.svg 301
+/favicon.ico /favicon-32.png 301

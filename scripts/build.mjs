@@ -154,9 +154,9 @@ for (const w of [birefnet, birefnet640]) {
 // top-level names; early.js is a classic script, so its names stay (no format given).
 const minify = async (f, opts) => writeFileSync(join(dist, f), (await esbuild.transform(readFileSync(join(dist, f), "utf8"), { minify: true, legalComments: "none", ...opts })).code);
 if (!process.env.NO_MINIFY) {
-  for (const f of ["app.js", "edit.js", "engine.js"]) await minify(f, { loader: "js", format: "esm", target: "es2022" });
+  for (const f of ["app.js", "engine.js"]) await minify(f, { loader: "js", format: "esm", target: "es2022" });
   await minify("early.js", { loader: "js", target: "es2022" });
-  for (const f of ["style.css", "edit.css"]) await minify(f, { loader: "css" });
+  for (const f of ["style.css"]) await minify(f, { loader: "css" });
 }
 
 // The service worker's version list (src/sw.js). Shell: the app page's files with a hash each, so an update keeps
@@ -164,7 +164,7 @@ if (!process.env.NO_MINIFY) {
 // Big: the runtime and model folders with their files, one cache each, named after the version; old versions are deleted.
 const fileHash = (f) => createHash("sha256").update(readFileSync(join(dist, f))).digest("hex").slice(0, 12);
 const shellFiles = { "/": "index.html" };
-for (const f of ["app.js", "style.css", "early.js", "engine.js", "favicon.svg", "manifest.webmanifest", "icon-192.png", "icon-512.png",
+for (const f of ["app.js", "style.css", "early.js", "engine.js", "favicon.svg", "favicon-32.png", "manifest.webmanifest", "icon-192.png", "icon-512.png",
   "icon-maskable-512.png", "apple-touch-icon.png", `fonts/${fontFile}`, "vendor/fflate.mjs", "vendor/confetti.mjs", "partners.json",
   "gif.mjs", "formats.mjs", "libheif.wasm", "render3d.mjs"]) shellFiles["/" + f] = f;
 const shell = Object.fromEntries(Object.entries(shellFiles).map(([p, f]) => [p, fileHash(f)]));
