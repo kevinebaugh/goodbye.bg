@@ -47,6 +47,8 @@ Extra usage capped at $0. Stop starting new work at 85% weekly; never pass 90%.
 | 05:05 | Refresh the launch kit for tonight's new features | background agent | 41% → 43% | 355eba0: new PH gallery, square social and demo showing blur, seller presets, batch; copy covers backgrounds, sizes, margin, shadow, Apply to all, 100 per drop (8 GB+); Show HN adds the GPU fallback; offline still not claimed (checklist step after Kevin's Safari check). Blur shot uses a corgi: no CC0 portrait without Kevin's OK. og.png unchanged. |
 | 05:12 | Final QA sweep of production with fixes | background agent | 42% → 44% | 0dfbaa1, 4a78dd5 (copy only): FAQ said the Zazzle copy lives "an hour at most" (unfetched ones are unreadable after an hour, deleted within a day); README model-caching, batch-limit and fallback wording. No code regressions at four sizes, both themes, all features, production and local; tests 21/21 + 41/41. Launch kit had the same "hour" wording: fixed. For Kevin: ?adtest traffic counts in ad data (~40 shows tonight); review items #5, #7; dark theme-color. |
 | 05:47 | Quality on product photos and high-res phone-style photos (all 4 pipelines) | background agent | 43% → | started |
+| 05:55 | Local web window for the bulk tool (branch bulk-cli) | background agent | 44% → | started |
+| 05:58 | Draft PRs for the preview branches | coordinator | 44% | kevinebaugh/goodbye.bg#2 mask editing, #3 phone model, #4 hair/fur filter (drafts; Kevin merges). |
 
 Check-in 23:46: weekly 28%, 5-hour window 6% (reset 04:30 UTC). About 4 weekly points in the first 45 min.
 
