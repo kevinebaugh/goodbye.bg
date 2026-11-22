@@ -51,6 +51,8 @@ const birefnetManifest = existsSync(join(birefnetSrc, "manifest.json")) ? JSON.p
 // m/ is cached forever, so the folder is named after the model's hash: a new export never mixes with old parts.
 const birefnetDir = birefnetManifest ? "birefnet-" + birefnetManifest.sha256.slice(0, 8) : "";
 writeFileSync(join(dist, "engine.js"), readFileSync(join(dist, "engine.js"), "utf8").replaceAll("%ORT%", ORT).replaceAll("%BIREFNET%", birefnetDir));
+// The page remembers per device which GPU tier worked (see the GPU gate in app.js); a new runtime or model tries again.
+writeFileSync(join(dist, "app.js"), readFileSync(join(dist, "app.js"), "utf8").replaceAll("%ENGINE%", `${ORT}/${birefnetDir}`));
 
 // fflate (MIT) for "Download all" zips.
 mkdirSync(join(dist, "vendor"));

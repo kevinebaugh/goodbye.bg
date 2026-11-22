@@ -17,7 +17,8 @@ const MODELS = {
   birefnet: { dir: `./m/${BIREFNET}/`, mean: [123.675, 116.28, 103.53], std: [58.395, 57.12, 57.375], logits: true },
 };
 const RES = 1024;
-let ort, session, model, failMode = "", debug = false;
+let ort, session, model, failMode = "", debug = false, runs = 0;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const dbg = (step, data = {}) => debug && postMessage({ type: "dbg", step, data });
 
 // Fetch a split file (Cloudflare Pages allows 25 MiB per file). Each part retries on its own.
@@ -62,8 +63,12 @@ function toInput(px) {
 async function run(input, warmUp = false) {
   if (!warmUp && failMode === "run") throw new Error("Forced GPU run failure (?gpufail=run)");
   if (!warmUp && failMode === "hang") return new Promise(() => {});
+  const first = !warmUp && !runs++;
+  // BiRefNet only (the page then tries ISNet on the GPU): the worker dies as if out of memory, or the first photo is slow.
+  if (first && failMode === "birefnet-oom") { setTimeout(() => { throw new Error("Forced out of memory (?gpufail=birefnet-oom)"); }); return new Promise(() => {}); }
   dbg("run-start", { warmUp });
   const t0 = performance.now();
+  if (first && failMode === "birefnet-slowrun") await sleep(2500);
   // Ask for the final mask only. The model has 12 more side outputs, and computing them holds hundreds of MB.
   const out = await session.run({ [session.inputNames[0]]: new ort.Tensor("float32", input, [1, 3, RES, RES]) }, [session.outputNames[0]]);
   dbg("run-done");
@@ -79,9 +84,11 @@ async function run(input, warmUp = false) {
 onmessage = async ({ data }) => {
   if (data.type === "init") {
     try {
-      failMode = data.ep === "webgpu" ? data.fail || "" : ""; debug = !!data.debug;
+      debug = !!data.debug;
       // BiRefNet only on the GPU; ?model=isnet|birefnet (sent by the page) forces one where it can run.
       const name = data.ep === "webgpu" && BIREFNET && data.model !== "isnet" ? "birefnet" : "isnet";
+      // ?gpufail=init|run|hang breaks every GPU engine; birefnet-init|birefnet-oom|birefnet-slow|birefnet-slowrun only BiRefNet.
+      failMode = data.ep !== "webgpu" ? "" : /^birefnet-/.test(data.fail || "") ? (name === "birefnet" ? data.fail : "") : data.fail || "";
       model = MODELS[name];
       postMessage({ type: "model", name }); // now, so a crash while starting up is reported against the right model
       dbg("init", { ep: data.ep, model: name });
@@ -101,6 +108,9 @@ onmessage = async ({ data }) => {
       if (data.ep === "webgpu" && !data.noWarm) {
         // Warm-up: compiles the shaders now instead of on the first photo, and proves the GPU works.
         if (failMode === "init") throw new Error("Forced GPU warm-up failure (?gpufail=init)");
+        // A real delay first, so a photo added meanwhile has to wait for the fallback.
+        if (failMode === "birefnet-init") { await sleep(3000); throw new Error("Forced BiRefNet warm-up failure (?gpufail=birefnet-init)"); }
+        if (failMode === "birefnet-slow") await sleep(60_000); // the page gives up on a slow BiRefNet start
         const probe = new Float32Array(3 * RES * RES);
         for (let i = 0; i < probe.length; i++) probe[i] = ((i % RES) / RES - 0.5) * 0.9;
         dbg("warmup"); const { ms } = await run(probe, true); dbg("warm", { ms });

@@ -71,7 +71,7 @@ async function freshen() {
 }
 addEventListener("pageshow", freshen);
 document.addEventListener("visibilitychange", freshen);
-let running = false, uid = 0, lastMs = 0;
+let running = false, uid = 0, lastMs = 0, lastEngine = ""; // lastEngine: what made the last mask (votes name it)
 
 /* ---------- small helpers ---------- */
 /* Messages appear next to what they're about (Kevin, 2026-11-21): one bubble that points at the button it concerns:
@@ -103,9 +103,10 @@ const baseName = (s) => (s || "image").split(/[\\/?#]/).filter(Boolean).pop()?.r
    The model runs in its own worker (engine.js). Computers whose GPU can run it use WebGPU with
    BiRefNet (about 0.3 s a photo on a recent Mac); everyone else uses ISNet on the CPU (several seconds).
    ?model=isnet runs ISNet on the GPU too, for comparison.
-   If the GPU fails to start, fails a run, hangs, or returns garbage, its worker is thrown away
-   and a CPU worker takes over the same photo. ?engine=gpu or ?engine=cpu forces one;
-   ?gpufail=init|run|hang simulates a broken GPU for testing. */
+   If the GPU fails to start, fails a run, hangs, or returns garbage, its worker is thrown away and the next
+   tier takes over the same photo: BiRefNet steps down to ISNet on the GPU, ISNet on the GPU to the CPU (the
+   GPU gate below). ?engine=gpu or ?engine=cpu forces one; ?gpufail=init|run|hang simulates a broken GPU,
+   ?gpufail=birefnet-init|birefnet-oom|birefnet-slow|birefnet-slowrun a GPU too weak for BiRefNet. */
 
 const params = new URLSearchParams(location.search);
 
@@ -140,6 +141,42 @@ const jobs = new Map();
 const DESKTOP = matchMedia("(any-pointer: fine)").matches;
 const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 const THREADS = +params.get("threads") || (IOS ? 2 : 4);
+
+/* ---------- GPU gate ----------
+   Adapter limits can't tell a weak GPU from a strong one, so the gate acts at run time. Three tiers:
+   BiRefNet on the GPU (computers, GPU peak about 3 GB), ISNet on the GPU (about 1 GB, 0.1 to 0.3 s a photo),
+   the CPU (ISNet, 5 to 7 s). BiRefNet steps down to ISNet on the GPU when its start fails, a run fails or its
+   worker dies (running out of GPU memory looks like one of these), its start (session and warm-up, after the
+   download) takes over 10 s, or its first photo over 2 s (the M5 Pro: 1.5 to 2 s and 0.3 s; the limits are the
+   ones docs/platforms-and-phone-model.md proposed). A slow first photo keeps its result. ISNet on the GPU steps
+   down to the CPU on a failure or a hang (30 s start, 15 s a run). Computers that report navigator.deviceMemory
+   under 8 (Chrome caps it at 8, so 8 GB and 64 GB look alike) start on ISNet.
+   The outcome stays on the device (gb-gpu) so the next visit skips the try that failed; a browser update, a new
+   runtime or model, or 30 days later it tries again. Never stored under ?engine=, ?model= or ?gpufail=. */
+const GATE_KEY = "gb-gpu", GATE_VER = "%ENGINE%", GATE_DAYS = 30, BIREFNET_START_LIMIT = 10_000, BIREFNET_RUN_LIMIT = 2_000;
+let gpuModel = ""; // what the GPU worker is asked for: "" (BiRefNet on computers) or "isnet"
+if (!IOS && !params.has("engine") && !params.has("model")) {
+  let kept = null; try { kept = JSON.parse(localStorage.getItem(GATE_KEY)); } catch {}
+  if (kept?.ua === navigator.userAgent && kept.v === GATE_VER && Date.now() - kept.t < GATE_DAYS * 864e5) {
+    if (kept.tier === "cpu") gpuBroken = true; else if (kept.tier === "isnet") gpuModel = "isnet";
+    dbg("gpu-remembered", { tier: kept.tier });
+  } else if (DESKTOP && navigator.deviceMemory < 8) { gpuModel = "isnet"; dbg("gpu-lowmem", { mem: navigator.deviceMemory }); }
+}
+function remember(tier) {
+  if (params.has("engine") || params.has("model") || params.has("gpufail")) return;
+  try { localStorage.setItem(GATE_KEY, JSON.stringify({ tier, ua: navigator.userAgent, v: GATE_VER, t: Date.now() })); } catch {}
+}
+// A GPU engine failed or was too slow. Reported (once per device, as it is remembered) against the engine that
+// failed, so step and engine say what happened: birefnet-start-failed, birefnet-run-failed, birefnet-slow-start,
+// birefnet-slow-run, gpu-start-failed, gpu-run-failed. Picks the next tier; false when there is none (?engine=gpu).
+function stepDown(what, e) {
+  const birefnet = engineModel === "birefnet", step = (birefnet ? "birefnet-" : "gpu-") + what;
+  console.warn(`goodbye.bg: ${step}`, e); dbg(step, { error: String(e?.message || e).slice(0, 200) });
+  report(step, e);
+  if (birefnet && params.get("model") !== "birefnet") { gpuModel = "isnet"; remember("isnet"); return true; }
+  if (params.get("engine") === "gpu") return false;
+  gpuBroken = true; remember("cpu"); return true;
+}
 
 /* ---------- crash reports ----------
    iOS kills a tab that runs out of memory and no code runs then, so nothing can report it at the time.
@@ -239,7 +276,8 @@ function working(step, it) {
   saveNote();
 }
 function saveNote() { try { localStorage.setItem(CRASH_KEY, JSON.stringify({ ...note, trail: trail.join("\n") })); } catch {} }
-// Errors the page survives but the person sees (the engine would not start, or a photo failed): sent at once.
+// Errors the page survives but the person sees (the engine would not start, or a photo failed), and GPU tiers
+// stepping down (see the GPU gate): sent at once.
 function report(step, e, it) {
   const note = { step, engine: engineTag(), dev: DEVICE, done: finished, mp: it ? +((it.w * it.h) / 1e6).toFixed(1) : 0,
     error: String(e?.message || e).slice(0, 160), trail: trail.join("\n") };
@@ -303,7 +341,10 @@ function startEngine(name) {
       else if (data.type === "progress") status(`Downloading model: ${Math.floor(data.f * 10) * 10}%`);
       else if (data.type === "loaded") {
         status("Starting up…");
-        if (name === "gpu") timer = setTimeout(() => fail("GPU warm-up timed out"), GPU_WARMUP_TIMEOUT);
+        if (name === "gpu") {
+          const slow = engineModel === "birefnet" && !params.has("model");
+          timer = setTimeout(() => fail(Object.assign(new Error(slow ? "BiRefNet start too slow" : "GPU warm-up timed out"), { slow })), slow ? BIREFNET_START_LIMIT : GPU_WARMUP_TIMEOUT);
+        }
       } else if (data.type === "model") engineModel = data.name;
       else if (data.type === "ready") { clearTimeout(timer); w.up = true; resolve(); }
       else if (data.type === "failed") fail(data.error);
@@ -314,7 +355,7 @@ function startEngine(name) {
       }
     };
     dbg("engine-start", { name });
-    w.postMessage({ type: "init", ep: name === "gpu" ? "webgpu" : "wasm", model: params.get("model") || (DESKTOP ? "" : "isnet"), fail: params.get("gpufail"), debug: DEBUG, noWarm: params.has("nowarm"),
+    w.postMessage({ type: "init", ep: name === "gpu" ? "webgpu" : "wasm", model: params.get("model") || (DESKTOP ? gpuModel : "isnet"), fail: params.get("gpufail"), debug: DEBUG, noWarm: params.has("nowarm"),
       // ?threads=N to test. iPhone: 4 threads 3.5 s a photo, 2 threads 5.0 s, 1 thread 7.3 s. But 4 threads
       // peak at 2.1 GB and crashed a big photo half the time; 2 threads peak about 300 MB lower.
       threads: THREADS });
@@ -324,8 +365,8 @@ function startEngine(name) {
 function loadModel() {
   if (!engineReady) {
     engineReady = (async () => {
-      const name = await pickEngine();
-      try { await startEngine(name); }
+      let name = await pickEngine();
+      for (;;) try { await startEngine(name); break; }
       catch (e) {
         if (name !== "gpu") {
           // The CPU engine can fail to start when memory is short (a tab that just crashed, or an engine that
@@ -336,10 +377,10 @@ function loadModel() {
           status(`Ready.`); dbg("ready", { engine: engineName });
           return;
         }
-        console.warn("GPU engine failed to start, switching to CPU.", e); dbg("gpu-start-failed", { error: String(e?.message || e).slice(0, 200) });
-        gpuBroken = true; await startEngine("cpu");
+        if (!stepDown(e.slow ? "slow-start" : "start-failed", e)) throw e;
+        name = await pickEngine();
       }
-      status(`Ready.`); dbg("ready", { engine: engineName });
+      status(`Ready.`); dbg("ready", { engine: engineTag() });
       console.info(`goodbye.bg: engine ${engineTag()}`);
     })();
     engineReady.catch(() => { engineReady = null; });
@@ -367,16 +408,20 @@ async function segment(bitmap) {
   const input = px.slice(); // RGBA; the engine turns it into its model's input. A copy: px is used again below.
   let res;
   dbg("infer");
-  try { res = await infer(input); }
+  for (;;) try { res = await infer(input); break; }
   catch (e) {
-    if (engineName !== "gpu" || params.get("engine") === "gpu") throw e;
-    console.warn("GPU run failed, switching to CPU.", e); dbg("gpu-run-failed", { error: String(e?.message || e).slice(0, 200) });
-    gpuBroken = true; stopEngine("GPU failed");
+    if (engineName !== "gpu" || !stepDown("run-failed", e)) throw e;
+    stopEngine("GPU failed"); // the next tier redoes this photo
     await loadModel();
-    res = await infer(input);
   }
+  const birefnet = engineModel === "birefnet";
+  lastMs = res.ms; lastEngine = engineTag(); dbg("inferred", { ms: res.ms });
+  // BiRefNet's first photo (the warm-up already compiled the shaders) took too long: keep this result; the next
+  // photos go to ISNet on the GPU. The BiRefNet worker goes first: both at once would hold about 4 GB.
+  const first = worker && !worker.ran; if (worker) worker.ran = true;
+  if (first && birefnet && !params.has("model") && !params.has("nowarm") && res.ms > BIREFNET_RUN_LIMIT
+    && stepDown("slow-run", new Error(`First photo took ${res.ms} ms`))) { stopEngine("BiRefNet too slow"); loadModel().catch(() => {}); }
   const m = res.mask;
-  lastMs = res.ms; dbg("inferred", { ms: res.ms });
   const id = new ImageData(RES, RES);
   for (let i = 0; i < n; i++) {
     const k = i * 4;
@@ -384,7 +429,7 @@ async function segment(bitmap) {
     id.data[k + 3] = Math.max(0, Math.min(255, m[i] * 255));
   }
   despeck(id);
-  if (engineModel !== "birefnet" && params.get("haze") !== "0") hardenHaze(id); // ISNet only; ?haze=0 shows it without
+  if (!birefnet && params.get("haze") !== "0") hardenHaze(id); // ISNet only; ?haze=0 shows it without
   const box = subjectBox(id);
   for (let i = 3; i < id.data.length; i += 4) id.data[i] = LUT[id.data[i]]; // soften the edge once, here
   const mask = new OffscreenCanvas(RES, RES);
@@ -1303,7 +1348,7 @@ async function run() {
       if (!items.includes(it)) continue;
       if (it.anim) try { await animate(it); } catch (e) { console.error(e); report("gif-failed", e, it); it.anim = null; it.png = null; }
       if (!items.includes(it)) continue;
-      it.ms = lastMs;
+      it.ms = lastMs; it.engine = lastEngine;
       ready(it); dbg("shown"); keep(it);
       dbg("reveal"); reveal(it); sync(); tick(); milestone(it);
       it.el.card.dataset.ms = lastMs;
@@ -1347,7 +1392,7 @@ function landing(change) {
    megapixels. Never the photo. 👎 then runs the model again, zoomed in on the subject, which gives
    it more pixels to work with. The retry can be rated too. */
 function sendRating(it, vote) {
-  const body = JSON.stringify({ vote, engine: engineTag(), retry: !!it.retried, ms: it.ms || 0, mp: +((it.w * it.h) / 1e6).toFixed(1) });
+  const body = JSON.stringify({ vote, engine: it.engine || engineTag(), retry: !!it.retried, ms: it.ms || 0, mp: +((it.w * it.h) / 1e6).toFixed(1) });
   fetch("/api/rate", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
 }
 
@@ -1441,7 +1486,7 @@ async function retry(it) {
       { resizeWidth: RES, resizeHeight: RES, resizeQuality: "high" });
     big.close();
     const m = await segment(part); part.close();
-    if (m.box) { changed = true; it.mask = mergeRetry(it.first, m, { x: sx / it.w, y: sy / it.h, w: sw / it.w, h: sh / it.h }); it.maskRect = null; it.ms = lastMs; it.png = null; }
+    if (m.box) { changed = true; it.mask = mergeRetry(it.first, m, { x: sx / it.w, y: sy / it.h, w: sw / it.w, h: sh / it.h }); it.maskRect = null; it.ms = lastMs; it.engine = lastEngine; it.png = null; }
   } catch (e) { console.warn("Retry failed", e); }
   retrying--;
   busy.hidden = true; dl.disabled = false; it.el.card.classList.remove("working");
