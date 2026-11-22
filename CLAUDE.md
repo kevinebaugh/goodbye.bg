@@ -276,7 +276,7 @@ Only the newest 50 are kept on the device (`KEEP_MAX`, photos past it aren't wri
 into Download all, but a reload loses them. Download all streams its zip (fflate `Zip` + `ZipPassThrough`, gathered as
 Blob parts of 32 MB) instead of holding every file and then the whole zip. Measured in headless Chrome (M5 Pro, 1200x1600
 photos, GPU): about 10 MB of page memory per finished photo (preview bitmap, mask, edge colours): 0.8 GB for 50, 2.2 GB
-for 200 (98 s, zip 4 s), hence 100. At 50 photos on a 1440x900 window the cards already hit their 96 px minimum and the
+for 200 (98 s, zip 4 s), hence 100. At 50 photos on a 1440x900 window the cards are near their 84 px minimum (96 before 2026-11-22) and the
 grid scrolls (the one-screen rule gives way for bulk). remove.bg bulk users mostly need "drop a folder, get a zip": that
 works up to 100 at a time; more means another drop.
 
@@ -338,16 +338,29 @@ Tested: headless Chrome (reload in a restarted browser, Back still from bfcache)
 - QA pass 2026-11-21 (details in git log):
   - 👎 zooms in only when the subject's padded box is under 80% of the photo; otherwise it is a vote only and its
     label says "Bad result" instead of "Bad result, try again" (most phone photos fill the frame).
-  - The card bar drops controls so Download stays at least ~40 px wide (measured: 50+ px at every width). Bar order:
-    crop, background, Download, 👍 👎, remove. What the bar has no room for moves into the background picker, so crop
-    and remove are never lost (card widths): 218+ px everything; 186 to 217 no crop; 150 to 185 (a phone in portrait with
-    1 to 3 photos, 165 px) no crop and no remove, 👍 👎 stay (Kevin, 2026-11-21: voting beats crop; moving remove into the
-    picker was an overnight call on 2026-11-22, easy to reverse); 122 to 149 background, Download, remove; under 122
-    background and Download. The picker drops swatches as it narrows (sage and light aqua under 218, black under 150, any colour
-    under 122; measured to fit at 96 to 420 px with the sliders button).
+  - The card bar drops controls so Download stays at least ~40 px wide (measured 39 to 43 px at the tightest widths).
+    Every bar control is 32 px (`--h-sm`, 2026-11-22 visitor review: they were 28 px on narrow cards). Bar order:
+    crop, background, Download, 👍 👎, remove. What the bar has no room for rides along in the background picker
+    (`wantcrop`/`wantx` classes, set from what the bar actually hides), so crop and remove are never lost (card widths):
+    242+ px everything; 206 to 241 no crop; 162 to 205 no crop and no remove, 👍 👎 stay (Kevin, 2026-11-21: voting
+    beats crop); 130 to 161 background, Download, remove; under 130 background and Download.
+    **Roomy bars** (2026-11-22, visitor review: "no visible way to remove a photo on a phone"): when the cards fill the
+    width first and there is height to spare (a phone in portrait with 1 to 4 photos, 165 px cards), layout() sets
+    `.grid.roomy` and the bar takes a second row: background + Download, then crop, 👍 👎, remove. Every bar (ads too)
+    gets `min-height: var(--bar)` so a row's cards line up. Height-bound grids (a laptop with 12 photos) keep one row.
     Cards without a picker (waiting, failed, animated GIFs) keep remove in the bar, in the background button's place, so
     Download doesn't move when a card finishes. A background or crop change on a phone builds the PNG ahead only when no
     batch or retry is running.
+  - The grid fits the screen down to 84 px cards (was 96), and the bar's height is worked out per candidate width (it
+    was measured from the current cards): a phone in portrait fits 12 photos (3 x 4, 85 px cards) with Download all in
+    sight (visitor review: they scrolled). Past that the grid scrolls and Download all sticks to its bottom edge.
+  - A last row with empty cells (one photo before its ads arrive, or no ads) sits in the middle, under the centred
+    buttons (`centreLastRow`, a `translate`, so no layout shift); it glides aside when an ad fills a cell.
+  - The tell() bubble is placed again on every layout and resize (it used to stay where the Paste button had been).
+  - The Undo pill sits in the footer's place, and the footer fades out meanwhile (it covered the count on phones).
+  - The footer count never shows less than this browser showed before (`gb-count` in localStorage): a reload could
+    show a lower number than the local growth had reached.
+  - Every icon-only control has a `title` (Download, crop and remove had none).
   - Short screens (height 520 px or less, a phone on its side): the wordmark sits left of the buttons (buttons go
     right), the privacy note is hidden, spacing tightens; the empty page shrinks the headline so the footer fits.
   - Download and Download all shimmer while a big PNG or the zip is built; repeat taps don't start it again. A failed
@@ -355,15 +368,16 @@ Tested: headless Chrome (reload in a restarted browser, Back still from bfcache)
   - See-through inputs (PNG cut-outs, SVG logos) reach the model on white, or on black when the subject is light.
     SVGs are drawn at least 2048 px on their longest side.
   - Drags that start on the page (a cut-out dragged out) are ignored if dropped back on it.
-  - Background (2026-11-22, remove.bg parity): a round button in the bar shows the cut-out's background (checkerboard =
-    see-through, the default). Tapping it swaps the bar for a row of swatches at the same height (never over the photo,
+  - Background (2026-11-22, remove.bg parity): a round button in the bar shows the cut-out's background (see-through,
+    the default, is half checkerboard and half aqua: "this swaps the background"; on a device's first cut-out it rings
+    twice until the picker has been opened, `gb-bg-seen`). Tapping it swaps the bar for a row of swatches at the same height (never over the photo,
     cards never resize): see-through, white, black, light aqua, sage, any colour (`<input type=color>`, live on the card).
     A tap on a swatch, outside the bar or Escape closes it. The card, Download, long press, Download all and the
     partner-ad save follow it; a solid background downloads as a JPG (0.92), see-through stays PNG. Ad card art and the
     cut-out sent to Zazzle stay see-through. Not for animated GIFs (no button). Kept in IndexedDB (`bg` in the state record).
-    Blur and your own photo (2026-11-22, parity item 4): two more swatches. Blur: the photo's own background blurred,
-    the subject sharp; the first tap is soft, the next ones switch soft and strong (the row stays open so the card shows
-    each step). It is made per photo and strength from the preview bitmap at 480 px (never full size), with the subject
+    Blur and your own photo (2026-11-22, parity item 4): more swatches. Blur: the photo's own background blurred,
+    the subject sharp; two swatches, soft and strong, that close the row like every other one (until the visitor
+    review it was one swatch that toggled in place). It is made per photo and strength from the preview bitmap at 480 px (never full size), with the subject
     taken out first (blur of colour x background weight / blur of the weight, so no halo of the subject's colours), box
     blur two passes, no canvas filter; scaled up wherever drawn. Picking blur switches the card to the whole frame (the
     portrait-mode look; the crop button puts the crop back; Kevin may want this off). Your photo: the picture swatch opens
@@ -372,16 +386,25 @@ Tested: headless Chrome (reload in a restarted browser, Back still from bfcache)
     cover-fit behind the subject, shared by every photo that uses it (All), never uploaded. Both download as JPG and follow
     Download all, long press, reload and the partner-ad save; Zazzle gets the see-through crop. `it.bg` holds
     `"blur:1"`, `"blur:2"` or `"img:<id>"`; everything that paints a background goes through `backdrop()`.
-    Picker by card width: all swatches from 358 px; sage goes under 358, light aqua under 262, black under 217; gaps close
-    under 207, 19 px swatches under 185, any colour goes under 161, the crop toggle under 132, your photo and the sliders
-    under 121 (measured to fit 96 to 420 px). A phone in portrait (165 px) shows crop, see-through, white, any colour,
-    blur, your photo, sliders, remove.
+    **Pages and the dock** (2026-11-22, visitor review: 19 px swatches on phones, colours dropped, WebP cut off): the
+    swatch row and the options row never scroll and never drop or cut a control. `pageRow` measures what fits; the rest
+    goes on the next page, and › at the end turns the page (on the last page it points back). Swatches are 32 px on touch,
+    28 px with a mouse. A row that fits on two pages opens in the bar's place (two rows of swatches on a roomy bar). A
+    narrower card would need many pages, so the row opens in the **dock** instead (`seat()`): a pill in the footer's place
+    (the footer fades out), the card ringed in teal, nothing over any photo, no card moves. A phone with 12 photos and
+    a laptop with 12 docks both rows; a 277 px desktop card shows the swatches in its bar and docks the options.
   - Output options (2026-11-22, sellers, parity items 5 and 7): the picker's last button (sliders) swaps the swatches
     for a second row at the bar's height: Size (native select: Original, Square, 4:5, 16:9, Custom W x H up to 5000 px,
     4096 on iPhones), Margin (0, 4%, 10%, 20% of the subject's longer side; 4% is the old crop), a ground shadow toggle,
-    All, WebP. Phones build the PNG ahead when the row closes, not per change; controls are 16 px on touch (iOS focus zoom). Narrow cards scroll the row sideways with a fade at the end (most used first). All off by default, and then
+    Apply to all, WebP, after a Done button (✓, first, so there is always a way back). Shadow and WebP are chips that
+    fill and show a check when on; Apply to all is an action (dashed, a copy icon, "Applied" with a check for a moment;
+    it was an outlined "All" that read as a toggle). Custom's width and height go together and come up on their own page
+    when they don't fit. Phones build the PNG ahead when the row closes, not per change; controls are 16 px on touch (iOS focus zoom). All off by default, and then
     the output is byte-for-byte the old one. Original never goes past the photo's edges; a ratio grows the canvas around
-    the subject at the photo's own resolution (no resampling); Custom scales into exactly W x H; centred; the margin is
+    the subject at the photo's own resolution (no resampling); Custom scales into exactly W x H; centred, except that a
+    side where the subject runs off the photo (mask within 1.5/1024 of the edge: a person cut at the waist, a bottle at
+    its base) gets no margin and sits on the canvas edge, and no shadow goes under a cut bottom (visitor review: the cut
+    floated in mid-air with a shadow under it; cut on two opposite sides: centred); the margin is
     see-through or the background colour (the cut-out is clipped to the subject's box). The shadow is a radial-gradient
     ellipse under the subject's bottom edge (no canvas filter: Safari). Output capped at 16 MP on iPhones, 64 elsewhere.
     WebP only where the browser encodes it (a 1x1 test at load; not tested in Safari), quality 0.9,
@@ -429,7 +452,7 @@ Ads fill the grid (Kevin, 2026-11-20: "always fill the grid"): up to 3 photos ar
 2 + 2, 3 + 1); more photos fill out their last row. The cells are reserved from the start so photos don't resize when
 the ads arrive after the batch. Each card is a different variant (product), using a different cut-out when there are
 several, and with 2+ cut-outs one card at a time changes cut-out every 4 s, round-robin (the old one dips out, the
-next rises in), starting a full beat after ads come on screen; off when hidden or with reduced motion. Ads appear once the first cut-out is done; they wait 1.1 s after it (the cut-out gets the stage), come in one after another with a shimmering placeholder, and each product rises in once drawn (at least 0.45 s after its card), and the 3D code is fetched while the first photo is still being worked on. The label is centered. Products follow light/dark (black mug/shirt/tote in dark mode). Button names the product ("Put it on a mug", "Put it on a sticker", ...; it was "Make a mug" until the click took the cut-out along), outlined so Download stays the loud button.
+next rises in), starting a full beat after ads come on screen; off when hidden or with reduced motion. Ads appear once the first cut-out is done; they wait 1.1 s after it (the cut-out gets the stage), come in one after another with a shimmering placeholder, and each product rises in once drawn (at least 0.45 s after its card), and the 3D code is fetched while the first photo is still being worked on. The label is centered. Products follow light/dark (black mug/shirt/tote in dark mode). Button names the product ("Put it on a mug", "Put it on a sticker", ...; it was "Make a mug" until the click took the cut-out along), outlined so Download stays the loud button. Ad cards are quieter than a photo card (2026-11-22, visitor review: same surface as the result): no card surface, a dashed edge, a faint panel.
 Zazzle cards take the cut-out along (Create-a-Product, Kevin 2026-11-21: the click implies it, no interstitial;
 the button says "Put it on a mug"; no footer line (Kevin: the hero says "cut out right on your device" where people decide); the remove.bg page's FAQ has the details). The click PUTs the cut-out shown on the card (at most 2400 px) to `/api/cap/<random key>` (R2
 bucket goodbye-bg-cap, binding CAP) and opens `/go/zazzle?...&k=<key>`, which waits up to 10 s for it and redirects to
