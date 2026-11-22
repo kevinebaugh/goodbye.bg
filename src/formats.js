@@ -107,13 +107,38 @@ async function preview(b, orientation) {
   for (const j of jpegsIn(b)) {
     if (j.w * j.h < 640 * 480) break; // only thumbnails left
     try {
-      const bmp = await createImageBitmap(new Blob([b.subarray(j.start, j.end)], { type: "image/jpeg" }));
-      if (orientation === 1) return bmp;
+      const jpg = b.subarray(j.start, j.end);
+      const bmp = await createImageBitmap(new Blob([jpg], { type: "image/jpeg" }));
+      // A JPEG with its own EXIF orientation (iPhone ProRAW DNGs, portrait shots on some cameras) is turned by the
+      // browser already; turning it again by the RAW's orientation would put it sideways.
+      if (orientation === 1 || exifOrientation(jpg) > 1) return bmp;
       const c = new OffscreenCanvas(bmp.width, bmp.height); c.getContext("2d").drawImage(bmp, 0, 0); bmp.close();
       return orient(c.getContext("2d").getImageData(0, 0, c.width, c.height), orientation);
     } catch {}
   }
   throw new Error("RAW");
+}
+
+// The orientation tag in a JPEG's own EXIF (APP1) block, or 0 if it has none.
+function exifOrientation(j) {
+  for (let p = 2; p + 4 < j.length && j[p] === 0xff;) {
+    const m = j[p + 1], len = (j[p + 2] << 8) | j[p + 3];
+    if (m === 0xda || len < 2) break;
+    if (m === 0xe1 && ascii(j, p + 4, 6) === "Exif\0\0") {
+      const t = p + 10, le = j[t] === 0x49;
+      const u16 = (o) => (le ? j[t + o] | (j[t + o + 1] << 8) : (j[t + o] << 8) | j[t + o + 1]);
+      const u32 = (o) => (le ? u16(o) + u16(o + 2) * 65536 : u16(o) * 65536 + u16(o + 2));
+      const ifd = u32(4);
+      if (t + ifd + 2 > j.length) return 0;
+      for (let i = 0, n = u16(ifd); i < n && t + ifd + 14 + i * 12 <= j.length; i++) {
+        const e = ifd + 2 + i * 12;
+        if (u16(e) === 274) return u16(e + 8);
+      }
+      return 0;
+    }
+    p += 2 + len;
+  }
+  return 0;
 }
 
 // EXIF orientation 1..8 applied to pixels.
