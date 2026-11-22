@@ -1678,7 +1678,7 @@ function undoRemove() {
   pendingUndo = null; $("undo").hidden = true; document.body.classList.remove("undoing");
   const { it, card, at, next } = u, g = $("grid");
   // Back where it was: before the card that followed it, else after the photos (ahead of the ads and Download all).
-  const before = next?.parentNode === g ? next : g.querySelector(".adcard") || $("tools");
+  const before = next?.parentNode === g ? next : g.querySelector(".adcard") || gridEnd();
   g.insertBefore(card, before);
   items.splice(Math.min(at, items.length), 0, it);
   it.filed = false; // its stored file was deleted on Remove: write it again, not only its state
@@ -1929,13 +1929,25 @@ const GAP = 12, MIN_PIC = 84, MAX_PIC = 640;
 const BAR_SM = 49, BAR_MD = 57, ROW2 = 36, FULL_BAR = 242, ROOMY_MIN = 154;
 const barFor = (p) => (p <= FULL_BAR ? BAR_SM : BAR_MD);
 COARSE.addEventListener?.("change", () => requestAnimationFrame(layout));
+// A phone on its side (short and wide): "Download all" moves up beside Choose photos and Paste, where the width is
+// spare, and the footer steps aside (style.css), so the cards get the height and keep 👍 👎 (Kevin, 2026-11-22:
+// on its side the bars were cut off under Download all and 👎 was gone). Otherwise it is the row under the cards.
+const SIDEWAYS = matchMedia("(max-height: 520px) and (min-width: 660px)");
+function seatTools() {
+  const t = $("tools"), row = $("hero").querySelector(".row"), g = $("grid");
+  if (SIDEWAYS.matches) { if (t.parentNode !== row) row.append(t); }
+  else if (t.parentNode !== g) g.append(t);
+}
+const gridEnd = () => ($("tools").parentNode === $("grid") ? $("tools") : null); // cards and ads go before the row, when it is there
+SIDEWAYS.addEventListener("change", () => layout());
 function layout() {
   const g = $("grid"), n = g.querySelectorAll(".card").length, all = $("tools");
   if (!n) { placeAds(0, 0); hugFooter(0); return; } // the last photo was removed: the ads go with it
   try { if (adsOn()) load3d(); } catch {} // fetch the 3D code while the first photo is still being worked on, so ads draw at once
   // "Download all" sits under the cards. Its padding (only while the grid scrolls, where it sticks to the bottom) is left
   // out: counted, a grid that had scrolled stayed scrolling once a card went (13 to 12 photos on a phone).
-  const allH = all.hidden ? 0 : all.offsetHeight - (parseFloat(getComputedStyle(all).paddingTop) || 0) + GAP;
+  seatTools();
+  const allH = all.hidden || all.parentNode !== g ? 0 : all.offsetHeight - (parseFloat(getComputedStyle(all).paddingTop) || 0) + GAP;
   const W = g.clientWidth, H = g.clientHeight - (parseFloat(getComputedStyle(g).paddingTop) || 0) - allH;
   // The bar's height depends on the card's width, so it is worked out for each candidate, not measured from the cards.
   const fit = (k) => {
@@ -1954,8 +1966,10 @@ function layout() {
   const slots = adsOn() && n < 4 ? 4 : n, best = fit(slots);
   const scroll = best.p < MIN_PIC;
   let p = Math.min(MAX_PIC, Math.max(best.p, MIN_PIC));
+  // On its side the grid scrolls anyway: a row as tall as the screen allows (bars keep 👍 👎), not many tiny columns.
+  if (scroll && SIDEWAYS.matches) p = Math.max(MIN_PIC, Math.min(MAX_PIC, H - BAR_MD));
   const c = scroll ? Math.max(1, Math.floor((W + GAP) / (p + GAP))) : best.c;
-  if (scroll) p = Math.min(MAX_PIC, Math.floor((W - GAP * (c - 1)) / c)); // scrolling anyway: the columns use the full width
+  if (scroll) p = Math.min(MAX_PIC, Math.floor((W - GAP * (c - 1)) / c), SIDEWAYS.matches ? p : Infinity); // scrolling anyway: the columns use the full width (on its side, no taller than the screen)
   // Roomy: the cards fill the width before the height (a phone in portrait, 1 to 4 photos) and their bar has no room
   // for every control. The bar takes a second row (crop, 👍 👎, remove) instead of hiding them in the picker.
   // Touch only: with a mouse the photos get the height (a laptop with 12 photos keeps one row) and the picker carries
@@ -1996,7 +2010,7 @@ function hugFooter(rows) {
   let slack = 0;
   if (rows && card) { // measured from the rows, so the footer doesn't jump when the ads fill their kept cells
     const r = g.getBoundingClientRect(), h = card.offsetHeight; // not its box on screen: a card popping in is scaled down
-    const used = (parseFloat(getComputedStyle(g).paddingTop) || 0) + rows * h + (rows - 1) * GAP + (all.hidden ? 0 : GAP + all.offsetHeight);
+    const used = (parseFloat(getComputedStyle(g).paddingTop) || 0) + rows * h + (rows - 1) * GAP + (all.hidden || all.parentNode !== g ? 0 : GAP + all.offsetHeight);
     slack = Math.max(0, Math.floor(r.height - used));
   }
   f.style.transform = slack ? `translateY(${-slack}px)` : "";
@@ -2082,7 +2096,7 @@ function buildAd(i) {
   // The name starts with the words on screen (voice control); the rest is the description.
   a.setAttribute("aria-label", `${adLabel}: ${cta}`);
   a.setAttribute("aria-description", `${x.line}${CAP && p.id === "zazzle" ? ` Takes this cut-out to ${p.name}.` : ""}`);
-  $("grid").insertBefore(a, $("tools"));
+  $("grid").insertBefore(a, gridEnd());
   adWatch.observe(a); // the cut-out beat starts once ads are on screen
   a.tilt = { phase: i * 2.1, mix: 0, x: 0, y: 0, t: 0 }; // each card sways out of step with the others
   a.addEventListener("pointermove", (e) => { // while the mouse moves over it, the product leans toward it

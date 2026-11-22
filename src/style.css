@@ -465,6 +465,12 @@ body.app:not(.has-work) main { flex: none; margin-top: auto; }
   body.app.has-work main { padding-top: 10px; }
   body.app.has-work .hero { max-width: none; width: 100%; justify-items: end; } /* the buttons go right, clear of the wordmark */
 }
+/* On its side with room for it, "Download all" joins the buttons up top (app.js seatTools) and the footer steps aside:
+   the cards get the height, so their bars keep 👍 👎. Same query as SIDEWAYS in app.js. */
+@media (max-height: 520px) and (min-width: 660px) {
+  body.app.has-work .hero .allrow .btn { --h: 44px; --px: 24px; white-space: nowrap; }
+  body.app.has-work .foot { display: none; }
+}
 /* "Download all" spans the row under the cards, edge to edge with them. */
 .allrow { grid-column: 1 / -1; display: flex; }
 .allrow .btn { flex: 1; --fs: 16px; }

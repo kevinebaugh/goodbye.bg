@@ -210,6 +210,9 @@ without a visit; private windows refuse Blobs, so nothing is kept there.
 - Download and Download all shimmer while a big PNG or the zip is built; repeat taps don't start it again.
 - Short screens (height 520 px or less): the wordmark sits left of the buttons, the privacy note is hidden, spacing
   tightens; the empty page shrinks the headline so the footer fits.
+  Also 660 px wide or more (a phone on its side): Download all joins Choose photos / Paste up top and the footer is hidden
+  while photos are on screen, so the cards get the height and keep 👍 👎; when it scrolls, one row is as tall as the
+  screen allows (Kevin, 2026-11-22: on his iPhone on its side the bars were cut off under Download all and 👎 was gone).
 - Drags that start on the page (a cut-out dragged out) are ignored if dropped back on it.
 - Haptics: a light tick on result, crop, 👍/👎 and Download (Android vibrate; iOS 18+ hidden switch control).
 - Buttons follow one small system in style.css (Kevin, 2026-11-21: "a mature design system"): spacing tokens
