@@ -205,6 +205,8 @@ body.moving main, body.moving main *, body.moving .foot, body.moving .foot * { v
 .custom input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; border: 0; padding: 0; cursor: pointer; }
 .pcrop, .px { display: none; }
 .bgs.wantcrop .pcrop, .bgs.wantx .px { display: grid; } /* what the bar has no room for (app.js openPick) */
+.prate { display: none; font-size: 16px; background: color-mix(in srgb, var(--ink) 7%, transparent); }
+.bgs.wantrate .prate { display: grid; } /* 👍 👎 ride along too when the bar hides them */
 /* Blur: a soft dot (soft), spread wider (strong). Your photo: its thumbnail, or a picture icon. */
 .sw.blur, .swb.blur .sw { background: radial-gradient(circle, var(--brand) 0 20%, color-mix(in srgb, var(--brand) 40%, transparent) 42%, transparent 68%), var(--card); }
 .sw.blur.b2, .swb.blur.b2 .sw { background: radial-gradient(circle, color-mix(in srgb, var(--brand) 75%, transparent) 0 6%, color-mix(in srgb, var(--brand) 28%, transparent) 48%, transparent 82%), var(--card); }

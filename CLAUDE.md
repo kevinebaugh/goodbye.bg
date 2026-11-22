@@ -227,8 +227,9 @@ Bar order: crop, background, Download, 👍 👎, remove. Every bar control is 3
 strength on a faint ink chip; crop when on has a teal ring on an aqua tint. The bar drops controls so Download stays
 at least ~40 px wide (card widths, style.css): 242+ px everything; 206 to 241 no crop; 162 to 205 no crop and no remove,
 👍 👎 stay (Kevin, 2026-11-21: voting beats crop); 130 to 161 background, Download, remove; under 130 background and
-Download. What the bar hides rides along in the background picker (`wantcrop`/`wantx`), so crop and remove are never
-lost. Cards without a picker (waiting, failed, GIFs) keep remove in the background button's place.
+Download. What the bar hides rides along in the background picker (`wantcrop`/`wantx`/`wantrate`), so crop, remove and
+👍 👎 are never lost (unvoted 👍 👎 open the picker's first page, Kevin 2026-11-22: a phone in portrait with 3+ photos had
+no way to vote). Cards without a picker (waiting, failed, GIFs) keep remove in the background button's place.
 - **Roomy bars**: on touch screens only, when cards fill the width first with height to spare (a phone in portrait
   with 1 to 4 photos), `.grid.roomy` gives the bar a second row: background + Download, then crop, 👍 👎, remove. With
   a mouse the bar is always one row. Ad cards keep a one-row bar.
@@ -280,11 +281,13 @@ partner with one variant (Printful, Printify) leaves the other reserved cells em
 (random per visit), not in Download all, no rating. Links go through `/go/<id>`, which counts the click ('adclick')
 and redirects; a POST there counts the card being shown ('adseen').
 - Ads fill the grid (Kevin, 2026-11-20: "always fill the grid"): up to 3 photos are laid out as 4 cells (1 photo + 3
-  ads, 2 + 2, 3 + 1); more photos fill out their last row. The cells are reserved from the start so photos don't
+  ads, 2 + 2, 3 + 1); more photos fill out their last row. Exception (Kevin's iPhone, 402 x 654, 2026-11-22): on touch
+  screens where 4 cells make cards too small for 👍 👎 (under 160 px), 1 or 2 photos keep 2 cells (1 + 1 ad, or 2 + 0). The cells are reserved from the start so photos don't
   resize. Ads appear once the first cut-out is done, 1.1 s after it (`ADS_PAUSE`), one after another with a shimmering
   placeholder; the 3D code is fetched while the first photo is worked on.
 - Zazzle's 8 variants draw the visitor's cut-out on a product (mug, sticker, shirt, tote, ornament, phone case, pillow,
-  keychain), a different cut-out per card when there are several; with 2+ one card at a time swaps cut-out every 4 s.
+  keychain), a different cut-out per card when there are several; with 2+ one card at a time swaps cut-out every 4 s. Tapping a
+  finished photo puts it on every product card and stops the swapping (Kevin, 2026-11-22; `showArt`).
   The button names the product ("Put it on a mug"), outlined so Download stays the loud button. Ad cards have no
   surface, a solid hairline. Products follow light/dark.
 - Products render in 3D (`src/render3d.js` + Three.js 0.187.0, MIT, ~150 KB gzipped, loaded only when ads show): a

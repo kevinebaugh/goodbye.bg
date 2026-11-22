@@ -1233,6 +1233,7 @@ function makeCard(it) {
   const img = document.createElement("img"); img.alt = "Cut-out"; img.draggable = true;
   img.addEventListener("touchstart", () => holdFull(it), { passive: true });
   img.addEventListener("contextmenu", () => holdFull(it));
+  pic.addEventListener("click", () => { if (adEls.length && it.mask) { tick(); showArt(it); } });
   pic.append(canvas, img, busy);
   const bar = document.createElement("div"); bar.className = "bar";
   const dl = document.createElement("button"); dl.type = "button"; dl.className = "btn primary dl"; dl.disabled = true;
@@ -1336,7 +1337,14 @@ function bgPicker(it, crop, x) {
   more.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>';
   more.addEventListener("click", () => { tick(); openOpts(it); });
   const px = x.cloneNode(true); px.className = "swb px pg"; px.dataset.g = "ctl"; px.addEventListener("click", () => x.click());
-  pick.append(pcrop, px, more, pager(pick));
+  // 👍 👎 too, when the bar has no room for them (a phone in portrait with 3 or more photos): votes are never lost.
+  const prates = ["up", "down"].map((v) => {
+    const b = document.createElement("button"); b.type = "button"; b.className = `swb rate prate pg p${v}`; b.dataset.g = "vote"; // first, on the page the row opens on
+    b.textContent = v === "up" ? "👍" : "👎";
+    b.addEventListener("click", () => { const o = it.el[v]; closePick(); if (!o.disabled) o.click(); });
+    return b;
+  });
+  pick.prepend(...prates); pick.append(pcrop, px, more, pager(pick));
   [...pick.children].forEach((c, i) => c.style.setProperty("--i", i));
   pick.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); closePick(true); } });
   leaveCloses(it, pick);
@@ -1431,9 +1439,12 @@ function openPick(it) {
   // What the bar has no room for (crop, remove) rides along in the picker.
   pick.classList.toggle("wantcrop", getComputedStyle(it.el.crop).display === "none");
   pick.classList.toggle("wantx", getComputedStyle(it.el.bar.querySelector(":scope > .x")).display === "none");
+  const wantRate = !!it.mask && !it.el.up.disabled && getComputedStyle(it.el.bar.querySelector(".rates")).display === "none";
+  pick.classList.toggle("wantrate", wantRate); // unvoted only: a vote already given shows on the card
+  for (const v of ["up", "down"]) { const o = it.el[v], b = pick.querySelector(`.p${v}`); b.title = o.title; b.setAttribute("aria-label", o.getAttribute("aria-label")); }
   pick.hidden = false; bgb.setAttribute("aria-expanded", "true");
   const on = pick.querySelector('[aria-pressed="true"]:not(.pcrop)');
-  seat(it, pick, on || 0); // on the page with the current background
+  seat(it, pick, wantRate ? 0 : on || 0); // on the page with the current background (the votes' page while unvoted)
   (on && !on.classList.contains("off") ? on : pick.querySelector(".pg:not(.off)"))?.focus({ preventScroll: true });
 }
 /* A row goes in the bar's place when it fits on two pages there. A narrower card (a dozen photos) would need many
@@ -1712,6 +1723,7 @@ function swapAds(it) {
   }
 }
 function unshow(it) {
+  if (pinnedArt === it) pinnedArt = null;
   swapAds(it);
   if (pressed === it) pressed = null;
   try { it.bmp?.close(); } catch {} // a run still on it stops quietly (see run)
@@ -1923,7 +1935,7 @@ async function retry(it) {
 // Only past a minimum size (dozens of photos on a phone) does the grid scroll.
 // Cards are square and sized to fit the screen. Under MIN_PIC the grid scrolls (bulk: about 50 photos on a laptop);
 // 84 px still leaves Download 40 px next to the background button. A phone in portrait fits 12 (3 x 4).
-const GAP = 12, MIN_PIC = 84, MAX_PIC = 640;
+const GAP = 12, MIN_PIC = 84, MAX_PIC = 640, RATE_MIN = 160; // the bar shows 👍 👎 from 160 px (style.css, .rates)
 // The bar's height by card width (style.css): cards up to 242 px use the small Download (--h-sm). ROW2: the second row a
 // roomy bar adds (32 px controls and a 4 px gap). FULL_BAR: the card width from which one row holds every control.
 const BAR_SM = 49, BAR_MD = 57, ROW2 = 36, FULL_BAR = 242, ROOMY_MIN = 154;
@@ -1963,7 +1975,10 @@ function layout() {
   };
   // Ads fill the grid (Kevin, 2026-11-20): up to 3 photos are laid out as 4 cells, more photos fill out their
   // last row. The cells are reserved from the start, so the photos never resize when the ads arrive.
-  const slots = adsOn() && n < 4 ? 4 : n, best = fit(slots);
+  let slots = adsOn() && n < 4 ? 4 : n, best = fit(slots);
+  // A phone in portrait (Kevin's iPhone: 402 x 654): 1 or 2 photos in the 4 kept cells came out 136 px, too small for
+  // 👍 👎. Then they keep 2 cells (1 photo + 1 ad, or 2 photos side by side), which leaves room for the bar's second row.
+  if (slots === 4 && n < 3 && COARSE.matches && best.p < RATE_MIN) { const two = fit(2); if (two.p >= RATE_MIN) { slots = 2; best = two; } }
   const scroll = best.p < MIN_PIC;
   let p = Math.min(MAX_PIC, Math.max(best.p, MIN_PIC));
   // On its side the grid scrolls anyway: a row as tall as the screen allows (bars keep 👍 👎), not many tiny columns.
@@ -2330,12 +2345,21 @@ function beat() {
 function nextArt() {
   if (document.hidden || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   const done = finishedCuts();
-  if (done.length < 2 || !adEls.length || swaps >= MOTION_MS / BEAT) return;
+  if (done.length < 2 || !adEls.length || swaps >= MOTION_MS / BEAT || pinnedArt) return;
   let a = null;
   for (let k = 0; k < adEls.length && !a; k++) { const c = adEls[(beatNext + k) % adEls.length]; if (c.onScreen && c.art) { a = c; beatNext = (beatNext + k + 1) % adEls.length; } }
   if (!a || a.matches(":hover, :focus-within")) return; // never under the pointer or keyboard focus
   swaps++;
-  const next = done[(done.indexOf(a.artIt) + 1) % done.length]; // becomes the card's once it shows, so a click saves what is on screen
+  swapArt(a, done[(done.indexOf(a.artIt) + 1) % done.length]);
+}
+// A tap on a finished photo puts it on every product card (Kevin, 2026-11-22), and the cards stop taking turns.
+let pinnedArt = null;
+function showArt(it) {
+  if (!adEls.length || !it.mask || it.anim) return;
+  pinnedArt = it;
+  for (const a of adEls) if (a.art && a.artIt !== it) swapArt(a, it);
+}
+function swapArt(a, next) { // next becomes the card's once it shows, so a click saves what is on screen
   const old = a.querySelector(".adart");
   if (!old) return;
   let src; try { src = artOf(next); } catch { return; }
