@@ -7,7 +7,7 @@ zero friction: fun copy and small animations are fine, delays and popups are not
 
 Measurements and the history behind the decisions below: `docs/history.md`. Other docs: `docs/birefnet.md`,
 `docs/quality-1000.md`, `docs/quality-products.md`, `docs/platforms-and-phone-model.md`, `docs/removebg-parity.md`,
-`docs/zazzle-cap.md`, `docs/ads.md`, `docs/seo.md`, `docs/launch-drafts.md`, `docs/domain-cutover.md`.
+`docs/zazzle-cap.md`, `docs/ads.md`, `docs/seo.md`, `docs/launch-drafts.md`, `docs/domain-cutover.md`, `docs/i18n.md`.
 
 ## Commands
 
@@ -30,7 +30,8 @@ Actions. The old upload-only project `goodbye-bg` can be deleted.
   `render3d.js` (3D ad products), `sw.js` (offline caches, Android share target), `manifest.webmanifest`, `_headers`
   (security headers, also used by local dev), `_redirects` (`/share` to `/` when the service worker missed it),
   `404.html` (no scripts), `ad.html` (sandboxed ad slot, ads off), `remove-bg-alternative/` and
-  `how-to-remove-background/` (SEO pages, `docs/seo.md`).
+  `how-to-remove-background/` (SEO pages, `docs/seo.md`), the same two under `de/ es/ fr/ pt-br/ id/`, `i18n.js` (UI
+  strings in other languages, inlined into early.js by the build; see Languages).
 - `functions/` Cloudflare Pages Functions: `api/fetch.js` (image for a pasted link: same-origin only, 30 MB cap, follows
   og:image), `api/rate.js`, `api/crash.js`, `api/count.js`, `api/diag.js`, `api/cap/[key].js` and `cap/[file].js`
   (Zazzle hand-off), `go/[id].js` (ad redirect and counts).
@@ -308,6 +309,17 @@ and redirects; a POST there counts the card being shown ('adseen').
   (Safari won't save from a tab that went to the background), then the partner (tested in the iOS Simulator).
 - Ad blockers hide the card and block `/go/` beacons; that is the visitor's choice, so we don't work around it. A
   failing card is reported as 'ad-failed' or 'mug-failed'. EthicalAds: see `docs/ads.md`.
+
+## Languages (branch i18n, 2026-11-22, not yet reviewed by native speakers)
+
+German, Spanish, French, Brazilian Portuguese and Indonesian (`docs/i18n.md`: why these, sources, open questions).
+The app page follows the browser's language list (English first stays English; `?lang=xx` to test, a test switch); no
+switcher, nothing stored. Strings: `src/i18n.js`, keyed by the English text in index.html/app.js; app.js calls
+`t(english, { slot })`. The build inlines it into early.js, which translates `data-t*` elements as the parser passes
+them (no English flash, CLS 0). **Changing an English string means changing its key in all five** (the smoke test
+lists missing and stale keys). Text pages: `src/<de|es|fr|pt-br|id>/{remove-bg-alternative,how-to-remove-background}/`,
+same claims as the English ones (change all six together), hreflang filled in by the build, own CSP lines in `_headers`.
+Quips must fit two lines in a 165 px card's bar.
 
 ## Analytics and test traffic
 
