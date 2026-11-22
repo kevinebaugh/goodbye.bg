@@ -311,6 +311,25 @@ try {
     return f.name;
   }, [`one photo (${engine}): result and PNG download`]);
 
+  // Ad cards that don't send the cut-out (?zazzlecap=0, Printful, Printify) save it see-through, never on the card's white.
+  await check("ads: a click saves the see-through PNG, not the white JPG", async () => {
+    const c7 = await context(), a = await page(c7);
+    try {
+      await a.go(app("&zazzlecap=0"));
+      await addPhotos(a, ["adsave"]);
+      await allDone(a, 1, 90000);
+      await click(a, "#grid > .card .bgb");
+      await a.until(`!document.querySelector("#grid > .card .bgs").hidden`, 3000, "the picker open");
+      await click(a, `#grid > .card .bgs [data-bg="#ffffff"]`);
+      await a.until(`document.querySelectorAll("#grid > .adcard.artcard:not(.loading)").length > 0`, 20000, "an ad card with the cut-out");
+      await a.ev(`(document.addEventListener("click", (e) => { if (e.target.closest(".adcard")) e.preventDefault(); }), true)`); // the partner's tab stays shut
+      const f = await download(c7, () => click(a, "#grid > .adcard.artcard"));
+      assert(f.kind === "png" && f.name === "adsave-goodbye-bg.png", `${f.kind} ${f.name}`);
+      assert(f.bytes[25] === 6, "PNG has no alpha channel");
+      return f.name;
+    } finally { await a.close(); }
+  }, ["background picker: White gives a JPG"]);
+
   await check("batch: 3 photos and Download all (zip names)", async () => {
     await addPhotos(p, ["two", "three"]);
     await allDone(p, 3, 120000);

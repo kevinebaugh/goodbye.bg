@@ -686,9 +686,9 @@ function still(it) {
     it.previewUrl = URL.createObjectURL(b);
     img.src = it.gifUrl || it.previewUrl; // an animated cut-out plays
     try { await img.decode(); } catch {}
+    if (old) URL.revokeObjectURL(old); // even when a newer draw came in meanwhile (the live colour picker), or it leaks
     if (gen !== it.gen) return;
     pic.classList.add("still");
-    if (old) URL.revokeObjectURL(old);
   }, "image/png");
 }
 
@@ -2101,9 +2101,9 @@ function buildAd(i) {
     const it = a.artIt;
     if (!it?.mask) return;
     if (CAP && p.id === "zazzle" && !it.anim) { e.preventDefault(); return capSend(a, it); }
-    if (!PHONE) { try { save(outName(it), await png(it)); } catch (err) { report("ad-failed", err); } return; }
+    if (!PHONE) { try { save(plainName(it), await plainBlob(it)); } catch (err) { report("ad-failed", err); } return; }
     e.preventDefault();
-    try { await share([{ name: outName(it), blob: await png(it) }]); } catch (err) { report("ad-failed", err); }
+    try { await share([{ name: plainName(it), blob: await plainBlob(it) }]); } catch (err) { report("ad-failed", err); }
     const w = window.open(a.href, "_blank"); // not "noopener": that always returns null
     if (w) w.opener = null; else location.href = a.href; // pop-up blocked: go in this tab
   });
@@ -2149,14 +2149,20 @@ async function capSend(a, it) {
     if (!r.ok) throw new Error(`cap upload ${r.status}`);
   } catch (err) { // /go gives up after a few seconds and opens the usual page; computers still get the cut-out saved
     report("cap-failed", err);
-    if (!PHONE) try { save(outName(it), await png(it)); } catch {}
+    if (!PHONE) try { save(plainName(it), await plainBlob(it)); } catch {}
   }
   a.capBusy = false;
   if (!w) location.href = href; // pop-up blocked: go in this tab
 }
-// The cut-out as Download gives it, but always see-through (cropped to the subject unless the card shows the whole frame), at most CAP_MAX px.
+// What ad cards save or send: the cut-out as Download gives it, but always see-through, at its own size, as a PNG (cropped
+// to the subject unless the card shows the whole frame; a GIF stays the GIF). A product looks wrong on a white square.
+function plainBlob(it) {
+  return it.bg || !plainOut(it) || outOf(it).fmt ? (pngChain = pngChain.then(() => fullBlob(it, true), () => fullBlob(it, true))) : png(it);
+}
+const plainName = (it) => `${it.name}-goodbye-bg.${it.anim ? "gif" : "png"}`;
+// The cut-out sent to Zazzle: plainBlob, at most CAP_MAX px.
 async function capBlob(it) {
-  const full = it.bg || !plainOut(it) || outOf(it).fmt ? await (pngChain = pngChain.then(() => fullBlob(it, true), () => fullBlob(it, true))) : await png(it);
+  const full = await plainBlob(it);
   const bm = await createImageBitmap(full);
   try {
     const k = Math.min(1, CAP_MAX / Math.max(bm.width, bm.height));
