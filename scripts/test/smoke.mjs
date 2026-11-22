@@ -10,7 +10,7 @@
 // public count (Kevin: tests count). Nothing else reaches production; ad cards are never clicked.
 import { spawn } from "node:child_process";
 import { createServer } from "node:net";
-import { mkdtempSync, readFileSync, writeFileSync, rmSync, existsSync, mkdirSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, writeFileSync, rmSync, existsSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateSync, crc32 } from "node:zlib";
@@ -125,7 +125,7 @@ const OBSERVE = `
   addEventListener("securitypolicyviolation", (e) => window.__csp.push(e.violatedDirective + " " + e.blockedURI));
 `;
 
-async function page(ctx, { w = 1280, h = 800, dark = false, mobile = false } = {}) {
+async function page(ctx, { w = 1280, h = 800, dark = false, mobile = false, lang = "" } = {}) {
   const { targetId } = await browser.send("Target.createTarget", { url: "about:blank", browserContextId: ctx.id });
   const { sessionId } = await browser.send("Target.attachToTarget", { targetId, flatten: true });
   const s = (m, p) => browser.send(m, p, sessionId);
@@ -140,6 +140,10 @@ async function page(ctx, { w = 1280, h = 800, dark = false, mobile = false } = {
   });
   await s("Page.enable"); await s("Runtime.enable"); await s("Log.enable"); await s("Network.enable");
   await s("Page.addScriptToEvaluateOnNewDocument", { source: OBSERVE });
+  if (lang) { // the browser's language list (navigator.languages and Accept-Language), as a browser set to that language sends it
+    const { result } = await s("Runtime.evaluate", { expression: "navigator.userAgent", returnByValue: true });
+    await s("Network.setUserAgentOverride", { userAgent: result.value, acceptLanguage: lang });
+  }
   await s("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceScaleFactor: mobile ? 3 : 1, mobile });
   await s("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: dark ? "dark" : "light" }] });
   const p = {
@@ -232,6 +236,7 @@ const cspClean = async (p) => { const v = await p.ev("window.__csp"); assert(!v?
 const click = (p, sel) => p.ev(`(() => { const el = document.querySelector(${JSON.stringify(sel)}); if (!el) throw new Error("no ${sel.replace(/"/g, "'")}"); el.click(); return true; })()`);
 
 /* ---------- the checks ---------- */
+const TRANSLATED = ["de", "es", "fr", "pt-br", "id"].flatMap((l) => [`/${l}/remove-bg-alternative/`, `/${l}/how-to-remove-background/`]);
 let base, engine;
 try {
   if (!process.argv.includes("--no-build")) {
@@ -248,6 +253,42 @@ try {
   await check("build: placeholders filled in", () => {
     const app = readFileSync(join(root, "dist/app.js"), "utf8"), eng = readFileSync(join(root, "dist/engine.js"), "utf8");
     for (const [f, s, ph] of [["app.js", app, '"%PARTNERS%"'], ["app.js", app, "%BUILD%"], ["app.js", app, "%ENGINE%"], ["engine.js", eng, "%ORT%"], ["engine.js", eng, "%BIREFNET%"]]) assert(!s.includes(ph), `${ph} left in dist/${f}`);
+    assert(!readFileSync(join(root, "dist/early.js"), "utf8").includes("%I18N%"), "/*%I18N%*/ left in dist/early.js");
+    for (const f of readdirSync(join(root, "dist"), { recursive: true }).filter((f) => /\.(html|xml|txt)$/.test(f) && !f.startsWith("m/") && !f.startsWith("rt/"))) {
+      const t = readFileSync(join(root, "dist", f), "utf8");
+      for (const ph of ["%SITE%", "%HREFLANG%"]) assert(!t.includes(ph), `${ph} left in dist/${f}`);
+    }
+  });
+
+  // Every English string the page can show has a translation in each language, and no translation is left over
+  // after its English changed (src/i18n.js is keyed by the English text; a missing key shows English).
+  await check("i18n: every string translated, none stale", async () => {
+    const { LANGS } = await import(join(root, "src/i18n.js"));
+    const app = readFileSync(join(root, "src/app.js"), "utf8"), idx = readFileSync(join(root, "src/index.html"), "utf8");
+    const { PARTNERS } = await import(join(root, "lib/partners.mjs"));
+    const said = (f) => [...readFileSync(join(root, f), "utf8").matchAll(/(?:fail\(\d+, |new Error\()"([^"]+)"/g)].map((m) => m[1]);
+    const used = new Set([
+      ...[...app.matchAll(/\bt\(\s*"((?:[^"\\]|\\.)+)"/g)].map((m) => m[1]),
+      // t(a ? "one" : "other"): both, from lines that call t()
+      ...app.split("\n").filter((l) => /\bt\(/.test(l)).flatMap((l) => [...l.matchAll(/\bt\((?:[^"\n]|"[^"\n]*")*?\? "((?:[^"\\]|\\.)+)" : "((?:[^"\\]|\\.)+)"/g)]).flatMap((m) => [m[1], m[2]]),
+      ...[...idx.matchAll(/<[^>]*\sdata-t(?:="html")?(?=[\s>])[^>]*>([^<]*(?:<br>[^<]*)?)</g)].map((m) => m[1].trim()).filter(Boolean),
+      ...[...idx.matchAll(/title="([^"]+)" data-t-title/g)].map((m) => m[1]),
+      idx.match(/<title>([^<]+)<\/title>/)[1],
+      ...PARTNERS.flatMap((p) => [p, ...(p.variants || [])]).flatMap((x) => [x.line, x.cta, ...(x.ctas || [])]).filter(Boolean),
+      "Ad", "Sponsored", "See-through", "White", "Black", "Light aqua", "Sage", "Soft blur", "Strong blur", "Original", "Square", "Custom",
+      "Size", "Margin around the subject", "Width in pixels", "Height in pixels", "Shadow", "Shadow under the subject", "Save as WebP (smaller files)",
+      ...said("functions/api/fetch.js").filter((m) => !/endpoint|too large/.test(m)), ...said("src/formats.js").filter((m) => m !== "RAW"),
+      "The other site answered {status}.",
+    ]);
+    const problems = [];
+    for (const [code, l] of Object.entries(LANGS)) {
+      const missing = [...used].filter((k) => !(k in l.t)), stale = Object.keys(l.t).filter((k) => !used.has(k));
+      if (missing.length) problems.push(`${code} lacks ${missing.slice(0, 4).map((k) => JSON.stringify(k)).join(", ")}${missing.length > 4 ? ` and ${missing.length - 4} more` : ""}`);
+      if (stale.length) problems.push(`${code} has unused ${stale.slice(0, 4).map((k) => JSON.stringify(k)).join(", ")}`);
+      for (const [k, v] of Object.entries(l.t)) { const slots = (x) => (x.match(/\{\w+\}/g) || []).sort().join(); if (slots(k) !== slots(v)) problems.push(`${code}: slots differ in ${JSON.stringify(k)}`); }
+    }
+    assert(!problems.length, problems.join(" | "));
+    return `${used.size} strings, ${Object.keys(LANGS).join(", ")}`;
   });
 
   await check("basics: headers (CSP, COOP/COEP)", async () => {
@@ -659,6 +700,40 @@ try {
     return `${e1}, ${e2}`;
   });
 
+  // Other languages: a browser set to German gets the page in German from the first paint, with no layout shift.
+  await check("i18n: a German browser gets German, from the first paint", async () => {
+    const c = await context(), d = await page(c, { w: 390, h: 844, mobile: true, lang: "de-DE,de;q=0.9,en;q=0.8" });
+    // What the first frame that holds the hero's line shows (animation frames run just before painting).
+    await d.s("Page.addScriptToEvaluateOnNewDocument", { source: `requestAnimationFrame(function f() { const h = document.querySelector("#hero .sub"); if (h) window.__firstSub = h.textContent; else requestAnimationFrame(f); });` });
+    await d.go(base + "/?confetti=0");
+    const st = await d.ev(`({ lang: document.documentElement.lang, h1: document.querySelector("h1").textContent, pick: document.getElementById("pick").textContent,
+      paste: document.getElementById("paste").textContent, alt: document.querySelector(".foot a").getAttribute("href"), title: document.title, langs: navigator.languages.join() })`);
+    assert(st.lang === "de", `lang ${st.lang} (navigator.languages ${st.langs})`);
+    assert(st.h1 === "Tschüss,Hintergrund." && st.pick === "Fotos wählen" && st.paste === "Einfügen", `not German: ${st.h1} / ${st.pick} / ${st.paste}`);
+    assert(st.alt === "de/remove-bg-alternative/", "footer link goes to " + st.alt);
+    assert(/^Hintergrund entfernen/.test(st.title), "title " + st.title);
+    const first = await d.ev("window.__firstSub");
+    assert(first && /Gerät/.test(first), "the parser showed this before the German: " + first);
+    await sleep(500);
+    const cls = (await d.ev("window.__ls")).reduce((a, b) => a + b, 0);
+    assert(cls < 0.001, `layout shift on load: ${cls.toFixed(4)}`);
+    await addPhotos(d, ["eins"]);
+    await allDone(d, 1, 120000);
+    const card = await d.ev(`({ dl: document.querySelector("#grid > .card .dl").getAttribute("aria-label"), crop: document.querySelector("#grid > .card .crop").title,
+      w: document.querySelector("#grid > .card .dl").getBoundingClientRect().width, wide: document.documentElement.scrollWidth > innerWidth + 1 })`);
+    assert(card.dl === "Speichern" && card.crop === "Auf das Motiv zuschneiden", `card not German: ${card.dl} / ${card.crop}`);
+    assert(card.w >= 40 && !card.wide, `Download ${card.w} px wide, page wider than the screen: ${card.wide}`);
+    noErrors(d); await cspClean(d);
+    await d.close();
+    // English first in the list stays English; ?lang= overrides (for testing).
+    const e = await page(c, { lang: "en-US,de;q=0.9" });
+    await e.go(base + "/");
+    assert(await e.ev(`document.documentElement.lang === "en" && document.getElementById("pick").textContent === "Choose photos"`), "en-US, de: not English");
+    await e.go(base + "/?lang=pt-BR");
+    assert(await e.ev(`document.documentElement.lang === "pt-BR" && document.getElementById("pick").textContent === "Escolher fotos"`), "?lang=pt-BR: not Portuguese");
+    await e.close();
+  });
+
   // Text pages.
   await check("pages: unknown path gives the 404 page", async () => {
     for (const path of ["/no-such-page", "/a/b/c.png"]) {
@@ -670,7 +745,7 @@ try {
     assert(r.status === 303 && r.headers.get("location") === "/", "/share does not send to the app");
   });
   await check("pages: SEO and 404 pages load clean, in Nunito", async () => {
-    for (const path of ["/remove-bg-alternative/", "/how-to-remove-background/", "/no-such-page", "/"]) {
+    for (const path of ["/remove-bg-alternative/", "/how-to-remove-background/", ...TRANSLATED, "/no-such-page", "/"]) {
       const r = await fetch(base + path);
       assert(r.status === (path === "/no-such-page" ? 404 : 200), `${path}: status ${r.status}`);
       if (/\/.+\/$/.test(path)) assert(/script-src 'none'/.test(r.headers.get("content-security-policy") || ""), `${path}: CSP missing`);
@@ -694,6 +769,21 @@ try {
     }
     const t = await (await fetch(base + "/")).text();
     assert(/<title>[^<]{10,}/.test(t) && /name="description"/.test(t), "home page has no title/description");
+  });
+  await check("pages: translations link each other (hreflang, canonical, sitemap)", async () => {
+    const sitemap = await (await fetch(base + "/sitemap.xml")).text();
+    for (const path of ["/remove-bg-alternative/", "/how-to-remove-background/", ...TRANSLATED]) {
+      const t = await (await fetch(base + path)).text();
+      const canon = t.match(/<link rel="canonical" href="([^"]+)"/)?.[1] || "";
+      assert(canon.endsWith(path), `${path}: canonical ${canon}`);
+      const alts = [...t.matchAll(/<link rel="alternate" hreflang="([^"]+)" href="([^"]+)"/g)].map((m) => [m[1], new URL(m[2]).pathname]);
+      const slug = path.split("/").at(-2);
+      assert(alts.length === 7 && alts.find(([l]) => l === "x-default")?.[1] === `/${slug}/`, `${path}: hreflang ${JSON.stringify(alts)}`);
+      const lang = t.match(/<html lang="([^"]+)"/)[1];
+      assert(alts.find(([l]) => l === lang)?.[1] === path, `${path}: lang ${lang} doesn't match its hreflang`);
+      assert(sitemap.includes(path + "</loc>"), `${path}: not in the sitemap`);
+      if (path !== `/${slug}/`) { const words = t.replace(/<script[\s\S]*?<\/script>|<[^>]+>/g, " ").match(/\b(the|your|and|with)\b/gi); assert(!words, `${path}: English words left: ${words?.slice(0, 5)}`); }
+    }
   });
 } catch (e) {
   report("harness", "FAIL", 0, e?.stack?.split("\n").slice(0, 3).join(" ") || String(e));

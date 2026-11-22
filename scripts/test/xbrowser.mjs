@@ -330,15 +330,29 @@ async function target(name, t, base) {
 
   await check(pre + "404 and SEO pages", async () => {
     const notes = [];
-    for (const [path, code] of [["/nope-" + Date.now(), 404], ["/remove-bg-alternative/", 200], ["/how-to-remove-background/", 200]]) {
+    const translated = ["de", "es", "fr", "pt-br", "id"].flatMap((l) => [[`/${l}/remove-bg-alternative/`, 200], [`/${l}/how-to-remove-background/`, 200]]);
+    for (const [path, code] of [["/nope-" + Date.now(), 404], ["/remove-bg-alternative/", 200], ["/how-to-remove-background/", 200], ...translated]) {
       const r = await p.goto(base + path);
       assert(r.status() === code, `${path}: ${r.status()}`);
       const st = await p.evaluate(() => ({ font: document.fonts.check("16px Nunito"), h1: document.querySelector("h1")?.textContent, overflow: document.documentElement.scrollWidth > innerWidth + 1 }));
       assert(st.h1, path + ": no h1"); assert(!st.overflow, path + ": sideways scroll");
-      notes.push(`${path.split("/")[1].slice(0, 12)} ${st.font ? "Nunito" : "system font"}`);
+      if (!/^\/(de|es|fr|pt-br|id)\//.test(path)) notes.push(`${path.split("/")[1].slice(0, 12)} ${st.font ? "Nunito" : "system font"}`);
     }
     await clean("on the text pages");
-    return notes.join(", ");
+    return notes.join(", ") + `, ${translated.length} translated`;
+  });
+
+  // A browser set to German gets the app in German (src/i18n.js, picked in early.js).
+  await check(pre + "German browser: German page", async () => {
+    const c2 = await t.b.launchPersistentContext(mkdtempSync(join(tmp, name + "-de-")), { ...t.opts, locale: "de-DE" });
+    const q = c2.pages()[0] || await c2.newPage();
+    const errs = []; q.on("pageerror", (e) => errs.push(e.message));
+    await q.goto(base + "/?confetti=0");
+    const st = await q.evaluate(() => ({ lang: document.documentElement.lang, pick: document.getElementById("pick").textContent,
+      h1: document.querySelector("h1").textContent, langs: navigator.languages.join(), wide: document.documentElement.scrollWidth > innerWidth + 1 }));
+    await c2.close();
+    assert(st.lang === "de" && st.pick === "Fotos wählen" && st.h1 === "Tschüss,Hintergrund.", `not German: ${JSON.stringify(st)}`);
+    assert(!st.wide && !errs.length, `sideways scroll ${st.wide}, errors ${errs.join(" | ")}`);
   });
 
   await ctx.close();

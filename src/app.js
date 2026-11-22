@@ -16,7 +16,11 @@ const CUTOFF = 0.5, SOFTNESS = 0.6;
 const ADS = false;           // EthicalAds; turn on per docs/ads.md
 const AD_SRC = "ad.html";    // later: ad.html on its own origin, e.g. https://ads.goodbye.bg/ad.html
 
-const QUIPS = [
+// Other languages: early.js picks one and sets self.GB (strings from src/i18n.js, keyed by the English text here).
+// t(english, { slot }) gives the visitor's language, or the English with its {slot}s filled in.
+const GB = self.GB || { lang: "en", t: (s, v) => (v ? s.replace(/\{(\w+)\}/g, (m, k) => (k in v ? v[k] : m)) : s), quips: null };
+const t = GB.t, LANG = GB.lang;
+const QUIPS_EN = [
   "Asking the background to leave…",
   "Showing the backdrop the door…",
   "Packing the background’s bags…",
@@ -53,6 +57,7 @@ const QUIPS = [
   "Hailing the background a cab…",
   "Returning the backdrop to sender…",
 ];
+const QUIPS = GB.quips || QUIPS_EN;
 
 const $ = (id) => document.getElementById(id);
 const items = [];
@@ -121,7 +126,7 @@ const params = new URLSearchParams(location.search);
 // and /go and /api/rate and /api/crash drop it, so the A/B, vote and crash data hold real visitors only. The page still
 // sends it (the smoke tests read those requests) and clicks still redirect. /api/count is left alone (Kevin: tests count).
 const TEST_SWITCHES = ["adtest", "adpartner", "adv", "engine", "gpufail", "model", "threads", "nowarm", "haze", "keepmax", "keepmb",
-  "maxbatch", "zazzlecap", "confetti", "debug"];
+  "maxbatch", "zazzlecap", "confetti", "debug", "lang"];
 const TEST = !!navigator.webdriver || TEST_SWITCHES.some((k) => params.has(k));
 
 // ?debug=1: report each step to /api/diag (server log only) to find where a phone crashes.
@@ -253,7 +258,7 @@ function renderCount(v) {
   const el = $("count");
   if (v <= 0) return;
   el.classList.add("on"); el.tabIndex = 0;
-  el.textContent = `Goodbye to ${v.toLocaleString("en-US")} ${v === 1 ? "background" : "backgrounds"} since 2026.`;
+  el.textContent = t(v === 1 ? "Goodbye to {n} background since 2026." : "Goodbye to {n} backgrounds since 2026.", { n: v.toLocaleString(LANG === "en" ? "en-US" : LANG) });
 }
 function growCount() { // waits like a random arrival at the recent pace, then adds one
   clearTimeout(countTimer);
@@ -981,7 +986,7 @@ async function backEntry(c, blob, kept = false) {
 async function useBack(it, file) {
   const ph = it.el.pick.querySelector(".photo"); ph.setAttribute("aria-busy", "true");
   try { setBg(it, "img:" + (await addBack(file))); }
-  catch (e) { console.warn(e); tell("Could not open that picture. Try a JPG or PNG.", it.el.bgb); }
+  catch (e) { console.warn(e); tell(t("Could not open that picture. Try a JPG or PNG."), it.el.bgb); }
   finally { ph.removeAttribute("aria-busy"); if (picking === it) closePick(); }
 }
 
@@ -1000,7 +1005,7 @@ async function animate(it) {
   const out = [{ rgba: cut(it.mask, frames[0].canvas), delay: frames[0].delay }];
   for (let i = 1; i < frames.length; i++) {
     if (!items.includes(it)) return;
-    say(it, `Frame ${i + 1} of ${frames.length}`);
+    say(it, t("Frame {i} of {n}", { i: i + 1, n: frames.length }));
     working("gif", it);
     const m = await segment(frames[i].canvas);
     out.push({ rgba: cut(m, frames[i].canvas), delay: frames[i].delay });
@@ -1041,8 +1046,8 @@ const mimeOf = (n) => ({ jpg: "image/jpeg", jpeg: "image/jpeg", jfif: "image/jpe
 const isPicture = (f) => !(f instanceof Blob) || !f.type || f.type.startsWith("image/") || IMG_EXT.test(f.name || "") || isZip(f);
 function skipped(bad) {
   if (!bad.length) return;
-  const msg = bad.length === 1 ? (bad[0].msg ? `${bad[0].name}: ${bad[0].msg}` : `${bad[0].name} isn’t an image goodbye.bg can open.`)
-    : `Skipped ${bad.length} files goodbye.bg can’t open: ${bad.map((b) => b.name).join(", ")}.`;
+  const msg = bad.length === 1 ? (bad[0].msg ? `${bad[0].name}: ${bad[0].msg}` : t("{name} isn’t an image goodbye.bg can open.", { name: bad[0].name }))
+    : t("Skipped {n} files goodbye.bg can’t open: {names}.", { n: bad.length, names: bad.map((b) => b.name).join(", ") });
   tell(msg, $("pick").parentElement, 8000); // #tell is a status region: read out once
 }
 function unopened(it) {
@@ -1060,7 +1065,7 @@ function closeAddTell() {
 async function addSources(list, origin = "") {
   list = list.filter(Boolean);
   if (list.length) closeAddTell();
-  const bad = list.filter((f) => !isPicture(f)).map((f) => ({ name: f.name || "That file" }));
+  const bad = list.filter((f) => !isPicture(f)).map((f) => ({ name: f.name || t("That file") }));
   list = list.filter(isPicture);
   if (list.length) startModel(); // now, not after the decode (or a link's fetch): the download is the long part
   let zipFailed = false;
@@ -1068,13 +1073,13 @@ async function addSources(list, origin = "") {
     const out = [];
     for (const src of list) {
       if (!isZip(src)) { out.push(src); continue; }
-      try { out.push(...await unzipImages(src)); } catch (e) { console.warn(e); tell("Could not open that ZIP."); zipFailed = true; }
+      try { out.push(...await unzipImages(src)); } catch (e) { console.warn(e); tell(t("Could not open that ZIP.")); zipFailed = true; }
     }
     list = out;
   }
   const over = list.length > MAX_BATCH;
   list = list.slice(0, MAX_BATCH);
-  if (!list.length) { if (bad.length) skipped(bad); else if (!zipFailed) tell("No image found there. Try a photo file, a copied image, or an image link."); return; } // a broken ZIP already said so
+  if (!list.length) { if (bad.length) skipped(bad); else if (!zipFailed) tell(t("No image found there. Try a photo file, a copied image, or an image link.")); return; } // a broken ZIP already said so
   await restoring; // kept photos go in first, so this batch lands on top of them
   adsStraight = adsQuiet = false; // a new batch's ads wait for its reveal, as usual
   const top = keyBase();
@@ -1088,7 +1093,7 @@ async function addSources(list, origin = "") {
     return [it, src];
   });
   await landing(() => { show(); $("grid").prepend(cards); sync(); });
-  if (over) tell(`Added the first ${MAX_BATCH}. Add the rest once these are done.`);
+  if (over) tell(t("Added the first {n}. Add the rest once these are done.", { n: MAX_BATCH }));
   else skipped(bad);
   const broken = [];
   for (const [it, src] of batch) { // one decode at a time: a full-size decode is big
@@ -1126,24 +1131,26 @@ async function openOne(it, src) {
     console.warn(e);
     unopened(it); // no card for a file that can't be opened (addSources names it)
     run();
-    return e.message || "Could not open this image.";
+    return e.message || t("Could not open this image.");
   }
   run();
 }
 
+// Messages the link fetcher (functions/api/fetch.js) writes for people, in the visitor's language when known.
+const saidHere = (m) => { const a = /^The other site answered (\d+)\.$/.exec(m); return a ? t("The other site answered {status}.", { status: a[1] }) : t(m); };
 async function toBlob(src) {
   if (src instanceof Blob) return { blob: src, name: src.name || "pasted" };
   const s = String(src).trim();
   if (s.startsWith("data:")) {
     const m = s.match(/^data:([^;,]*)(;base64)?,(.*)$/s);
-    if (!m) throw new Error("That data link is not an image.");
+    if (!m) throw new Error(t("That data link is not an image."));
     const raw = m[2] ? atob(m[3]) : decodeURIComponent(m[3]);
     return { blob: new Blob([Uint8Array.from(raw, (c) => c.charCodeAt(0))], { type: m[1] || "image/png" }), name: "pasted" };
   }
   if (s.startsWith("blob:")) return { blob: await (await fetch(s)).blob(), name: "image" };
   const url = new URL(s);
   const res = await fetch(`/api/fetch?url=${encodeURIComponent(url.href)}`);
-  if (!res.ok) throw new Error((await res.text()).slice(0, 200) || `Could not get that link (${res.status}).`);
+  if (!res.ok) throw new Error(saidHere((await res.text()).slice(0, 200)) || t("Could not get that link ({status}).", { status: res.status }));
   return { blob: await res.blob(), name: url.pathname };
 }
 
@@ -1172,11 +1179,11 @@ async function decodeElsewhere(blob) {
     const buf = await blob.arrayBuffer();
     const r = await new Promise((res, rej) => {
       w.onmessage = (e) => res(e.data);
-      w.onerror = (e) => { e.preventDefault?.(); rej(new Error("Could not open this image. Check your connection and try again.")); };
+      w.onerror = (e) => { e.preventDefault?.(); rej(new Error(t("Could not open this image. Check your connection and try again."))); };
       w.postMessage({ buf, name: blob.name || "", type: blob.type || "" }, [buf]);
     });
     if (r.bitmap) return r.bitmap;
-    throw new Error(r.say ? r.error : r.raw ? "This RAW file has no full-size preview inside. Export it as JPG first." : "This file isn’t an image goodbye.bg can open.");
+    throw new Error(r.say ? t(r.error) : t(r.raw ? "This RAW file has no full-size preview inside. Export it as JPG first." : "This file isn’t an image goodbye.bg can open."));
   } finally { w.terminate(); }
 }
 
@@ -1222,25 +1229,25 @@ function makeCard(it) {
   const card = document.createElement("article"); card.className = "card";
   const pic = document.createElement("div"); pic.className = "pic";
   const canvas = document.createElement("canvas");
-  canvas.setAttribute("role", "img"); canvas.setAttribute("aria-label", "Image");
+  canvas.setAttribute("role", "img"); canvas.setAttribute("aria-label", t("Image"));
   const busy = document.createElement("div"); busy.className = "busy";
   card.classList.add("queued"); // waits quietly; only the photo being worked on waves and talks
   card.setAttribute("aria-busy", "true");
-  const x = document.createElement("button"); x.type = "button"; x.className = "x"; x.textContent = "×"; x.setAttribute("aria-label", "Remove"); x.title = "Remove";
+  const x = document.createElement("button"); x.type = "button"; x.className = "x"; x.textContent = "×"; x.setAttribute("aria-label", t("Remove")); x.title = t("Remove");
   const crop = document.createElement("button"); crop.type = "button"; crop.className = "crop"; crop.style.visibility = "hidden"; // keeps its place, so the bar never shifts
-  crop.setAttribute("aria-label", "Crop to subject"); crop.title = "Crop to subject"; crop.setAttribute("aria-pressed", "true");
+  crop.setAttribute("aria-label", t("Crop to subject")); crop.title = t("Crop to subject"); crop.setAttribute("aria-pressed", "true");
   crop.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M2 6h14a2 2 0 0 1 2 2v14"/></svg>';
-  const img = document.createElement("img"); img.alt = "Cut-out"; img.draggable = true;
+  const img = document.createElement("img"); img.alt = t("Cut-out"); img.draggable = true;
   img.addEventListener("touchstart", () => holdFull(it), { passive: true });
   img.addEventListener("contextmenu", () => holdFull(it));
   pic.addEventListener("click", () => { if (adEls.length && it.mask) { tick(); showArt(it); } });
   pic.append(canvas, img, busy);
   const bar = document.createElement("div"); bar.className = "bar";
   const dl = document.createElement("button"); dl.type = "button"; dl.className = "btn primary dl"; dl.disabled = true;
-  dl.setAttribute("aria-label", "Download"); dl.title = "Download";
-  dl.innerHTML = '<span>Download</span><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>';
+  dl.setAttribute("aria-label", t("Download")); dl.title = t("Download");
+  dl.innerHTML = `<span>${t("Download")}</span>` + '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>';
   const up = document.createElement("button"), down = document.createElement("button");
-  for (const [b, label, emoji] of [[up, "Good result", "👍"], [down, "Bad result", "👎"]]) {
+  for (const [b, label, emoji] of [[up, t("Good result"), "👍"], [down, t("Bad result"), "👎"]]) {
     b.type = "button"; b.className = "ico rate"; b.textContent = emoji; b.style.visibility = "hidden";
     b.setAttribute("aria-label", label); b.title = label;
   }
@@ -1249,7 +1256,7 @@ function makeCard(it) {
   const rates = document.createElement("div"); rates.className = "rates"; rates.append(up, down);
   x.classList.add("ico"); crop.classList.add("ico");
   const bgb = document.createElement("button"); bgb.type = "button"; bgb.className = "ico bgb"; bgb.style.visibility = "hidden";
-  bgb.setAttribute("aria-label", "Background"); bgb.title = "Background"; bgb.setAttribute("aria-expanded", "false");
+  bgb.setAttribute("aria-label", t("Background")); bgb.title = t("Background"); bgb.setAttribute("aria-expanded", "false");
   bgb.innerHTML = '<span class="sw"></span>';
   const pick = bgPicker(it, crop, x), opts = optsRow(it);
   const say = document.createElement("p"); say.className = "say"; // the quip while this photo is worked on: in the bar, never on the photo
@@ -1279,7 +1286,7 @@ function makeCard(it) {
     // A big photo takes a few seconds to build at full size: the button shimmers meanwhile (not for a quick one).
     const slow = setTimeout(() => dl.setAttribute("aria-busy", "true"), 150);
     try { const blob = await png(it); clearTimeout(slow); dl.removeAttribute("aria-busy"); await deliver([{ name: outName(it), blob }]); }
-    catch (e) { console.error(e); report("save-failed", e, it); tell("Could not save this image. Try again.", dl); }
+    catch (e) { console.error(e); report("save-failed", e, it); tell(t("Could not save this image. Try again."), dl); }
     finally { clearTimeout(slow); dl.removeAttribute("aria-busy"); it.saving = false; }
   });
 
@@ -1300,7 +1307,7 @@ let picking = null;
 // Every swatch is one tap: it sets the background and closes the row (your photo once the picture is picked).
 function bgPicker(it, crop, x) {
   const pick = document.createElement("div"); pick.className = "bgs"; pick.hidden = true;
-  pick.setAttribute("role", "group"); pick.setAttribute("aria-label", "Background");
+  pick.setAttribute("role", "group"); pick.setAttribute("aria-label", t("Background"));
   // Pages break between groups (pageRow): the colours, then blur soft + strong (never split) and your photo, then crop
   // and remove when the bar has no room for them. Size, margin, shadow (sliders) is pinned next to ›, on every page.
   const pcrop = crop.cloneNode(true); pcrop.className = "swb crop pcrop pg"; pcrop.style.visibility = ""; pcrop.dataset.g = "ctl";
@@ -1308,14 +1315,15 @@ function bgPicker(it, crop, x) {
   const swatch = (v, label, cls) => {
     const b = document.createElement("button"); b.type = "button"; b.className = `swb pg ${cls}`; b.dataset.bg = v || "";
     b.dataset.g = String(v).startsWith("blur") ? "back" : "colour"; if (String(v).startsWith("blur")) b.dataset.u = "blur";
-    b.setAttribute("aria-label", label); b.title = label;
+    label = t(label); b.setAttribute("aria-label", label); b.title = label;
     b.innerHTML = '<span class="sw"></span>';
     b.addEventListener("click", () => { setBg(it, v); closePick(); });
     return b;
   };
   BGS.forEach(([v, label], i) => { const b = swatch(v, label, `sw${i}`); if (v) b.firstChild.style.background = v; pick.append(b); });
-  const own = document.createElement("label"); own.className = "swb custom pg"; own.title = "Any colour"; own.dataset.g = "colour";
-  own.innerHTML = '<span class="sw"></span><input type="color" value="#69d2e7" aria-label="Any colour">';
+  const own = document.createElement("label"); own.className = "swb custom pg"; own.title = t("Any colour"); own.dataset.g = "colour";
+  own.innerHTML = '<span class="sw"></span><input type="color" value="#69d2e7">';
+  own.querySelector("input").setAttribute("aria-label", t("Any colour"));
   const input = own.querySelector("input");
   let raf = 0;
   input.addEventListener("input", () => { // live on the card while the colour picker is open
@@ -1327,13 +1335,14 @@ function bgPicker(it, crop, x) {
   // Blur: the photo's own background, soft or strong (the subject stays sharp).
   BLURS.forEach(([v, label], i) => pick.append(swatch(v, label, `blur b${i + 1}`)));
   // Your own picture behind the subject: picked here or dropped on the row (see the drop handler). Never uploaded.
-  const photo = document.createElement("label"); photo.className = "swb photo pg"; photo.title = "Your photo"; photo.dataset.g = "back";
-  photo.innerHTML = '<span class="sw"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 16 5-5 4 4 3-3 6 6"/></svg></span><input type="file" accept="image/*" aria-label="Your photo as the background">';
+  const photo = document.createElement("label"); photo.className = "swb photo pg"; photo.title = t("Your photo"); photo.dataset.g = "back";
+  photo.innerHTML = '<span class="sw"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 16 5-5 4 4 3-3 6 6"/></svg></span><input type="file" accept="image/*">';
+  photo.querySelector("input").setAttribute("aria-label", t("Your photo as the background"));
   const file = photo.querySelector("input");
   file.addEventListener("change", () => { const f = file.files[0]; file.value = ""; if (f) useBack(it, f); });
   pick.append(photo);
   const more = document.createElement("button"); more.type = "button"; more.className = "swb more";
-  more.setAttribute("aria-label", "Size, margin, shadow"); more.title = "Size, margin, shadow";
+  more.setAttribute("aria-label", t("Size, margin, shadow")); more.title = t("Size, margin, shadow");
   more.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>';
   more.addEventListener("click", () => { tick(); openOpts(it); });
   const px = x.cloneNode(true); px.className = "swb px pg"; px.dataset.g = "ctl"; px.addEventListener("click", () => x.click());
@@ -1417,7 +1426,7 @@ function showPage(row, i, focus = false) {
   row.pages.forEach((pg, k) => { for (const e of pg) e.classList.toggle("off", k !== row.page); });
   const last = row.page === n - 1 && n > 1;
   next.classList.toggle("back", last);
-  const label = last ? "Back to the first" : "More"; next.setAttribute("aria-label", label); next.title = label;
+  const label = t(last ? "Back to the first" : "More"); next.setAttribute("aria-label", label); next.title = label;
   if (focus) (row.pages[row.page][0] || next).focus({ preventScroll: true });
 }
 // The background button is easy to miss: on a device's first cut-out it rings twice, until the picker has been opened.
@@ -1509,7 +1518,7 @@ function wholeForBlur(it, v) {
   else return;
   if (it.el) paintCrop(it);
 }
-const bgName = (v) => { const k = bgKind(v); return k === "blur" ? (v === "blur:2" ? "Strong blur" : "Soft blur") : k === "img" ? "Your photo" : BGS.find(([c]) => c === (v || null))?.[1] || v; };
+const bgName = (v) => { const k = bgKind(v); const n = k === "blur" ? (v === "blur:2" ? "Strong blur" : "Soft blur") : k === "img" ? "Your photo" : BGS.find(([c]) => c === (v || null))?.[1]; return n ? t(n) : v; };
 // The trigger shows the current background; the picker marks it.
 function paintBg(it) {
   const { bgb, pick } = it.el, v = it.bg || null, kind = bgKind(v), own = kind === "color" && !BGS.some(([c]) => c === v);
@@ -1522,12 +1531,12 @@ function paintBg(it) {
   c.classList.toggle("set", !!own); c.setAttribute("aria-pressed", String(!!own));
   c.firstChild.style.background = own ? v : "";
   if (own) c.querySelector("input").value = v;
-  c.querySelector("input").setAttribute("aria-label", own ? "Any colour, chosen" : "Any colour"); // the label's aria-pressed isn't announced
+  c.querySelector("input").setAttribute("aria-label", t(own ? "Any colour, chosen" : "Any colour")); // the label's aria-pressed isn't announced
   const ph = pick.querySelector(".photo"), psw = ph.firstChild;
   ph.setAttribute("aria-pressed", String(kind === "img")); ph.classList.toggle("set", !!back?.thumb);
-  ph.querySelector("input").setAttribute("aria-label", kind === "img" ? "Your photo as the background, chosen" : "Your photo as the background");
+  ph.querySelector("input").setAttribute("aria-label", t(kind === "img" ? "Your photo as the background, chosen" : "Your photo as the background"));
   psw.style.backgroundImage = back?.thumb ? `url("${back.thumb}")` : "";
-  const label = `Background: ${bgName(v)}`;
+  const label = t("Background: {name}", { name: bgName(v) });
   bgb.setAttribute("aria-label", label); bgb.title = label;
 }
 
@@ -1540,14 +1549,14 @@ const CHECK = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" strok
 const COPY = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 4H6a2 2 0 0 0-2 2v10"/></svg>';
 function optsRow(it) {
   const o = document.createElement("div"); o.className = "opts"; o.hidden = true;
-  o.setAttribute("role", "group"); o.setAttribute("aria-label", "Size, margin, shadow");
+  o.setAttribute("role", "group"); o.setAttribute("aria-label", t("Size, margin, shadow"));
   const done = document.createElement("button"); done.type = "button"; done.className = "swb odone"; done.innerHTML = CHECK;
-  done.setAttribute("aria-label", "Done"); done.title = "Done";
+  done.setAttribute("aria-label", t("Done")); done.title = t("Done");
   done.addEventListener("click", () => { tick(); closePick(true); });
   const sel = (cls, label, list) => {
     const w = document.createElement("span"); w.className = "selw pg " + cls;
-    const s = document.createElement("select"); s.className = "osel"; s.setAttribute("aria-label", label);
-    for (const [v, t] of list) { const op = document.createElement("option"); op.value = String(v); op.textContent = t; s.append(op); }
+    const s = document.createElement("select"); s.className = "osel"; s.setAttribute("aria-label", label = t(label));
+    for (const [v, text] of list) { const op = document.createElement("option"); op.value = String(v); op.textContent = t(text); s.append(op); }
     w.title = label; w.append(s); return w;
   };
   const size = sel("osize", "Size", SIZES), margin = sel("omargin", "Margin around the subject", MARGINS);
@@ -1562,7 +1571,7 @@ function optsRow(it) {
   });
   const num = (cls, label, key) => {
     const n = document.createElement("input"); n.type = "number"; n.inputMode = "numeric"; n.min = "16"; n.max = String(OUT_MAX); n.step = "1";
-    n.className = "onum " + cls; n.setAttribute("aria-label", label); n.title = label;
+    n.className = "onum " + cls; label = t(label); n.setAttribute("aria-label", label); n.title = label;
     n.addEventListener("change", () => { const v = Math.round(Math.min(OUT_MAX, Math.max(16, +n.value || OUT0[key]))); n.value = v; setOut(it, { [key]: v }); });
     return n;
   };
@@ -1571,20 +1580,20 @@ function optsRow(it) {
   dim.append(num("ocw", "Width in pixels", "cw"), by, num("och", "Height in pixels", "ch"));
   // On/off chips show a check mark when on; "Apply to all" is an action (its own icon, never "on").
   const chip = (cls, text, label) => {
-    const b = document.createElement("button"); b.type = "button"; b.className = `btn ochip pg ${cls}`; b.title = label;
-    b.innerHTML = `${CHECK}<span>${text}</span>`; b.setAttribute("aria-pressed", "false"); return b;
+    const b = document.createElement("button"); b.type = "button"; b.className = `btn ochip pg ${cls}`; b.title = t(label);
+    b.innerHTML = `${CHECK}<span>${t(text)}</span>`; b.setAttribute("aria-pressed", "false"); return b;
   };
   const shadow = chip("oshadow", "Shadow", "Shadow under the subject");
   shadow.addEventListener("click", () => { tick(); setOut(it, { shadow: !outOf(it).shadow }); });
   const webp = chip("owebp", "WebP", "Save as WebP (smaller files)");
   webp.addEventListener("click", () => { tick(); setOut(it, { fmt: outOf(it).fmt ? null : "webp" }); });
   const all = document.createElement("button"); all.type = "button"; all.className = "btn ochip oall pg";
-  all.title = "Use this background and these options for every photo";
-  all.innerHTML = `${COPY}<span>Apply to all</span>`;
+  all.title = t("Use this background and these options for every photo");
+  all.innerHTML = `${COPY}<span>${t("Apply to all")}</span>`;
   all.addEventListener("click", () => {
     tick(); useForAll(it);
-    all.innerHTML = `${CHECK}<span>Applied</span>`; clearTimeout(all.t);
-    all.t = setTimeout(() => (all.innerHTML = `${COPY}<span>Apply to all</span>`), 1400);
+    all.innerHTML = `${CHECK}<span>${t("Applied")}</span>`; clearTimeout(all.t);
+    all.t = setTimeout(() => (all.innerHTML = `${COPY}<span>${t("Apply to all")}</span>`), 1400);
   });
   o.append(done, size, dim, margin, shadow, all, webp, pager(o)); // most used first
   [...o.children].forEach((c, i) => c.style.setProperty("--i", i));
@@ -1607,7 +1616,7 @@ function paintOpts(it) {
   // crop on (it used to grey out with no reason given).
   const whole = o.size === "orig" && !it.crop;
   q(".omargin select").value = whole ? "0" : String(MARGINS.some(([v]) => v === o.margin) ? o.margin : OUT0.margin);
-  q(".omargin").title = whole ? "Margin around the subject (turns the crop on)" : "Margin around the subject";
+  q(".omargin").title = t(whole ? "Margin around the subject (turns the crop on)" : "Margin around the subject");
   q(".ocw").value = o.cw; q(".och").value = o.ch;
   q(".odim").hidden = !custom;
   q(".oshadow").setAttribute("aria-pressed", String(!!o.shadow));
@@ -1635,7 +1644,7 @@ function useForAll(from) {
 // The file name tells screen readers which photo a card (and its Download, Remove…) belongs to.
 function named(it, name) {
   it.name = name;
-  it.el.card.setAttribute("aria-label", name); it.el.img.alt = `${name}, background removed`; it.el.canvas.setAttribute("aria-label", name);
+  it.el.card.setAttribute("aria-label", name); it.el.img.alt = t("{name}, background removed", { name }); it.el.canvas.setAttribute("aria-label", name);
 }
 // Screen readers hear when a photo is done or failed (a polite status line, always in the page; #tell comes and goes).
 function announce(msg) {
@@ -1656,7 +1665,7 @@ function offerUndo(u) {
   // "Removed." on screen (camera names like IMG_4823 are noise next to the ringed card); screen readers hear the name.
   const said = bar.firstChild, who = document.createElement("span");
   who.className = "sr-only"; who.textContent = ` ${u.it.name}`;
-  said.replaceChildren("Removed", who, ".");
+  said.replaceChildren(t("Removed"), who, ".");
   bar.hidden = false;
   // In the footer's place (the footer fades out meanwhile), so it covers neither the count nor the cards.
   const f = document.querySelector(".foot").getBoundingClientRect();
@@ -1765,15 +1774,15 @@ async function run() {
       await nextFrame();
       working(engineReady ? "model" : "load", it);
       try { it.mask = await segment(it.bmp); finished++; }
-      catch (e) { if (!items.includes(it)) continue; console.error(e); report("run-failed", e, it); fail(it, "Could not process this image."); continue; } // removed meanwhile: not a failure
-      if (!it.mask.box) { it.mask = null; fail(it, "No clear subject in this photo."); continue; }
+      catch (e) { if (!items.includes(it)) continue; console.error(e); report("run-failed", e, it); fail(it, t("Could not process this image.")); continue; } // removed meanwhile: not a failure
+      if (!it.mask.box) { it.mask = null; fail(it, t("No clear subject in this photo.")); continue; }
       it.ms = lastMs; it.engine = lastEngine;
       // Removed meanwhile: Undo finishes it (undoRemove). A GIF cut short starts over (its frames were let go).
       if (!items.includes(it)) { it.unfinished = true; if (it.anim) it.mask = null; continue; }
       if (it.anim) try { await animate(it); } catch (e) { console.error(e); report("gif-failed", e, it); it.anim = null; it.png = null; }
       if (!items.includes(it)) { it.unfinished = true; if (it.anim && !it.gifUrl) it.mask = null; continue; }
       ready(it); dbg("shown"); keep(it);
-      { const left = items.filter((i) => i.bmp && !i.mask && !i.failed).length; announce(`${it.name}: background removed.${left ? ` ${left} to go.` : ""}`); }
+      { const left = items.filter((i) => i.bmp && !i.mask && !i.failed).length; announce(left ? t("{name}: background removed. {n} to go.", { name: it.name, n: left }) : t("{name}: background removed.", { name: it.name })); }
       dbg("reveal"); reveal(it); sync(); tick(); milestone(it);
       it.el.card.dataset.ms = lastMs;
     }
@@ -1889,8 +1898,8 @@ function zoomRect(it) {
 }
 // The 👎 label says what it will do.
 function downLabel(it) {
-  const t = !it.retried && zoomRect(it) ? "Bad result, try again" : "Bad result";
-  it.el.down.setAttribute("aria-label", t); it.el.down.title = t;
+  const label = t(!it.retried && zoomRect(it) ? "Bad result, try again" : "Bad result");
+  it.el.down.setAttribute("aria-label", label); it.el.down.title = label;
 }
 
 async function retry(it) {
@@ -1928,7 +1937,7 @@ async function retry(it) {
   if (changed) { it.vote = null; for (const b of [up, down]) { b.disabled = false; b.classList.remove("chosen"); b.style.visibility = ""; } }
   downLabel(it); keep(it);
   if (document.activeElement === it.el.card) dl.focus({ preventScroll: true });
-  announce(`${it.name}: ${changed ? "tried again, new result" : "tried again, no better result"}`);
+  announce(t(changed ? "{name}: tried again, new result" : "{name}: tried again, no better result", { name: it.name }));
 }
 
 // Everything fits on one screen: cards are square and sized so they all fit the space left.
@@ -2105,12 +2114,12 @@ function buildAd(i) {
     a.querySelector(".adicon").replaceWith(c);
     a.classList.add("artcard"); // the picture says it; the line stays in the label for screen readers
   } else a.querySelector(".adicon").textContent = p.emoji;
-  a.querySelector(".adline").textContent = x.line;
-  a.querySelector(".adcta").textContent = cta;
-  a.querySelector(".adtag").textContent = adLabel;
+  a.querySelector(".adline").textContent = t(x.line);
+  a.querySelector(".adcta").textContent = t(cta);
+  a.querySelector(".adtag").textContent = t(adLabel); // shown translated; the l= sent to /go stays "ad" or "sponsored"
   // The name starts with the words on screen (voice control); the rest is the description.
-  a.setAttribute("aria-label", `${adLabel}: ${cta}`);
-  a.setAttribute("aria-description", `${x.line}${CAP && p.id === "zazzle" ? ` Takes this cut-out to ${p.name}.` : ""}`);
+  a.setAttribute("aria-label", `${t(adLabel)}: ${t(cta)}`);
+  a.setAttribute("aria-description", `${t(x.line)}${CAP && p.id === "zazzle" ? " " + t("Takes this cut-out to {name}.", { name: p.name }) : ""}`);
   $("grid").insertBefore(a, gridEnd());
   adWatch.observe(a); // the cut-out beat starts once ads are on screen
   a.tilt = { phase: i * 2.1, mix: 0, x: 0, y: 0, t: 0 }; // each card sways out of step with the others
@@ -2448,7 +2457,7 @@ function drawMug(c, src) {
 function sync() {
   const done = items.filter((i) => i.mask).length;
   $("all").style.visibility = done < 2 ? "hidden" : "";
-  if (!$("all").hasAttribute("aria-busy")) $("all").textContent = `Download all (${done})`; // not over "Preparing 3 of 8…"
+  if (!$("all").hasAttribute("aria-busy")) $("all").textContent = t("Download all ({n})", { n: done }); // not over "Preparing 3 of 8…"
   $("tools").hidden = items.length < 2; // reserve the row early so the cards don't jump
   if (!items.length) document.body.classList.remove("has-work");
   try { localStorage.setItem("gb-kept", String(items.length)); } catch {} // early.js: start in the photos layout next visit
@@ -2481,7 +2490,7 @@ $("all").addEventListener("click", async () => {
   if (zipping) return; // a second tap while it works would build it all again
   zipping = true; $("all").setAttribute("aria-busy", "true");
   try { await saveAll(); }
-  catch (e) { console.error(e); report("zip-failed", e); tell("Could not save them all. Try again, or save them one by one.", $("all")); }
+  catch (e) { console.error(e); report("zip-failed", e); tell(t("Could not save them all. Try again, or save them one by one."), $("all")); }
   finally { zipping = false; $("all").removeAttribute("aria-busy"); }
 });
 async function saveAll() {
@@ -2506,7 +2515,7 @@ async function saveAll() {
     if (held > 32 * 2 ** 20) { parts.push(new Blob(chunks.splice(0))); held = 0; }
   });
   for (const [n, it] of done.entries()) {
-    $("all").textContent = `Preparing ${n + 1} of ${done.length}…`; // on the button itself (sync puts its label back)
+    $("all").textContent = t("Preparing {i} of {n}…", { i: n + 1, n: done.length }); // on the button itself (sync puts its label back)
     let name = outName(it);
     for (let k = 2; used.has(name); k++) name = `${it.name}-goodbye-bg-${k}.${ext(it)}`;
     used.add(name);
@@ -2693,7 +2702,7 @@ async function fillRestored(list) {
       it.bmp = bmp; // only now: a running batch picks up photos that have a bitmap and no mask
       if (it.mask) { ready(it); if (it.vote) showVote(it, it.vote); adsStraight = true; } // no reveal to wait for: ads come straight in
       drawCard(it);
-    } catch (e) { console.warn("Could not bring back a kept photo", e); fail(it, "Could not open this image."); }
+    } catch (e) { console.warn("Could not bring back a kept photo", e); fail(it, t("Could not open this image.")); }
   }
   restoredShown();
   sync();
@@ -2734,7 +2743,7 @@ else {
         out.push(...linksFrom(html, text));
       }
       addSources(out);
-    } catch { tell(PHONE || !DESKTOP ? "Paste was blocked. Allow it, or use Choose photos." : "Paste was blocked. Use ⌘/Ctrl + V, or allow clipboard access.", $("paste")); }
+    } catch { tell(t(PHONE || !DESKTOP ? "Paste was blocked. Allow it, or use Choose photos." : "Paste was blocked. Use ⌘/Ctrl + V, or allow clipboard access."), $("paste")); }
   });
 }
 
@@ -2763,7 +2772,7 @@ addEventListener("drop", async (e) => {
   const got = await fromDataTransfer(e.dataTransfer);
   if (!to) return addSources(got);
   const f = got.find((g) => g instanceof Blob && !isZip(g));
-  if (f) useBack(to, f); else tell("Drop a picture file here.", to.el.bgb);
+  if (f) useBack(to, f); else tell(t("Drop a picture file here."), to.el.bgb);
 });
 
 
@@ -2782,7 +2791,7 @@ if (params.has("share")) {
         await cache.delete(req);
       }
       addSources(out);
-    } catch { tell("Could not read the shared image."); }
+    } catch { tell(t("Could not read the shared image.")); }
   })();
 }
 if (params.has("url") || params.has("share")) history.replaceState(null, "", location.pathname);
@@ -2817,7 +2826,7 @@ function startModel() { // a declaration, with no outside let: ?url= calls addSo
   if (p === startModel.asked) return;
   startModel.asked = p;
   p.then(() => { try { localStorage.setItem("gb-model", "1"); } catch {} },
-    (e) => { console.error(e); tell("Could not load. Check your connection and reload.", $("pick").parentElement, 10_000); });
+    (e) => { console.error(e); tell(t("Could not load. Check your connection and reload."), $("pick").parentElement, 10_000); });
 }
 {
   let seen = false; try { seen = !!localStorage.getItem("gb-model") || +localStorage.getItem("gb-kept") > 0; } catch {}
@@ -2847,4 +2856,4 @@ function startModel() { // a declaration, with no outside let: ?url= calls addSo
   }
 }
 // Safari before 16.4 (iOS 16.3 and older) has no OffscreenCanvas, which every cut-out needs: say so instead of failing.
-if (typeof OffscreenCanvas === "undefined") tell("This browser is too old for goodbye.bg. Update it, then come back.", $("pick").parentElement, 60_000);
+if (typeof OffscreenCanvas === "undefined") tell(t("This browser is too old for goodbye.bg. Update it, then come back."), $("pick").parentElement, 60_000);
