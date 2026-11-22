@@ -1514,6 +1514,25 @@ function landing(change) {
    👍 and 👎 send an anonymous count to /api/rate: the vote, the engine, the run time and the photo's
    megapixels. Never the photo. 👎 then runs the model again, zoomed in on the subject, which gives
    it more pixels to work with. The retry can be rated too. */
+// Other languages: one quiet line in the footer to rate the translation (Kevin, 2026-11-22: "a super subtle way to
+// rate the translation"). One tap, an anonymous count of the language and the vote, "Thanks." and it's gone for good
+// in this browser (gb-tr). The translations haven't had a native speaker yet; this says which language needs one.
+if (LANG !== "en") try {
+  if (localStorage.getItem("gb-tr") !== LANG) {
+    const p = document.querySelector(".foot p:last-child"), s = document.createElement("span"); s.className = "trrate";
+    s.append(" · " + t("Translation") + " ");
+    for (const [vote, e, label] of [["up", "👍", t("Good translation")], ["down", "👎", t("Bad translation")]]) {
+      const b = document.createElement("button"); b.type = "button"; b.textContent = e; b.title = label; b.setAttribute("aria-label", label);
+      b.addEventListener("click", () => {
+        postJSON("/api/rate", JSON.stringify({ kind: "lang", lang: LANG, vote, ...(TEST && { t: 1 }) }));
+        try { localStorage.setItem("gb-tr", LANG); } catch {}
+        s.textContent = " · " + t("Thanks."); tick();
+      });
+      s.append(b);
+    }
+    p?.append(s);
+  }
+} catch {}
 function sendRating(it, vote) {
   const body = JSON.stringify({ vote, engine: it.engine || engineTag(), retry: !!it.retried, ms: it.ms || 0, mp: mpOf(it), ...(TEST && { t: 1 }) });
   postJSON("/api/rate", body);

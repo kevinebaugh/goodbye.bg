@@ -231,6 +231,9 @@ body.hot .c { animation: squeeze .8s ease-in-out infinite alternate; }
 .foot { width: 100%; max-width: 520px; margin: 0 auto; padding: 24px 16px; font-size: 12px; line-height: 1.45; color: var(--muted); /* 4.7:1: no fading */ text-align: center; display: grid; gap: 4px; }
 .foot a { color: inherit; }
 .foot p { margin: 0; }
+/* Rate the translation (other languages only): two bare emoji in the footer's line, no chips. */
+.trrate button { border: 0; background: none; padding: 0 2px; font: inherit; cursor: pointer; filter: grayscale(1); opacity: .8; }
+@media (hover: hover) { .trrate button:hover { filter: none; opacity: 1; } }
 /* Empty page: the hero and footer sit together, a little above the middle, instead of the footer
    hugging the bottom of a tall window. Once photos arrive, the grid takes the space. */
 body:not(.has-work) main { flex: none; margin-top: auto; }

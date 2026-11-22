@@ -1,5 +1,5 @@
 // POST /api/rate
-// A thumbs up or down on one result. Stores an anonymous data point: the vote, which engine
+// A thumbs up or down on one result, or on the page's translation (kind "lang"). Stores an anonymous data point: the vote, which engine
 // ran, whether it was a retry, the run time and the photo's size in megapixels.
 // Never the photo, never an IP address, no cookies.
 
@@ -15,6 +15,13 @@ export async function onRequestPost({ request, env }) {
   if (isTest(request, b)) return ok(); // a test visit (lib/test-traffic.mjs): not counted
   const vote = b?.vote === "up" || b?.vote === "down" ? b.vote : null;
   if (!vote) return new Response("Bad request", { status: 400 });
+  // A vote on the translation (the footer, other languages only): blob1 tr-up/tr-down, blob2 the language.
+  if (b.kind === "lang") {
+    const lang = ["de", "es", "fr", "pt-BR", "id"].includes(b.lang) ? b.lang : null;
+    if (!lang) return new Response("Bad request", { status: 400 });
+    env.RATINGS?.writeDataPoint({ blobs: [`tr-${vote}`, lang], doubles: [1], indexes: ["tr"] });
+    return ok();
+  }
   const engine = engineOf(b.engine);
   const ms = Math.max(0, Math.min(600_000, Number(b.ms) || 0));
   const mp = Math.max(0, Math.min(1000, Number(b.mp) || 0));

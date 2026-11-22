@@ -339,6 +339,9 @@ Quips must fit two lines in a 165 px card's bar.
 
 Anonymous counts the page sends (never photo data), to Workers Analytics Engine dataset `goodbye_bg_ratings`:
 - 👍/👎 to `/api/rate`: blob1 vote, blob2 engine, blob3 first/retry, double1 ms, double2 megapixels.
+- Translation votes (other languages only): one line at the end of the footer's links, "Übersetzung 👍 👎" (Kevin,
+  2026-11-22: "a super subtle way to rate the translation"); one tap, then "Danke." and never again in that browser
+  (`gb-tr`). `/api/rate` with `kind: "lang"`: blob1 'tr-up'/'tr-down', blob2 the language. Per language, not per string.
 - Crash reports to `/api/crash`: the page leaves a note in localStorage while working on a photo; the next visit sends
   it if the tab died (blob2 engine, blob3 step, blob4 device, blob6 the last 20 steps, double1 photos done, double2
   megapixels). GPU step-downs are sent at once.
@@ -367,6 +370,8 @@ Queries (`POST /accounts/<account>/analytics_engine/sql`, text/plain body):
     FROM goodbye_bg_ratings WHERE blob1 = 'view' GROUP BY day, device, from_site ORDER BY day DESC
     SELECT blob1 AS kind, blob2 AS partner, blob5 AS variant, count() AS n
     FROM goodbye_bg_ratings WHERE blob1 IN ('adseen','adclick') GROUP BY kind, partner, variant
+    SELECT blob2 AS lang, blob1 AS vote, count() AS n
+    FROM goodbye_bg_ratings WHERE blob1 IN ('tr-up','tr-down') GROUP BY lang, vote
 
 Ad tests: clicks / shows per variant (blob5) or label (blob6); expect a few hundred clicks per variant before trusting
 a difference.
