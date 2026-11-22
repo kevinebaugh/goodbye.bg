@@ -146,7 +146,7 @@ const TEST = !!navigator.webdriver || TEST_SWITCHES.some((k) => params.has(k));
 // ?debug=1: report each step to /api/diag (server log only) to find where a phone crashes.
 // Step names and numbers only, never photo data. Off for everyone else.
 const DEBUG = params.has("debug"), dbgId = Math.random().toString(36).slice(2, 7);
-const PP = params.get("pp") === "1"; // experiment: refineEdge (the guided filter on hair and fur) after the model
+const PP = params.get("pp") === "1"; // experiment: refineEdge (the guided filter on hair and fur) after BiRefNet
 let dbgN = 0;
 // Every page keeps its last 20 steps (names and numbers only, never photo data). They leave the device only
 // inside a crash or error report (see working() and report()); with ?debug=1 each step is also sent live.
@@ -490,7 +490,8 @@ async function segment(bitmap) {
   if (!birefnet && params.get("haze") !== "0") hardenHaze(id); // ISNet only; ?haze=0 shows it without
   const box = subjectBox(id);
   for (let i = 3; i < id.data.length; i += 4) id.data[i] = LUT[id.data[i]]; // soften the edge once, here
-  if (PP) { const t = performance.now(), px1 = refineEdge(px, id); dbg("edge", { ms: Math.round(performance.now() - t), px: px1 }); }
+  // ?pp=1, BiRefNet only (on ISNet it changed next to nothing): the guided filter on hair and fur.
+  if (PP && birefnet) { const t = performance.now(), px1 = refineEdge(px, id); dbg("edge", { ms: Math.round(performance.now() - t), px: px1 }); }
   const mask = new OffscreenCanvas(RES, RES);
   mask.getContext("2d").putImageData(id, 0, 0);
   mask.box = box;
