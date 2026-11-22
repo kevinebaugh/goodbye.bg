@@ -239,7 +239,7 @@ const click = (p, sel) => p.ev(`(() => { const el = document.querySelector(${JSO
 /* ---------- the checks ---------- */
 const TRANSLATED = ["de", "es", "fr", "pt-br", "id"].flatMap((l) => [`/${l}/remove-bg-alternative/`, `/${l}/how-to-remove-background/`]);
 // Text pages in English only (so far): no hreflang, same rules otherwise.
-const ENGLISH_ONLY = ["/bulk-background-remover/", "/remove-background-from-gif/", "/white-background-product-photo/"];
+const ENGLISH_ONLY = ["/bulk-background-remover/", "/remove-background-from-gif/"];
 let base, engine;
 try {
   if (!process.argv.includes("--no-build")) {

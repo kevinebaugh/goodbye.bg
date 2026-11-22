@@ -31,7 +31,7 @@ Actions. The old upload-only project `goodbye-bg` can be deleted.
   (security headers, also used by local dev), `_redirects` (`/share` to `/` when the service worker missed it),
   `404.html` (no scripts), `ad.html` (sandboxed ad slot, ads off), `remove-bg-alternative/` and
   `how-to-remove-background/` (SEO pages, `docs/seo.md`), the same two under `de/ es/ fr/ pt-br/ id/`,
-  `bulk-background-remover/`, `remove-background-from-gif/` and `white-background-product-photo/` (SEO pages, English
+  `bulk-background-remover/` and `remove-background-from-gif/` (SEO pages, English
   only so far; a text page is any folder whose index.html holds `<!--%HREFLANG%-->`, and it needs its CSP line in
   `_headers`, a sitemap entry and a place in the smoke test's lists; the build minifies the page's own scripts and
   styles, `NO_MINIFY=1` keeps them readable), `i18n.js` (UI

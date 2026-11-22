@@ -25,7 +25,7 @@ Kevin's photos. Light and dark versions of each.
 | `demo.mp4` / `demo.gif` | 1270x760 / 800 px, 25 s | **Outdated (removed features).** Drop 4 photos, cut out, teapot to white + Square + shadow, corgi to blur, Download all |
 | `social-square-*.png` | 1080x1080 | **Outdated (removed features).** Before/after plus white + shadow, blur, a colour |
 | `before-after-strip-*.png` | 1600x900 | Reddit, blog posts, directory listings (also in the repo README) |
-| `../../src/og.png` | 1200x630 | Link previews: corgi half photo, half cut-out. Unchanged; still true |
+| `../../src/og.png` | 1200x630 | Link previews: the corgi twice, photo then cut-out, an arrow between (2026-11-22; the old split ran through its head) |
 
 Honest notes about the captures:
 - The demo runs in real time on an M-series Mac with WebGPU and **the model already cached** (the four cut-outs are done

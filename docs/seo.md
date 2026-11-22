@@ -35,8 +35,8 @@ left for whoever owns that file. Recommended:
 3. **done** 2026-11-22, English only: three pages on things most background removers don't do or charge for, each
    with its own steps and limits (no shared paragraphs): `/bulk-background-remover/` ("bulk background remover",
    "remove background from multiple images"), `/remove-background-from-gif/` ("remove background from gif",
-   "transparent gif") and `/white-background-product-photo/` ("white background for product photos", sellers; also
-   the audience the print-on-demand ads fit). Linked from the how-to page and from each other, in the sitemap.
+   "transparent gif"). (A `/white-background-product-photo/` page was cut the same day: the white background, sizes and
+   shadow it described were removed from the app.) Linked from the how-to page and from each other, in the sitemap.
    Translate them once Search Console shows which languages bring visits.
    Later, only if Search Console shows the queries: `/transparent-background/`, `/remove-background-iphone/`,
    `/remove-background-android/`. Each needs real, distinct content. Thin near-duplicates hurt.
