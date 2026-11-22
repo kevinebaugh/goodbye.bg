@@ -1315,7 +1315,7 @@ const adSeen = new Set();
 const PARTNERS = "%PARTNERS%";
 (PARTNERS.startsWith("[") ? Promise.resolve(JSON.parse(PARTNERS)) : fetch("/partners.json").then((r) => r.json())).then((list) => {
   const ok = list.filter((p) => p.live || params.has("adtest")); // ?adtest=1 shows partners before their links exist
-  adPartner = ok.length ? ok[Math.floor(Math.random() * ok.length)] : null;
+  adPartner = ok.find((p) => p.id === params.get("adpartner")) || (ok.length ? ok[Math.floor(Math.random() * ok.length)] : null); // ?adpartner=<id> to test one
   // The partner's live variants in random order, so each card gets a different one (?adv=<v> puts one first).
   adVariants = (adPartner?.variants.filter((x) => x.live || params.has("adtest")) || []).sort(() => Math.random() - 0.5);
   const first = adVariants.findIndex((x) => x.v === params.get("adv"));

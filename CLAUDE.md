@@ -62,7 +62,7 @@ even with no warm-up run (one try in two); the CPU engine never crashed: 7.3 s a
 Debugging on phones: `?debug=1` sends step names and numbers (never photo data) to `/api/diag`, which
 only writes to the Functions log. Read it with `npx wrangler pages deployment tail <deployment-id>
 --project-name goodbye-bg-git --format json` (find the ID with `wrangler pages deployment list`).
-Other test switches: `?keepmax=N`, `?keepmb=N` (kept-photo limits), `?engine=gpu|cpu`, `?model=isnet|birefnet`, `?threads=N`, `?nowarm=1`, `?gpufail=init|run|hang`.
+Other test switches: `?keepmax=N`, `?keepmb=N` (kept-photo limits), `?engine=gpu|cpu`, `?model=isnet|birefnet`, `?threads=N`, `?nowarm=1`, `?gpufail=init|run|hang`, `?adpartner=zazzle|printful|printify` (with `?adtest=1`).
 
 Memory on phones (measured in the iOS Simulator, CPU engine): ISNet at 1024x1024 needs about 1.5 to
 2 GB of wasm heap, mostly activations; it can't run smaller (a Concat inside is fixed to 1024). Asking
@@ -123,6 +123,27 @@ Rejected:
 - ISNet **small** (quint8): garbage (61% of pixels unsure).
 
 Requirement from Kevin: 10 to 30 seconds per photo is unacceptable. Target a few seconds.
+
+## First visit (2026-11-22)
+
+Measured on production first: Lighthouse mobile LCP 1.2 s (simulated; 1.5 s with DevTools throttling), CLS 0, TBT 0,
+score 100; desktop LCP 0.3 s. The model download never competed with first paint (it started after the h1 was drawn).
+Time to the first cut-out is download-bound (116 MB on the CPU engine, 121 MB with BiRefNet): every second the download
+starts later is about a second later for the first photo. So the trade-off is data (and iPhone memory) against speed:
+- **At once**: returning visitors (`gb-model` in localStorage, set when an engine was ready: the files are cached for a
+  year), kept photos, `?url=`, shares. `addSources` starts the model before it decodes or fetches anything.
+- **Computers** (`any-pointer: fine`, no Save-Data): right after `load`, at idle. Same time to first cut-out as before.
+- **Phones, tablets, Save-Data**: on intent only: pointer over, touch or focus on Choose photos / Paste, a drag over the
+  page, a paste. A phone visitor who leaves without adding a photo downloads 0.2 MB instead of 116 MB. Cost: the dwell
+  before the tap. Headless, 20 Mbps, photo added 8 s after load with the tap 4 s before: first cut-out at 58.8 s instead
+  of 56.1 s (+5%); added at 20 s: 72 s instead of 53 s (someone who reads 16 s first waits for the download after).
+  To go back to eager on phones, start the model in the `else` branch at the end of app.js.
+- engine.js fetches the runtime wasm and the model in parallel (no measurable change at a fixed bandwidth; saves round trips).
+- fflate (ZIPs) loads on first use; its static import held up app.js by about 0.7 s on slow 4G.
+- Landing to grid is a View Transition (`landing()` in app.js, about 0.3 s): the headline fades out, the buttons and the
+  wordmark glide, the cards fade in. For the one frame where the layout changes, `main` and the footer are hidden
+  (`body.moving`), which keeps that step out of CLS (it was 0.20 on a computer, 0.37 on a phone; now 0, with and without
+  the API). Reduced motion or no API: instant (one blank frame).
 
 ## Animated GIFs (2026-11-21)
 
@@ -254,7 +275,8 @@ writes blob1 'view', blob2 device, blob3 referring host, blob4 country (no IP, n
 was avoided: `_headers` (COEP/COOP, which give iPhones their threads) would not apply to its responses.
 
 Ads (affiliate, Kevin 2026-11-20): `lib/partners.mjs` lists partners (Printful, Printify, Zazzle; Canva's program is closed to us); one shows only once its
-`url` holds Kevin's affiliate link (`?adtest=1` shows them all, linking to home pages). The ad card fills a grid cell
+`url` holds Kevin's affiliate link (`?adtest=1` shows them all, linking to home pages). Each card is a different product, never a repeat: a partner with
+one variant (Printful, Printify) leaves the other reserved cells empty. The ad card fills a grid cell
 that would otherwise be empty, after the batch is done, one partner per visit, marked "Ad", not in Download all, no
 rating. Links go through `/go/<id>` (functions/go/[id].js), which counts the click (blob1 'adclick') and redirects;
 a POST there counts the card being shown ('adseen'). EthicalAds would need the below-results slot (their rules forbid

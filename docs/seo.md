@@ -56,11 +56,10 @@ left for whoever owns that file. Recommended:
      submit the sitemap, and use the Change of Address tool if pages.dev was verified there first.
 - Preview deployments (`<branch>.goodbye-bg-git.pages.dev`) must stay out of the index. Cloudflare adds
   `X-Robots-Tag: noindex` to them; check with `curl -I` after each new branch.
-- **Core Web Vitals.** The page itself is tiny and has no third-party code, so LCP and CLS are fine. The
-  risk is the 88 MB model: `app.js` starts loading it at page load, which competes with first paint and
-  costs mobile data for visitors who only read. Start the download on first interaction (pointer over or
-  focus on "Choose photos", paste, drop) or after `requestIdleCallback`, and keep the result fast for the
-  first photo. Measure with PageSpeed Insights on mobile after the change.
+- **done** (2026-11-22) **Core Web Vitals.** Measured: LCP 1.2 s mobile / 0.3 s desktop, CLS 0, TBT 0, Lighthouse 100.
+  The model download never delayed first paint. Phones now download it only on intent (tap, focus, drag, paste), computers
+  at idle after load, returning visitors at once (details in CLAUDE.md, "First visit"). Adding the first photos used to shift
+  the layout by 0.2 to 0.37 (the hero going away); it is now a View Transition with no layout shift.
 - **done** `404.html` (2026-11-21): unknown paths return a real 404 (they used to return the app with 200, a soft 404). `_redirects` sends `GET`/`POST /share` to `/` when the service worker didn't catch it (it was 405 for POST before).
 - Later: `hreflang` only if the page gets translated. Not before.
 
