@@ -397,6 +397,46 @@ try {
   await q.close();
 
 
+  // A file that can't be opened in a batch that fitted (second review, problem 3): no card for it, so the cards keep
+  // their size, no ad cell opens and nothing scrolls. notes.txt is skipped before any card exists; a "JPG" that fails
+  // to decode loses its card once it fails. Phone 390x844 and desktop 1280x800, 12 photos each.
+  await check("layout: a file that can't be opened doesn't reflow 12 photos", async () => {
+    const out = [];
+    for (const v of [{ w: 390, h: 844, mobile: true }, { w: 1280, h: 800 }]) {
+      const cx = await context(), q = await page(cx, v);
+      await q.go(app());
+      await addPhotos(q, Array.from({ length: 12 }, (_, i) => `f${i + 1}`));
+      await q.until(`document.querySelectorAll("#grid > .card").length === 12`, 10000, "12 cards");
+      await sleep(400);
+      const look = `(() => { const m = document.querySelector("main").style, g = document.getElementById("grid");
+        return { p: m.getPropertyValue("--p"), cols: m.getPropertyValue("--cols"), cards: document.querySelectorAll("#grid > .card").length,
+          ads: document.querySelectorAll("#grid > .adcard").length, scroll: g.classList.contains("scroll"),
+          over: document.documentElement.scrollHeight - innerHeight, tell: document.getElementById("tell").hidden ? "" : document.getElementById("tell").textContent }; })()`;
+      const before = await q.ev(look);
+      await q.ev(`(() => { const dt = new DataTransfer();
+        dt.items.add(new File(["shopping list"], "notes.txt", { type: "text/plain" }));
+        const i = document.getElementById("file"); i.files = dt.files; i.dispatchEvent(new Event("change", { bubbles: true })); return true; })()`);
+      await sleep(300);
+      const now = await q.ev(look);
+      assert(now.cards === 12 && now.p === before.p && now.cols === before.cols, `right after notes.txt: ${JSON.stringify(now)} (was ${JSON.stringify(before)})`);
+      assert(/notes\.txt/.test(now.tell), "nothing says notes.txt was skipped: " + JSON.stringify(now.tell));
+      await q.ev(`(() => { const dt = new DataTransfer();
+        dt.items.add(new File(["not really a jpeg"], "broken.jpg", { type: "image/jpeg" }));
+        const i = document.getElementById("file"); i.files = dt.files; i.dispatchEvent(new Event("change", { bubbles: true })); return true; })()`);
+      await q.until(`document.querySelectorAll("#grid > .card").length === 12 && /broken\.jpg/.test(document.getElementById("tell").textContent)`, 10000, "broken.jpg skipped");
+      // Ads come in once a cut-out is done (plus a 1.1 s pause): 12 photos fill whole rows here, so none may appear.
+      await q.until(`[...document.querySelectorAll("#grid > .card")].some((c) => !c.querySelector(".dl").disabled && !c.classList.contains("working") && !c.classList.contains("queued"))`, 120000, "a first cut-out");
+      await sleep(2000);
+      const after = await q.ev(look), want = Math.ceil(12 / +before.cols) * +before.cols - 12;
+      assert(after.cards === 12 && after.p === before.p && after.cols === before.cols, `after: ${JSON.stringify(after)} (was ${JSON.stringify(before)})`);
+      assert(after.ads === want, `${after.ads} ad cards, ${want} expected for 12 photos`);
+      assert(!after.scroll && after.over <= 0, `the page scrolls: ${JSON.stringify(after)}`);
+      out.push(`${v.w}x${v.h}: ${after.cols} x ${after.p}`);
+      await q.close();
+    }
+    return out.join("; ");
+  });
+
   // Output options (sellers): Square with a margin, a shadow, WebP, "All" for the other photo, kept over a reload.
   await check(`output: Square with a margin, All, WebP, reload (${engine})`, async () => {
     const c6 = await context(), o = await page(c6);
@@ -498,6 +538,10 @@ try {
     await o.reload();
     await allDone(o, 1, 20000);
     await o.until(`document.querySelector("#grid > .card").classList.contains("solid") && document.querySelector("#grid > .card .bgb").getAttribute("aria-label") === "Background: Strong blur"`, 10000, "blur back after the reload");
+    // Leaving blur puts back the crop blur took away (kept over the reload too).
+    await click(o, "#grid > .card .bgb");
+    await click(o, `#grid > .card .bgs [data-bg="#ffffff"]`);
+    await o.until(`document.querySelector("#grid > .card .crop").getAttribute("aria-pressed") === "true"`, 3000, "the crop back after leaving blur");
     noErrors(o); await cspClean(o);
     await o.close();
     return `background red ${Math.min(...reds)}-${Math.max(...reds)} (stripes 32-232), subject ${r.at[12].slice(0, 3)}`;
