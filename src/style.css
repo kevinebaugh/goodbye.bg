@@ -86,6 +86,19 @@ main { flex: 1; width: 100%; max-width: 1100px; margin: 0 auto; padding: 0 max(2
 /* Once photos arrive, the hero steps aside. */
 body.has-work .hero { margin-top: 0; gap: 12px; }
 body.has-work .hero h1, body.has-work .sub { display: none; }
+/* The step from the empty page to photos (landing() in app.js, a View Transition): the headline fades out first, the
+   buttons glide up to their place, then the page with the cards fades in, so the headline never sits over a card.
+   About 0.3 s; skipped with reduced motion. */
+.hero .row { view-transition-name: addrow; }
+.mark { view-transition-name: mark; } /* stays lit (it moves only on short screens) */
+::view-transition-group(addrow), ::view-transition-group(mark) { animation-duration: .3s; animation-timing-function: cubic-bezier(.2, .9, .3, 1); }
+::view-transition-old(addrow), ::view-transition-new(addrow) { animation-duration: .3s; }
+::view-transition-old(root) { animation: .12s ease-in both vtOut; }
+::view-transition-new(root) { animation: .2s ease-out .08s both vtIn; }
+@keyframes vtOut { to { opacity: 0; } }
+@keyframes vtIn { from { opacity: 0; } }
+/* The frame where the layout changes (see landing() in app.js): hidden, so the move isn't a layout shift. */
+body.moving main, body.moving main *, body.moving .foot, body.moving .foot * { visibility: hidden !important; }
 
 .spacer { flex: 1; }
 

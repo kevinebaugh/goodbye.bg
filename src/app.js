@@ -3,7 +3,9 @@
 // only allows requests back to this site. Server calls that carry images: /api/fetch, when the visitor gives us
 // a link to an image on another site, and /api/cap, the one cut-out a click on a Zazzle product ad takes along.
 
-import { zipSync, unzipSync } from "./vendor/fflate.mjs";
+// fflate (ZIPs in and out) loads on first use: a static import sat in front of everything else on a first visit.
+let zipLib = null;
+const loadZip = () => (zipLib ||= import("./vendor/fflate.mjs"));
 
 const RES = 1024;            // model input size
 const MAX_SIDE = 8192;       // larger images are scaled down to fit in memory
@@ -699,6 +701,7 @@ const isZip = (f) => f instanceof Blob && (/zip/i.test(f.type) || /\.zip$/i.test
 
 // A ZIP becomes the pictures inside it, in name order (folders inside are fine; Mac "__MACOSX" copies and dot-files are not pictures).
 async function unzipImages(zip) {
+  const { unzipSync } = await loadZip();
   const data = new Uint8Array(await zip.arrayBuffer()), names = [];
   // First pass reads only the names, so a ZIP of more than MAX_BATCH keeps the first ones by name, not by archive order.
   unzipSync(data, { filter: (f) => { if (IMG_EXT.test(f.name) && !/(^|\/)(__MACOSX\/|\.)/.test(f.name) && f.originalSize > 0 && f.originalSize < 200e6) names.push(f.name); return false; } });
@@ -711,6 +714,7 @@ const mimeOf = (n) => ({ jpg: "image/jpeg", jpeg: "image/jpeg", jfif: "image/jpe
 
 async function addSources(list, origin = "") {
   list = list.filter(Boolean);
+  if (list.length) startModel(); // now, not after the decode (or a link's fetch): the download is the long part
   let zipFailed = false;
   if (list.some(isZip)) {
     const out = [];
@@ -723,7 +727,6 @@ async function addSources(list, origin = "") {
   list = list.slice(0, MAX_BATCH);
   if (!list.length) { if (!zipFailed) tell("No image found there. Try a photo file, a copied image, or an image link."); return; } // a broken ZIP already said so
   await restoring; // kept photos go in first, so this batch lands on top of them
-  show();
   adsStraight = adsQuiet = false; // a new batch's ads wait for its reveal, as usual
   const top = keyBase();
   // All cards appear at once, so the layout settles once instead of jumping with every photo.
@@ -735,8 +738,7 @@ async function addSources(list, origin = "") {
     named(it, baseName(src instanceof Blob ? src.name : String(src).startsWith("data:") ? "pasted" : String(src)));
     return [it, src];
   });
-  $("grid").prepend(cards);
-  sync();
+  await landing(() => { show(); $("grid").prepend(cards); sync(); });
   for (const [it, src] of batch) { // one decode at a time: a full-size decode is big
     if (!items.includes(it)) continue;
     try {
@@ -1123,6 +1125,17 @@ function say(it, text) {
 }
 
 function show() { document.body.classList.add("has-work"); }
+// The first photos on the empty page: the headline fades away, the buttons glide up and the cards pop in, in about a
+// quarter of a second (a View Transition; style.css). Instant without the API, with reduced motion, or once photos are up.
+// For the frame where the layout changes, the page below the wordmark is hidden ("moving", style.css), so the move
+// isn't counted as a layout shift (it was 0.2 on a computer, 0.37 on a phone); the transition shows its pictures meanwhile.
+function landing(change) {
+  const b = document.body;
+  if (b.classList.contains("has-work")) return change();
+  const swap = () => { change(); b.classList.add("moving"); requestAnimationFrame(() => requestAnimationFrame(() => b.classList.remove("moving"))); };
+  if (!document.startViewTransition || document.hidden || matchMedia("(prefers-reduced-motion: reduce)").matches) return swap();
+  return document.startViewTransition(swap).updateCallbackDone.catch((e) => { console.warn(e); if (!b.classList.contains("has-work")) swap(); });
+}
 /* ---------- ratings ----------
    👍 and 👎 send an anonymous count to /api/rate: the vote, the engine, the run time and the photo's
    megapixels. Never the photo. 👎 then runs the model again, zoomed in on the subject, which gives
@@ -1736,6 +1749,7 @@ async function saveAll() {
     // built fresh and not kept (memory).
     files[name] = [new Uint8Array(await (await (it.anim || it.png ? png(it) : fullBlob(it))).arrayBuffer()), { level: 0 }];
   }
+  const { zipSync } = await loadZip();
   sync();
   save(`goodbye-bg-${done.length}-images.zip`, new Blob([zipSync(files)], { type: "application/zip" }));
 }
@@ -1986,5 +2000,37 @@ if (DEBUG) window.goodbye = { items, png, frame, PRODUCTS, artSource, mugArt }; 
 // The frame gets its src only when ads are on, so nothing loads from the ad network otherwise.
 if (ADS) { $("ad").querySelector("iframe").src = AD_SRC; $("ad").hidden = false; }
 
-// Start loading the model right away so the first photo is fast.
-loadModel().catch((e) => { console.error(e); tell("Could not load. Check your connection and reload.", $("pick").parentElement, 10_000); });
+/* ---------- when the model starts downloading ----------
+   The runtime and model are about 116 MB (121 MB with BiRefNet). The first cut-out waits for all of it, so every
+   second the download starts later is about a second more for the first photo. The download never competed with
+   first paint (it starts after the page is drawn). What it costs is data and, on iPhones, memory for visitors who
+   never add a photo. So:
+   - At once: visitors whose model is already here (gb-model, set once an engine was ready; the files are cached for a
+     year), kept photos, and links or shares that bring a photo (addSources starts it too).
+   - Computers: right after the page has loaded (idle), unless the browser asks to save data. The few seconds a
+     visitor needs to pick a photo hide much of the download.
+   - Phones and tablets, and Save-Data: on the first sign of a photo coming: a touch or focus on Choose photos or
+     Paste, a drag over the page, a paste. The photo picker then hides part of the download. */
+function startModel() { // a declaration, with no outside let: ?url= calls addSources (and so this) before the code below has run
+  const p = loadModel();
+  if (p === startModel.asked) return;
+  startModel.asked = p;
+  p.then(() => { try { localStorage.setItem("gb-model", "1"); } catch {} },
+    (e) => { console.error(e); tell("Could not load. Check your connection and reload.", $("pick").parentElement, 10_000); });
+}
+{
+  let seen = false; try { seen = !!localStorage.getItem("gb-model") || +localStorage.getItem("gb-kept") > 0; } catch {}
+  const saveData = !!navigator.connection?.saveData;
+  if (seen || params.has("url") || params.has("share")) startModel();
+  else {
+    const intent = () => { off(); startModel(); };
+    const evs = [[$("pick").parentElement, "pointerover"], [$("pick").parentElement, "pointerdown"], [$("pick").parentElement, "focusin"],
+      [window, "dragenter"], [window, "paste"]];
+    const off = () => { for (const [el, ev] of evs) el.removeEventListener(ev, intent, true); };
+    for (const [el, ev] of evs) el.addEventListener(ev, intent, { capture: true, passive: true });
+    if (DESKTOP && !saveData) {
+      const soon = () => (self.requestIdleCallback || setTimeout)(intent, { timeout: 800 });
+      document.readyState === "complete" ? soon() : addEventListener("load", soon, { once: true });
+    }
+  }
+}

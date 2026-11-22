@@ -85,11 +85,15 @@ onmessage = async ({ data }) => {
       model = MODELS[name];
       postMessage({ type: "model", name }); // now, so a crash while starting up is reported against the right model
       dbg("init", { ep: data.ep, model: name });
+      // Runtime code, runtime wasm and model all at once: one after the other cost a round trip or two each, and the
+      // model could not start until the runtime was in. Both buffers were held together until the session anyway.
+      const wasmP = fetchParts(RT + "wasm/"), modelP = fetchParts(model.dir, (f) => postMessage({ type: "progress", f }));
+      wasmP.catch(() => {}); modelP.catch(() => {}); // a failure is thrown below, where it is awaited
       ort = await import(RT + "ort.webgpu.min.mjs");
       ort.env.wasm.wasmPaths = new URL(RT, location.href).href;
-      ort.env.wasm.wasmBinary = await fetchParts(RT + "wasm/");
+      ort.env.wasm.wasmBinary = await wasmP;
       ort.env.wasm.numThreads = self.crossOriginIsolated ? Math.min(data.threads || 4, navigator.hardwareConcurrency || 2) : 1;
-      let bytes = await fetchParts(model.dir, (f) => postMessage({ type: "progress", f }));
+      let bytes = await modelP;
       postMessage({ type: "loaded" }); dbg("model-fetched");
       // logSeverityLevel 3: errors only (BiRefNet otherwise prints a page of harmless constant-folding warnings).
       session = await ort.InferenceSession.create(bytes, { executionProviders: [data.ep], graphOptimizationLevel: "all", logSeverityLevel: 3 });
