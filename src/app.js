@@ -322,7 +322,7 @@ function stopEngine(reason) { killWorker(reason); engineReady = null; }
 
 // iPhones: the engine's memory (about 1.8 GB) only grows while the tab is open, and each photo added to it
 // until Safari killed the tab (7 to 8 photos in one session). Once nothing is waiting, shut it down; the
-// next photo starts a fresh one in under a second from the cached model.
+// next photo starts a fresh one in under a second from the cached model (after engineFree, below).
 // Phones make each PNG ahead of time (the share sheet only opens straight from a tap). On iPhone, wait until
 // the engine just shut down has really been freed: building a 16 MP PNG while it was still in memory crashed.
 // A Download tap before then builds that one PNG on the spot.
@@ -332,12 +332,17 @@ function preparePngs() {
   clearTimeout(pngTimer);
   pngTimer = setTimeout(() => { if (!running && !retrying) for (const it of items) if (it.mask) png(it); }, IOS ? 10_000 : 0);
 }
+// A stopped engine's memory comes back only about 2 s after terminate() (Chrome, measured), so a 👎 or a new photo
+// right after the shutdown held two engines (3.3 GB, 4.6 GB with a new photo). The next one waits until 3 s after it.
+let engineFree = 0;
 function idle() {
-  if (IOS && worker && !jobs.size && !running) { stopEngine("idle"); dbg("engine-idle"); }
+  if (IOS && worker && !jobs.size && !running) { stopEngine("idle"); engineFree = performance.now() + 3000; dbg("engine-idle"); }
 }
 
-function startEngine(name) {
+async function startEngine(name) {
   killWorker("Engine restarted");
+  const wait = engineFree - performance.now();
+  if (wait > 0) { dbg("engine-wait", { ms: Math.round(wait) }); await new Promise((r) => setTimeout(r, wait)); }
   engineName = name; engineModel = "";
   const w = worker = new Worker("engine.js", { type: "module" });
   return new Promise((resolve, reject) => {

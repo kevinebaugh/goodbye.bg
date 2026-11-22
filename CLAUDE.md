@@ -96,6 +96,14 @@ Memory on phones (measured in the iOS Simulator, CPU engine): ISNet at 1024x1024
 for only the first of its 13 outputs, freeing the model bytes after session creation, one PNG at a
 time, and compositing the mask instead of copying pixels took 3 photos from 2.1 GB to 1.46 GB.
 Safari caps photos at 16 MP (canvas limit); the original bitmap is kept and scaled when drawn.
+Restart after the iPhone idle shutdown (2026-11-22, headless Chrome and Playwright WebKit with the iPhone profile;
+**untested on a real iPhone**): a terminated engine's memory comes back about 2 s later in Chrome (session release,
+`close()`, ending its thread workers first: no faster), and in WebKit mostly within 0.6 s (phys_footprint).
+A 👎 or a new photo in that window held two engines: Chrome renderer RSS 3.3 GB for the 👎 and 4.6 GB for a new
+18.75 MP photo after it (batch alone 2.0 GB). Now `startEngine` waits until 3 s after an idle shutdown (`engineFree`):
+both 2.0 GB, the 👎 up to 3 s slower when tapped right away. The model and runtime parts are read into one buffer of
+the final size (were chunks + Blob + copy): batch peak about 130 MB lower. Masks bit-for-bit unchanged.
+If Safari turns out to free more slowly, keeping the engine a few seconds after a batch (a quick 👎 reuses it) is the next step.
 
 Two models, two engines. `src/engine.js` runs ONNX Runtime Web 1.31.1 inside its own module Worker. `app.js`
 starts it with WebGPU when the adapter has `shader-f16`, else with WebAssembly (4 threads).
