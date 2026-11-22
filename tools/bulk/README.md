@@ -199,6 +199,8 @@ Covered, as documented:
   site. `channels=alpha` and zip's `alpha.png` include the shadow. The foreground type is the request's `type`, or
   `other` without one: `shadow_type=auto` is then a drop shadow, `shadow_type[product]=drop` needs `type=product`, and
   `add_shadow=true` (remove.bg's car shadow) needs `type=car`. The default opacity is 90 for `type=car`, 50 otherwise.
+  With `bg_color` and a shadow, the subject's box is measured on the full-size cut-out rather than the model's 1024
+  px mask, so `X-Foreground-*` and the crop can differ by a pixel or two from the same request without a shadow.
 - Response: the image (or `{"data": {"result_b64", "foreground_*"}}` with `Accept: application/json`), headers
   `X-Width`, `X-Height`, `X-Foreground-Top/Left/Width/Height`, `X-Credits-Charged: 0`.
 - Errors: status 400 and `{"errors": [{"code", "title", "detail"}]}` with remove.bg's codes and titles:
@@ -251,9 +253,11 @@ Numbers (same Mac, 100 photos from the quality set at 1.6 MP, BiRefNet on the GP
 
 One client at a time leaves the GPU idle while its photo is decoded, encoded and sent; two or more keep it busy and
 reach the model's limit (about 275 ms a photo), the same as the folder mode. Peak memory footprint 4.1 GB, as in
-folder mode. `node test/serve-test.mjs <photo>` checks 65 behaviours against a running server started with
-`--allow-urls` (all pass on two COCO photos, 2026-11-22), including HEIC, background images and shadows; the shadow
-checks need a photo whose subject isn't cut by its bottom edge. `node test/shadow-test.mjs` checks the shadow and its
+folder mode. `node test/serve-test.mjs <photo>` checks 66 behaviours against a running server started with
+`--allow-urls` (all pass on four photos, 2026-11-22, one a portrait cut by the photo's bottom edge; on one small
+subject the cut-subject check skips itself because nothing is found once cut), including HEIC,
+background images and shadows (the photo gets a white band below it for those, then is cut through its subject to
+check that a cut subject gets none). `node test/shadow-test.mjs` checks the shadow and its
 parameters without a server or the model (39). `node test/serve-bench.mjs <folder> --clients 4` measures.
 
 ## One file: `scripts/build-sea.mjs`
@@ -292,16 +296,22 @@ checked against SHASUMS256.txt) and sharp's binaries for it with `npm pack` (sha
 |---|---|---|
 | File | ELF 64-bit x86-64, **180 MB** (76 MB zipped) | PE32+ x86-64 console, **141 MB** (79 MB zipped) |
 | Native parts inside | `libonnxruntime.so.1` 47.6 MB, binding, sharp + `libvips-cpp.so` 18.7 MB | `onnxruntime.dll` 31.7 MB, `DirectML.dll` 18.5 MB, `dxcompiler.dll` 18.0 MB, binding, sharp + `libvips-42.dll` 19.0 MB |
-| Checked | Static checks, and **ran it** in Docker (`debian:bookworm-slim`, linux/amd64 under emulation): `--licenses`, a folder run, `serve` + curl | Static checks only |
+| Checked | Static checks, and **ran it** in Docker (`debian:bookworm-slim`, linux/amd64 under emulation): `--licenses`, a folder run, `serve` + curl, a shadow | Static checks only |
 | Not checked | WebGPU on a real Linux GPU (Vulkan), the window, other distributions | **Running at all**, WebGPU/DirectML, the window, the folder dialog (PowerShell), SmartScreen |
 
 - Static checks on both: `file` type, the SEA fuse flipped (`NODE_SEA_FUSE_...:1`), and the embedded `build.json`
   listing the platform's native files with their sizes.
 - Linux in Docker: no GPU there, so the GPU start failed ("Couldn't load Vulkan") and it carried on on the CPU, as
   designed; 4.7 s a photo for BiRefNet under x86 emulation. The cut-out's alpha matches the Mac's CPU engine within
-  3/255 (mean difference 0.000) on a 1920x1080 photo. `serve` answered `/account` and `/removebg` (200, 667x375 PNG).
+  3/255 (mean difference 0.000) on a 1920x1080 photo. `serve` answered `/account` and `/removebg` (200, PNG), and
+  `shadow_type=drop` with `crop` gave the taller canvas (544x348 without, 544x371 with). Afterwards nothing named
+  `onnxruntime` or `DeveloperTools` was anywhere on the container's disk (ONNX Runtime's telemetry stays off).
 - Linux needs `libatomic.so.1` (Node 26's own requirement): present on desktop distributions, missing from slim
-  containers (`apt-get install libatomic1`). glibc 2.36 tested; Node 26 needs 2.28 or newer.
+  containers (`apt-get install libatomic1`). glibc 2.36 tested; the newest glibc symbol version Node, ONNX Runtime and
+  libvips ask for is 2.28 (and GLIBCXX 3.4.22), so distributions from 2018 on should do (read from the files, not run).
+- Telemetry on Windows: `onnxruntime.dll` carries the same `ORT_DISABLE_TELEMETRY` switch (and keeps its device ID in
+  the registry, `HKCU\SOFTWARE\Microsoft\DeveloperTools\.onnxruntime`), plus a Windows-only telemetry class
+  (`WindowsTelemetry`, the system's event tracing). Whether the switch silences that one too is not checked.
 - The Linux file is larger because nodejs.org's Linux `node` carries debug symbols; `strip` would shrink it (not tried).
 - Windows ships DirectML.dll and dxcompiler.dll from onnxruntime-node. Their licences are Microsoft's, not MIT, and their
   texts are not in the npm package; `LICENSES/README.txt` names them and says to add the texts before shipping.

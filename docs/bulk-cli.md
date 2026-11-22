@@ -70,7 +70,7 @@ API reference documents them (https://www.remove.bg/api; the OpenAPI file https:
 read 2026-11-22). Details and the full list in `tools/bulk/README.md`.
 
 - Checked: remove.bg's own two curl samples, run unchanged but for the URL (the `image_url` one needs `--allow-urls`);
-  65 checks in `tools/bulk/test/serve-test.mjs` (parameters, headers, JSON replies, HEIC, shadows, 23 of remove.bg's error codes); the Python `removebg` 0.4 and Node `remove.bg` 1.3.0 wrappers, file, URL and base64 calls each,
+  66 checks in `tools/bulk/test/serve-test.mjs` (parameters, headers, JSON replies, HEIC, shadows, 23 of remove.bg's error codes); the Python `removebg` 0.4 and Node `remove.bg` 1.3.0 wrappers, file, URL and base64 calls each,
   with a dummy key and no account.
 - Covered: the three image sources, `size` (with remove.bg's default `preview` = 0.25 MP and its caps), `format`
   auto/png/jpg/webp/zip, `channels=alpha`, `bg_color`, `bg_image_file`/`bg_image_url`, `crop` + `crop_margin`,
@@ -200,8 +200,9 @@ Checked on the binary:
 - **Windows x64: 141 MB, 79 MB zipped.** Checked: a valid PE32+ x86-64 file, the SEA fuse set, and the bundle lists
   `onnxruntime.dll`, `DirectML.dll`, `dxcompiler.dll`, sharp and libvips. **Never run**: there is no Windows machine
   here. Unknowns: whether it starts at all, WebGPU (there's no dxil.dll next to dxcompiler.dll), DirectML, the
-  PowerShell folder dialog, Explorer. DirectML.dll and dxcompiler.dll are under Microsoft's licences (not MIT); their
-  texts must be added before a release.
+  PowerShell folder dialog, Explorer, and whether `ORT_DISABLE_TELEMETRY` also silences ONNX Runtime's Windows-only
+  event-tracing telemetry (the switch is in the DLL; the Linux run wrote no telemetry files). DirectML.dll and
+  dxcompiler.dll are under Microsoft's licences (not MIT); their texts must be added before a release.
 - **Linux x64: 180 MB, 76 MB zipped** (nodejs.org's Linux Node keeps debug symbols). Ran in Docker on this Mac
   (Debian 12, x86-64 emulated): `--licenses`, a folder run and `serve` with curl all worked; no GPU in the container,
   so it said so and used the CPU (4.7 s a photo, emulated). The cut-out matches the Mac's CPU engine within 3/255.
