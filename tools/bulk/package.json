@@ -4,10 +4,19 @@
   "description": "Remove backgrounds from a folder of photos on your own computer. Nothing is uploaded.",
   "license": "AGPL-3.0-only",
   "type": "commonjs",
-  "bin": { "goodbye-bg": "bin/goodbye-bg.cjs" },
-  "files": ["bin", "lib", "README.md"],
-  "engines": { "node": ">=20" },
+  "bin": {
+    "goodbye-bg": "bin/goodbye-bg.cjs"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
+    "fflate": "0.8.2",
     "libheif-js": "1.23.5",
     "onnxruntime-node": "1.31.1",
     "sharp": "0.35.5"

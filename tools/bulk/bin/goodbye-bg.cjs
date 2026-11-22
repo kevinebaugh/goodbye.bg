@@ -2,15 +2,16 @@
 // goodbye-bg: cut out every photo in a folder on this computer. Nothing is uploaded; the only network use is the
 // one-time model download from the goodbye.bg site.
 "use strict";
-const fs = require("fs"), path = require("path"), os = require("os");
+const fs = require("fs"), path = require("path");
 const { Worker } = require("worker_threads");
-const { modelPath, cacheDir } = require("../lib/models.cjs");
-const { MODELS, RES, toInput } = require("../lib/pipeline.cjs");
+const { MODELS } = require("../lib/pipeline.cjs");
+const { startEngine } = require("../lib/engine.cjs");
 const VERSION = require("../package.json").version;
 
 const HELP = `goodbye-bg ${VERSION}: remove backgrounds from photos on this computer. Nothing is uploaded.
 
 Usage: goodbye-bg <photos or folders...> [options]
+       goodbye-bg serve [--port 5000]   remove.bg's API on this computer (see goodbye-bg serve --help)
 
   --out <dir>          where cut-outs go (default: ./cutouts). Subfolders are kept.
   --bg <color>         fill the background: white, black or #rrggbb (default: transparent)
@@ -139,62 +140,10 @@ async function main() {
 
   // The engine: one ONNX Runtime session on the main thread, shared by the workers, one run at a time.
   const t0 = performance.now();
-  const file = await modelPath(o.model, say);
-  const ort = require("onnxruntime-node");
-  const spec = MODELS[o.model];
-  let session, engine;
-  const open = async (ep) => {
-    const opts = { executionProviders: [ep], graphOptimizationLevel: "all", logSeverityLevel: 3 };
-    if (ep === "cpu") opts.intraOpNumThreads = os.availableParallelism?.() || os.cpus().length;
-    session = await ort.InferenceSession.create(file, opts);
-    engine = ep === "cpu" ? "cpu" : "gpu";
-  };
-  const FAIL = process.env.GOODBYE_BG_GPUFAIL; // test switch: init or run simulates a broken GPU
-  const run = async (input, warm = false) => {
-    if (engine === "gpu" && FAIL === (warm ? "init" : "run")) throw new Error(`Forced GPU ${FAIL} failure`);
-    const t = performance.now();
-    const out = await session.run({ [session.inputNames[0]]: new ort.Tensor("float32", input, [1, 3, RES, RES]) }, [session.outputNames[0]]);
-    const mask = Float32Array.from(out[session.outputNames[0]].data);
-    for (let i = 0; i < mask.length; i += 61) if (!Number.isFinite(mask[i])) throw new Error("Engine returned invalid values");
-    if (spec.logits) for (let i = 0; i < mask.length; i++) mask[i] = 1 / (1 + Math.exp(-mask[i]));
-    return { mask, ms: performance.now() - t };
-  };
-  say(`Starting the ${o.model} model...`);
-  if (o.engine !== "cpu") {
-    // WebGPU everywhere ONNX Runtime ships it (Metal on Macs); DirectML as a second try on Windows (untested).
-    const eps = process.platform === "win32" ? ["webgpu", "dml"] : ["webgpu"];
-    let err;
-    for (const ep of eps) {
-      try {
-        await open(ep);
-        const probe = new Float32Array(3 * RES * RES); // warm-up: compiles the shaders and proves the GPU works
-        for (let i = 0; i < probe.length; i++) probe[i] = ((i % RES) / RES - 0.5) * 0.9;
-        await run(probe, true);
-        err = null; break;
-      } catch (e) { err = e; session = null; }
-    }
-    if (err) {
-      if (o.engine === "gpu") fail(`the GPU engine failed to start: ${err.message}`);
-      if (!o.quiet) process.stderr.write(`\nGPU not available (${String(err.message).split("\n")[0]}), using the CPU.\n`);
-    }
-  }
-  if (!session) await open("cpu");
-  const tReady = performance.now();
-  if (engine === "cpu" && o.model === "birefnet" && !o.quiet)
-    process.stderr.write(`\nNote: BiRefNet on the CPU is slow and needs a lot of memory. --model isnet is several times faster on the CPU.\n`);
-
-  // One run at a time. A failed GPU run switches to the CPU for the rest (a broken GPU can return garbage).
-  let chain = Promise.resolve(), inferMs = 0, runs = 0;
-  const infer = (px) => (chain = chain.then(async () => {
-    const input = toInput(px, spec);
-    try { const r = await run(input); inferMs += r.ms; runs++; return r.mask; }
-    catch (e) {
-      if (engine !== "gpu" || o.engine === "gpu") throw e;
-      if (!o.quiet) process.stderr.write(`\nGPU run failed (${String(e.message).split("\n")[0]}), switching to the CPU.\n`);
-      await open("cpu");
-      const r = await run(input); inferMs += r.ms; runs++; return r.mask;
-    }
-  }));
+  let eng;
+  try { eng = await startEngine(o, say); } catch (e) { if (e.fatal) fail(e.message); throw e; }
+  const spec = eng.spec, tReady = performance.now();
+  const infer = eng.infer;
 
   const jobOpts = { harden: spec.harden, bg: o.bg, format: o.format, crop: o.crop, size: o.size, pad: o.pad };
   const queue = todo.slice(), inflight = new Map(), failed = [], empty = [];
@@ -237,20 +186,21 @@ async function main() {
       process.once("SIGINT", () => { for (const { tmp } of inflight.values()) fs.rmSync(tmp, { force: true }); process.exit(130); });
     });
   });
-  await session.release?.();
+  await eng.release();
 
   const secs = (performance.now() - tStart) / 1000, total = (performance.now() - t0) / 1000;
   if (!o.quiet && process.stderr.isTTY) process.stderr.write("\r\x1b[K");
   const left = todo.length - done - failed.length;
-  console.log(`${done} cut-out${done === 1 ? "" : "s"} in ${fmtTime(secs)} (${((done / secs) * 60).toFixed(1)} a minute, ${(mp / Math.max(1, done)).toFixed(1)} MP a photo), ${o.model} on the ${engine === "gpu" ? "GPU" : "CPU"}.`);
-  console.log(`Model ready in ${((tReady - t0) / 1000).toFixed(1)} s; the model itself took ${runs ? Math.round(inferMs / runs) : 0} ms a photo. Total ${fmtTime(total)}.`);
+  console.log(`${done} cut-out${done === 1 ? "" : "s"} in ${fmtTime(secs)} (${((done / secs) * 60).toFixed(1)} a minute, ${(mp / Math.max(1, done)).toFixed(1)} MP a photo), ${o.model} on the ${eng.engine === "gpu" ? "GPU" : "CPU"}.`);
+  console.log(`Model ready in ${((tReady - t0) / 1000).toFixed(1)} s; the model itself took ${eng.stats.runs ? Math.round(eng.stats.inferMs / eng.stats.runs) : 0} ms a photo. Total ${fmtTime(total)}.`);
   if (skipped) console.log(`${skipped} skipped: already done.`);
   if (empty.length) console.log(`${empty.length} with no subject found (saved empty): ${empty.slice(0, 5).join(", ")}${empty.length > 5 ? ", ..." : ""}`);
   if (failed.length) { console.log(`${failed.length} failed:`); for (const x of failed.slice(0, 20)) console.log(`  ${x.rel}: ${x.error}`); }
   if (left > 0) console.log(`${left} not started. Run the same command again to carry on.`);
   console.log(`Cut-outs are in ${outAbs}`);
-  if (process.env.GOODBYE_BG_STATS) fs.writeFileSync(process.env.GOODBYE_BG_STATS, JSON.stringify({ done, failed: failed.length, skipped, secs, total, ready: (tReady - t0) / 1000, inferMs: runs ? inferMs / runs : 0, mp: mp / Math.max(1, done), engine, model: o.model, jobs: o.jobs }) + "\n");
+  if (process.env.GOODBYE_BG_STATS) fs.writeFileSync(process.env.GOODBYE_BG_STATS, JSON.stringify({ done, failed: failed.length, skipped, secs, total, ready: (tReady - t0) / 1000, inferMs: eng.stats.runs ? eng.stats.inferMs / eng.stats.runs : 0, mp: mp / Math.max(1, done), engine: eng.engine, model: o.model, jobs: o.jobs }) + "\n");
   process.exitCode = stopping ? 130 : failed.length ? 1 : 0;
 }
 
-main().catch((e) => { console.error(`\ngoodbye-bg: ${e?.stack || e}`); process.exit(1); });
+const run = process.argv[2] === "serve" ? () => require("../lib/serve.cjs").serve(process.argv.slice(3)) : main;
+run().catch((e) => { console.error(`\ngoodbye-bg: ${e?.stack || e}`); process.exit(1); });
