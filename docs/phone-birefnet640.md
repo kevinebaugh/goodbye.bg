@@ -17,42 +17,51 @@ at 640x640** instead of ISNet. `?model=isnet` brings ISNet back on the same devi
   (first output only, logits, sigmoid), and scales the mask back up to 1024 (bilinear). So the despeckle, crop box,
   edge colours, the 👎 zoomed retry (2048 merge) and GIF frames are untouched. The model bytes are still freed after
   the session starts.
-- `src/app.js`: the page now sends `?model=` as typed (or nothing) plus whether it is a computer; the worker picks.
-  Votes and crash reports name the engine `cpu-birefnet640` (`/api/rate` and `/api/crash` accept it). The iPhone idle
-  shutdown and the CPU engine's lack of warm-up are unchanged (the GPU warm-up probe uses the model's size).
+- `src/app.js`: the page sends `?model=` as typed, or for the GPU worker the GPU gate's pick (`isnet` after BiRefNet
+  stepped down), plus whether it is a computer; the worker picks. Votes and crash reports name the engine
+  `cpu-birefnet640` (`/api/rate` and `/api/crash` accept it), also when a computer's GPU fails and the CPU takes over
+  (tested with `?gpufail=init`). The haze hardening (`hardenHaze`) now runs on ISNet masks only, as for BiRefNet 1024:
+  it was tuned on ISNet's half see-through areas (before the rebase the 640 masks went through it too).
+- Rebased on main at ad780d3 (2026-11-22, night), so the 640 model gets main's iPhone memory fixes for free: model and
+  runtime parts read into one buffer of the final size, and after the iPhone idle shutdown a new engine starts no
+  sooner than 3 s later (dbg step `engine-wait`). Also: download on intent (unchanged, the model is fetched by the
+  same code), the offline cache (`sw.js` list holds `/m/birefnet640-9348c64d/`, cache `gb-m-birefnet640-9348c64d`),
+  and the GPU gate.
+- Cost on computers: when ISNet on the GPU fails, the CPU engine now downloads its own 95 MB model; before, it reused
+  ISNet's files. Rare (a GPU that fails ISNet), and only once thanks to the cache.
 
-## Measured on the Mac (headless Chrome 157, `?engine=cpu&threads=2`, M5 Pro)
+## Measured on the Mac after the rebase (headless Chrome 157, iPhone user agent and touch, `?engine=cpu&threads=2`, M5 Pro)
 
-The Mac was busy with another session's harness (load average 11 to 30), so times are noisy; runs alternated
-ISNet / 640. Five photos (portrait, two cats, flower, person from AIM/AM-2k/P3M/pets/COCO), in one batch per run.
+Load average 4 to 8. The iPhone path, as in the iPhone memory work on main: 5 photos in one batch (portrait, two cats, flower,
+person from AIM/AM-2k/P3M/pets/COCO), the engine shuts down when idle, a 👎 on the first card `gap` after the shutdown
+(the engine restarts), then a new 18.75 MP photo (5000x3750) after the next shutdown. Largest Chrome renderer RSS
+(page plus engine worker) per phase, from `ps` every 100 ms. Runs alternated 640 / ISNet, two of each per gap.
 
-| | ISNet 1024 | BiRefNet lite 640 |
-|---|---|---|
-| Time per photo, 2 threads (browser, includes the resize) | 4.7 to 5.7 s, mean 5.0 s (10 photos) | 4.5 to 5.4 s, mean 4.85 s (15 photos) |
-| 18.75 MP photo (5000x3750), one run each | 6.2 s | 5.5 s |
-| Chrome renderer RSS peak (page + engine worker), 5 photos | 1934, 1985 MB | 2017, 2067, 2016 MB (about +60 MB, +3%) |
-| Renderer RSS peak, the 18.75 MP photo | 1826 MB | 1894 MB |
-| Wasm heap peak (Node, ORT Web 1.31.1, 2 threads, one run) | 918 to 920 MB, steady | 908 to 1048 MB, usually about 1040 (+13%) |
-| iPhone path (iPhone user agent), 5 photos + one 👎, quieter Mac (load 4 to 9): time per photo | 3.03 to 3.10 s | 2.91 to 3.01 s |
-| Same runs: renderer RSS peak (includes the idle shutdown and a fresh engine for the 👎) | 2742, 2516 MB | 2820, 2719 MB |
+| Renderer RSS peak, MB | batch | 👎 after the shutdown | new 18.75 MP photo |
+|---|---|---|---|
+| BiRefNet 640, gap 0 | 1911, 2012 | 1899, 1974 | 1936, 1895 |
+| ISNet, gap 0 | 1889, 1902 | 1843, 1891 | 1896, 1935 |
+| BiRefNet 640, gap 1.5 s | 1909, 1846 | 1938, 1889 | 1934, 1916 |
+| ISNet, gap 1.5 s | 1810, 1871 | 1826, 1897 | 1905, 1919 |
+| ISNet on main before the rebase (iphone-memory hand-over, gap 0 / 1.5 s) | 2073 / 2000 | 2008 / 1991 | 2023 / 1970 |
 
-- **Time is level.** The research doc measured 640 about 10% slower in Node; in the browser, on a loaded Mac, the two
-  are within noise of each other. Treat it as "about the same"; the iPhone's `inferred` ms decides.
-- **Memory is close but not equal.** The research doc's "913 MB, 1.0x" was a low reading: repeated runs of both the
-  research file and this export land at 1031 to 1048 MB most of the time. The renderer RSS (what Safari's limit is
-  about) is about 3% higher. So the iPhone test below decides it, not this table.
-  (`performance.measureUserAgentSpecificMemory` never returned in headless Chrome within 45 s, so RSS is from `ps`.)
-- **The 👎 after the idle shutdown peaks high for both models** (about 2.5 to 2.8 GB renderer RSS, against about 2 GB
-  without it): the old engine's memory isn't back yet when the new one starts. That comes from the restart, not the
-  model (640 is 80 to 200 MB above ISNet there, within run-to-run spread), but it is the pattern that crashed iPhones
-  before, so step 4 of the test below is required.
-- **Masks:** all five photos cut out cleanly (hair, whiskers, the flower's stem); the 18.75 MP cat too.
-- **👎 zoomed retry:** works on both models (one extra run, merged result shown).
-- **GIF:** 8 frames, 4.6 to 5.1 s each, comes back animated (`gif-done`, 8 frames).
-- **iPhone path** (Chrome with an iPhone user agent and touch): picks `birefnet640` with 2 threads, the engine shuts
-  down when idle (`engine-idle`) and a 👎 starts it again from the cached model. Not a real iPhone: Safari's memory
-  limit is what matters.
-- `npm run test` passes on the branch (16 of 16; the CPU check reports `cpu-birefnet640`).
+- **Peaks: all under about 2.0 GB, none above main's ISNet.** 640 sits about 50 MB above ISNet in the same build in the
+  batch and 👎 phases (means 1920 vs 1868 and 1925 vs 1864), level on the big photo (1920 vs 1914). The paired runs
+  overlap, but the small lead is consistent with the Node wasm heap (+13%), so read it as "slightly more", not noise.
+- **The old 2.5 to 2.8 GB 👎 peak is gone for both models**: it came from starting the new engine before the old one's
+  memory was back, which main's 3 s wait now prevents (`engine-wait` about 3.0 s at gap 0, then `engine-start`).
+- **Time per photo** (the model's `inferred` ms, 2 threads): 640 2.9 to 3.2 s in the batch, 3.1 to 3.5 s for the 👎 and
+  the big photo; ISNet 3.2 to 4.1 s. A 👎 at gap 0 takes 7.5 s in all (3 s of it the wait), at 1.5 s about 6.3 s.
+- **Masks** (computer UA, `?engine=cpu&threads=2`, cut-outs exported and looked at): all five clean with 640: the
+  flower with its stem, the cat on the wall (no plants left), the man by the toilet (gloves kept, toilet gone), the
+  portrait's hair, the Abyssinian with whiskers. The 18.75 MP cat cut out on every run.
+- **Fallback name:** `?gpufail=init` on a computer: the photo finishes on the CPU and the vote says `cpu-birefnet640`.
+- `npm run test` 20/20, `npm run test:x` 41/41 (WebKit iPhone and Firefox report `cpu-birefnet640`),
+  `node scripts/test/offline.mjs` 13/13 (the worker keeps `gb-m-birefnet640-9348c64d`, 6 files; offline CPU photo works).
+
+Before the rebase (2026-11-22, evening, loaded Mac): 640 4.85 s vs ISNet 5.0 s a photo on 2 threads (computer UA);
+renderer RSS +3%; the 👎 right after the idle shutdown peaked at 2.5 to 2.8 GB for both models (the restart overlap,
+fixed on main since).
 
 ## Kevin's 2-minute test on the iPhone
 
@@ -65,8 +74,9 @@ Use Safari, a fresh tab. Each step's URL carries `?debug=1` so every step lands 
    crash, each photo about 6 s or less. An empty card ("no subject") on a busy scene is a known weak spot; note how many.
 3. **Compare with ISNet.** Open `.../?debug=1&model=isnet` in a new tab and pick the same 8 photos. Which cut-outs look
    better? (Research: 640 wins on people, pets, products; ISNet wins on thin wire frames like a bike stand.)
-4. **Required: a 👎 a few seconds after the batch finished** (the engine has shut down; the 👎 starts a new one) on a
-   photo whose subject doesn't fill the frame. Pass: the zoomed retry comes back, no crash. Then a GIF (16 frames on iPhone).
+4. **Required: a 👎 right after the batch finished** (the engine has just shut down; the 👎 starts a new one, up to 3 s
+   later) on a photo whose subject doesn't fill the frame. Pass: the zoomed retry comes back, no crash. This is the
+   pattern that crashed iPhones before main's 3 s wait. Then a GIF (16 frames on iPhone).
 
 ### Reading the diag log
 
@@ -76,9 +86,10 @@ Use Safari, a fresh tab. Each step's URL carries `?debug=1` so every step lands 
 
 The first line finds the branch's newest deployment (every push makes a new one; the branch URL always serves the
 newest). Start the tail before testing. Look for, per tab (`id` is the same within a tab):
-- `worker:init` with `"model":"birefnet640"` (or `"isnet"` with `?model=isnet`), then `worker:session`, `ready` with engine `cpu`.
+- `worker:init` with `"model":"birefnet640"` (or `"isnet"` with `?model=isnet`), then `worker:session`, `ready` with engine `cpu-birefnet640` (`cpu` with `?model=isnet`).
 - `inferred` with `ms` for each photo: the model's time on the phone.
-- `engine-idle` after a batch (the engine let go of its memory), `engine-start` when the next photo arrives.
+- `engine-idle` after a batch (the engine let go of its memory), `engine-wait` (ms until 3 s after the shutdown) when a
+  photo or 👎 comes sooner, then `engine-start`.
 - A crash shows up as the log simply stopping. The next visit sends a crash report; read it with the crash query in
   CLAUDE.md (engine `cpu-birefnet640`).
 
