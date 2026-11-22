@@ -115,7 +115,8 @@ BiRefNet on the GPU, then ISNet on the GPU (a third of the GPU memory), then the
   shows up as one of these), its start (session and warm-up, after the download) takes over 10 s, or its first
   photo over 2 s (M5 Pro: about 2 s and 0.3 s). The time limits count only while the page stays in view (computers
   start the model at load, often in a background tab); hidden, only the 30 s hang counts. A slow first photo keeps its BiRefNet result. ISNet on the GPU
-  steps down to the CPU on a failure or a hang.
+  steps down to the CPU on a failure or a hang. A failure before the worker has the model (the download, offline, or
+  the worker script) is not a GPU failure: no step down, nothing remembered, "Could not load" as before.
 - Computers that report `navigator.deviceMemory` under 8 (Chrome only, capped at 8) start on ISNet on the GPU.
 - The outcome is kept in localStorage `gb-gpu` (tier, user agent, runtime/model version, date), so later visits skip
   the try that failed. A browser update, a new runtime or BiRefNet export, or 30 days start over. Never written
@@ -237,7 +238,7 @@ Safari also deletes site storage after 7 days without a visit. The Cache API sha
 ## Animated GIFs (2026-11-21)
 
 An animated GIF is read with gifuct-js and written back with gifenc (both MIT, bundled into `dist/gif.mjs`, loaded
-only when one is added). Every frame goes through the model (at most 100, or 16 on iPhones and without WebGPU:
+only when one is added). Every frame goes through the model (at most 100, or 16 when the CPU engine runs them, decided by the engine picked, not by `navigator.gpu`:
 longer GIFs keep every n-th frame and add up the delays) and the result is an animated GIF with on/off transparency
 (soft edges become hard). The card plays it; Download and long-press save the GIF. No crop and no zoomed retry
 for GIFs (👎 is a vote only). Measured: 10 frames at 360x540 in 5.7 s on the GPU engine.
@@ -259,17 +260,31 @@ Anything the browser opens goes straight in. HEIC and TIFF on Chrome/Edge/Firefo
   Sony A7 III ARW 1616x1080 (the largest preview that camera stores), CR3 3408x2272; HEIC 6016x6016 in 1.9 s; LZW TIFF;
   a portrait HEIC (irot) comes out upright; broken HEIC/TIFF/fake DNG give an error card; mixed ZIP (nested folders, HEIC, CR2, TIFF, junk) in name order.
 
+## Batches (2026-11-22)
+
+`MAX_BATCH` per drop, paste, folder or ZIP: 100 on computers (fine pointer, not iOS, `deviceMemory` 8 or unknown), 50 on
+phones, tablets and computers reporting under 8 GB; `?maxbatch=N` to test. A drop over the cap says "Added the first N".
+Only the newest 50 are kept on the device (`KEEP_MAX`, photos past it aren't written at all); the rest are cut out and go
+into Download all, but a reload loses them. Download all streams its zip (fflate `Zip` + `ZipPassThrough`, gathered as
+Blob parts of 32 MB) instead of holding every file and then the whole zip. Measured in headless Chrome (M5 Pro, 1200x1600
+photos, GPU): about 10 MB of page memory per finished photo (preview bitmap, mask, edge colours): 0.8 GB for 50, 2.2 GB
+for 200 (98 s, zip 4 s), hence 100. Past about 40 photos on a computer screen the cards hit their 96 px minimum and the
+grid scrolls (the one-screen rule gives way for bulk). remove.bg bulk users mostly need "drop a folder, get a zip": that
+works up to 100 at a time; more means another drop.
+
 ## Kept on the device (2026-11-21)
 
 Kevin: leaving and coming back lost every photo. Cause: nothing was stored. The page is bfcache-eligible (headless Chrome
 restores it on Back, IndexedDB open included), and desktop ad clicks already open a new tab, but bfcache drops big pages
 and anything over 10 min, a reload or new visit starts empty, iPhones discard background tabs, and on phones
 `window.open` after the share sheet can be blocked, which sends this tab to the partner.
-Now every photo is kept in IndexedDB (`goodbye-bg`, stores `files` and `state`, keyed in grid order) until removed:
+Now every photo is kept in IndexedDB (`goodbye-bg` version 2, stores `files`, `state` and `backs`, keyed in grid order) until removed:
 the original file, a preview (JPEG, PNG for see-through types), mask(s) as PNG, crop, vote, retry (and the first result),
 the finished GIF. On load the cards come back in place without the model; unfinished photos run. FIFO (Kevin: "into
 perpetuity, sane limit"): newest 50 photos within 1 GB on computers, 400 MB on phones; oldest out first; quota errors
-drop the oldest and retry, then give up quietly. Removing a card deletes its copy. `navigator.storage.persist()` is
+drop the oldest and retry, then give up quietly. Removing a card deletes its copy. Background photos (`backs`, a JPEG of at most
+2048 px on iPhones, 4096 elsewhere) are stored once however many photos use them; on load the unused ones are deleted.
+Keys are `-time x 1024 + n` (x64 before 2026-11-22, which let a batch over 64 overwrite the one before it). `navigator.storage.persist()` is
 asked except in Firefox (it prompts there). Safari still clears site storage after 7 days without a visit.
 Tested: headless Chrome (reload in a restarted browser, Back still from bfcache); iOS Simulator (iPhone 17, iOS 27): force-quitting Safari and reopening brings back both photos in order with the 👍 lit, a removed card stays gone, and Download on a restored photo shares the full-size PNG; an animated GIF comes back playing. Headless Chrome: a 👎 retry comes back with its first result (2048 merged mask, 1024 first), a 👎 after the reload still puts the first back, and that sticks; a GIF's Download after a reload is the GIF. Cap (headless Chrome, `?keepmax=N` / `?keepmb=N` lower it to test): 52 photos in two batches keep 50 (the two at the end of the grid go), about 2 MB a photo (97 MB for 50); with 5 MB, older photos go first and a single photo bigger than the whole limit is not kept (it used to push out everything). Restoring 50: cards up in 60 ms, all drawn in 1.0 s warm, 9.5 s on a cold start next to the CPU engine starting. Not tested: a real QuotaExceededError.
 
@@ -294,7 +309,9 @@ Tested: headless Chrome (reload in a restarted browser, Back still from bfcache)
   count text arriving moved its box). While photos are added, the footer used to land 34 px off and then move: hugFooter
   measured a card mid pop-in (scaled .92); it reads offsetHeight now. After: CLS 0 in every case (1 to 4 photos, desktop and phone, light and dark).
 - Remove can be undone for 5 s (Kevin, 2026-11-21): a pill at the bottom, "Removed." + Undo, with a ring on the button that
-  runs down (hover or focus pauses it; Cmd/Ctrl+Z works). The stored copy is deleted at once and rewritten on Undo; memory
+  runs down (hover or focus pauses it; Cmd/Ctrl+Z works). The deadline is a JS timer (`UNDO_MS`), not the ring's animation
+  (reduced motion turned that off and the pill stayed). Undo also finishes a photo removed while the model was on it, and
+  opens one removed before its turn. The stored copy is deleted at once and rewritten on Undo; memory
   is freed when the time is up. One at a time: a second removal settles the first.
 - Messages sit next to what they're about (Kevin, 2026-11-21), one look everywhere: `tell(msg, button)` in app.js shows one
   bubble pointing at the button (adding photos: Choose photos/Paste; a failed save: that Download; a failed zip: Download all),
@@ -336,7 +353,21 @@ Tested: headless Chrome (reload in a restarted browser, Back still from bfcache)
     A tap on a swatch, outside the bar or Escape closes it. The card, Download, long press, Download all and the
     partner-ad save follow it; a solid background downloads as a JPG (0.92), see-through stays PNG. Ad card art and the
     cut-out sent to Zazzle stay see-through. Not for animated GIFs (no button). Kept in IndexedDB (`bg` in the state record).
-    Your own photo as a background: not built (a second full-size image is the iPhone memory problem again).
+    Blur and your own photo (2026-11-22, parity item 4): two more swatches. Blur: the photo's own background blurred,
+    the subject sharp; the first tap is soft, the next ones switch soft and strong (the row stays open so the card shows
+    each step). It is made per photo and strength from the preview bitmap at 480 px (never full size), with the subject
+    taken out first (blur of colour x background weight / blur of the weight, so no halo of the subject's colours), box
+    blur two passes, no canvas filter; scaled up wherever drawn. Picking blur switches the card to the whole frame (the
+    portrait-mode look; the crop button puts the crop back; Kevin may want this off). Your photo: the picture swatch opens
+    a file picker, or drop a picture on the open row or the background button (the full-window drop target steps aside
+    there); decoded once, scaled to 2048 px on iPhones (4096 elsewhere), on iPhones only while no photo is being worked on,
+    cover-fit behind the subject, shared by every photo that uses it (All), never uploaded. Both download as JPG and follow
+    Download all, long press, reload and the partner-ad save; Zazzle gets the see-through crop. `it.bg` holds
+    `"blur:1"`, `"blur:2"` or `"img:<id>"`; everything that paints a background goes through `backdrop()`.
+    Picker by card width: all swatches from 358 px; sage goes under 358, light aqua under 262, black under 217; gaps close
+    under 207, 19 px swatches under 185, any colour goes under 161, the crop toggle under 132, your photo and the sliders
+    under 121 (measured to fit 96 to 420 px). A phone in portrait (165 px) shows crop, see-through, white, any colour,
+    blur, your photo, sliders, remove.
   - Output options (2026-11-22, sellers, parity items 5 and 7): the picker's last button (sliders) swaps the swatches
     for a second row at the bar's height: Size (native select: Original, Square, 4:5, 16:9, Custom W x H up to 5000 px,
     4096 on iPhones), Margin (0, 4%, 10%, 20% of the subject's longer side; 4% is the old crop), a ground shadow toggle,
