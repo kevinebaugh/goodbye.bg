@@ -82,6 +82,13 @@ rmSync(join(dist, "render3d.js"));
 await esbuild.build({ entryPoints: [join(root, "src/gif.js")], bundle: true, format: "esm", minify: true, target: "es2022",
   outfile: join(dist, "gif.mjs"), legalComments: "none", logLevel: "warning" });
 rmSync(join(dist, "gif.js"));
+// HEIC, TIFF and camera RAW: src/formats.js (a module Worker) with UTIF (MIT) and libheif (LGPL-3.0, wasm next to it,
+// with its licence), started only when such a file is added.
+await esbuild.build({ entryPoints: [join(root, "src/formats.js")], bundle: true, format: "esm", minify: true, target: "es2022",
+  outfile: join(dist, "formats.mjs"), legalComments: "none", logLevel: "warning", external: ["fs", "path", "crypto", "url", "module", "worker_threads"] }); // node-only branches
+rmSync(join(dist, "formats.js"));
+cpSync(join(nm, "libheif-js/libheif-wasm/libheif.wasm"), join(dist, "libheif.wasm"));
+cpSync(join(nm, "libheif-js/LICENSE"), join(dist, "libheif-LICENSE.txt"));
 
 // Ad partners the page may show (public fields only; the affiliate links stay in the /go redirect).
 const { PARTNERS } = await import(join(root, "lib/partners.mjs"));

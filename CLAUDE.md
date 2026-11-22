@@ -46,7 +46,7 @@ even with no warm-up run (one try in two); the CPU engine never crashed: 7.3 s a
 Debugging on phones: `?debug=1` sends step names and numbers (never photo data) to `/api/diag`, which
 only writes to the Functions log. Read it with `npx wrangler pages deployment tail <deployment-id>
 --project-name goodbye-bg-git --format json` (find the ID with `wrangler pages deployment list`).
-Other test switches: `?engine=gpu|cpu`, `?model=isnet|birefnet`, `?threads=N`, `?nowarm=1`, `?gpufail=init|run|hang`.
+Other test switches: `?keepmax=N`, `?keepmb=N` (kept-photo limits), `?engine=gpu|cpu`, `?model=isnet|birefnet`, `?threads=N`, `?nowarm=1`, `?gpufail=init|run|hang`.
 
 Memory on phones (measured in the iOS Simulator, CPU engine): ISNet at 1024x1024 needs about 1.5 to
 2 GB of wasm heap, mostly activations; it can't run smaller (a Concat inside is fixed to 1024). Asking
@@ -111,6 +111,33 @@ longer GIFs keep every n-th frame and add up the delays) and the result is an an
 (soft edges become hard). The card plays it; Download and long-press save the GIF. No crop and no zoomed retry
 for GIFs (👎 is a vote only). Measured: 10 frames at 360x540 in 5.7 s on the GPU engine.
 
+## Formats and ZIPs (2026-11-22)
+
+Anything the browser opens goes straight in. HEIC and TIFF on Chrome/Edge/Firefox and camera RAW everywhere go to
+`src/formats.js` (bundled to `dist/formats.mjs`), a module Worker started per file and terminated after it:
+- HEIC: libheif 1.23.5 (`libheif-js`, LGPL-3.0; `libheif.wasm` 1.4 MB served next to it with `libheif-LICENSE.txt`).
+  Fetched only when a HEIC arrives on a browser without HEIC. 1920x2306 decodes in about 0.16 s.
+- TIFF: UTIF (`utif2`, MIT), the largest colour picture in the file, EXIF orientation applied.
+- RAW (DNG, CR2, CR3, NEF, ARW, RAF, ORF, RW2, ...): the largest baseline JPEG the camera stored inside, turned by the
+  TIFF orientation. No developing. Older Canons store only about 2 MP (a 40D-era CR2 gave 1936x1288); a NEF gave
+  the full 4256x2832. A RAW without a usable preview says so.
+- ZIPs (picked, dropped or in a dropped folder) open with fflate's `unzipSync`: pictures by extension, in natural name
+  order, skipping `__MACOSX` and dot-files, at most `MAX_BATCH`.
+
+## Kept on the device (2026-11-21)
+
+Kevin: leaving and coming back lost every photo. Cause: nothing was stored. The page is bfcache-eligible (headless Chrome
+restores it on Back, IndexedDB open included), and desktop ad clicks already open a new tab, but bfcache drops big pages
+and anything over 10 min, a reload or new visit starts empty, iPhones discard background tabs, and on phones
+`window.open` after the share sheet can be blocked, which sends this tab to the partner.
+Now every photo is kept in IndexedDB (`goodbye-bg`, stores `files` and `state`, keyed in grid order) until removed:
+the original file, a preview (JPEG, PNG for see-through types), mask(s) as PNG, crop, vote, retry (and the first result),
+the finished GIF. On load the cards come back in place without the model; unfinished photos run. FIFO (Kevin: "into
+perpetuity, sane limit"): newest 50 photos within 1 GB on computers, 400 MB on phones; oldest out first; quota errors
+drop the oldest and retry, then give up quietly. Removing a card deletes its copy. `navigator.storage.persist()` is
+asked except in Firefox (it prompts there). Safari still clears site storage after 7 days without a visit.
+Tested: headless Chrome (reload in a restarted browser, Back still from bfcache); iOS Simulator (iPhone 17, iOS 27): force-quitting Safari and reopening brings back both photos in order with the 👍 lit, a removed card stays gone, and Download on a restored photo shares the full-size PNG; an animated GIF comes back playing. Headless Chrome: a 👎 retry comes back with its first result (2048 merged mask, 1024 first), a 👎 after the reload still puts the first back, and that sticks; a GIF's Download after a reload is the GIF. Cap (headless Chrome, `?keepmax=N` / `?keepmb=N` lower it to test): 52 photos in two batches keep 50 (the two at the end of the grid go), about 2 MB a photo (97 MB for 50); with 5 MB, older photos go first and a single photo bigger than the whole limit is not kept (it used to push out everything). Restoring 50: cards up in 60 ms, all drawn in 1.0 s warm, 9.5 s on a cold start next to the CPU engine starting. Not tested: a real QuotaExceededError.
+
 ## UX decisions (2026-11-20, from Kevin)
 
 - One screen, no scrolling. No double-tap zoom; pinch-zoom is allowed for accessibility (Kevin, 2026-11-20). Cards are square and sized to fit; a batch appears at
@@ -125,6 +152,20 @@ for GIFs (👎 is a vote only). Measured: 10 frames at 360x540 in 5.7 s on the G
   full-size PNG). Safari ignores `touch-action` for double taps, so app.js swallows a second
   tap within 350 ms.
 - Hover effects only on devices with a real pointer (phones keep :hover after a tap).
+- QA pass 2026-11-21 (details in git log):
+  - 👎 zooms in only when the subject's padded box is under 80% of the photo; otherwise it is a vote only and its
+    label says "Bad result" instead of "Bad result, try again" (most phone photos fill the frame).
+  - The card bar drops controls so Download stays at least ~40 px wide (card widths): 187+ px everything; 154 to 186 px
+    no crop toggle (a phone in portrait with 1 to 3 photos is 165 px: Kevin, 2026-11-21, voting beats crop there; results
+    stay cropped to the subject); 133 to 153 px crop but no 👍 👎; 132 px and under (a dozen photos) Download and remove only.
+  - Short screens (height 520 px or less, a phone on its side): the wordmark sits left of the buttons (buttons go
+    right), the privacy note is hidden, spacing tightens; the empty page shrinks the headline so the footer fits.
+  - Download and Download all shimmer while a big PNG or the zip is built; repeat taps don't start it again. A failed
+    save says so. Failed cards hide Download.
+  - See-through inputs (PNG cut-outs, SVG logos) reach the model on white, or on black when the subject is light.
+    SVGs are drawn at least 2048 px on their longest side.
+  - Drags that start on the page (a cut-out dragged out) are ignored if dropped back on it.
+  - Removing a photo frees its bitmap and moves any ad card showing it to another cut-out; focus goes to the next card.
 - Buttons follow one small system in style.css (Kevin, 2026-11-21: "a mature design system"): spacing tokens
   `--s1..--s5` (4 px scale), heights `--h-sm/md/lg` (32/40/48), every button a size plus a variant (`.primary`,
   `.ghost`, plain). Set `--h`, `--px`, `--fs` instead of padding by hand. Whimsy: lift on hover, press on click.
@@ -172,7 +213,7 @@ environment (RoomEnvironment, no download), a soft blob shadow (not a shadow map
 whole floor turned into a dark slab); each product sways slowly and leans toward a moving mouse, a few degrees at most; one shared WebGL context, ~20 ms a render. The 2D canvas
 drawings in app.js are the fallback (crash step '3d-failed'). The mug camera centres on the body, not the handle.
 
-Clicking an ad card also saves the cut-out shown on it, ready to upload on the partner's site: a normal download on computers; on phones the share sheet comes first (Safari won't save from a tab that went to the background), then the partner opens (tested in the iOS Simulator 2026-11-21).
+Clicking an ad card also saves the cut-out shown on it (the card keeps that photo as `artIt`), ready to upload on the partner's site: a normal download on computers; on phones the share sheet comes first (Safari won't save from a tab that went to the background), then the partner opens (tested in the iOS Simulator 2026-11-21).
 
 Zazzle variant "mug" (the A): the visitor's first finished cut-out drawn on a mug in a canvas on the device
 (drawMug in app.js: cylinder wrap column by column, shading, rim, shadow); nothing is uploaded, and Zazzle doesn't
