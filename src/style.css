@@ -107,7 +107,6 @@ body.moving main, body.moving main *, body.moving .foot, body.moving .foot * { v
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 16px; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; display: flex; flex-direction: column; animation: pop .35s cubic-bezier(.2,1.4,.4,1); }
-@media (prefers-reduced-motion: reduce) { .swb { animation: none; } }
 @keyframes pop { from { transform: scale(.92); opacity: 0; } }
 .card.back { animation: none; } /* kept photos coming back: already seen, so they don't pop */
 .restoring .grid, .restoring .grid > *, .restoring .foot { visibility: hidden; transition: none !important; } /* until app.js has measured the kept cards (see early.js); the footer takes its place without sliding */
@@ -158,97 +157,11 @@ body.moving main, body.moving main *, body.moving .foot, body.moving .foot * { v
 .ico { flex: none; width: var(--h-sm); height: var(--h-sm); border-radius: 50%; border: 0; padding: 0; display: grid; place-items: center; cursor: pointer;
   background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); font-size: 15px; line-height: 1; transition: background .15s, box-shadow .15s, filter .15s, transform .15s; }
 .x { font-size: 20px; margin-left: var(--s1); } /* room before remove, so a tap meant for 👎 doesn't land on it */
-.crop[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 35%, transparent); box-shadow: inset 0 0 0 2px var(--brand); }
 .rate { filter: grayscale(1); }
 /* Light mode: grey thumbs were 2.1:1 on white; darker they pass 3:1 (dark mode already did). */
 @media not (prefers-color-scheme: dark) { .rate:not(.chosen, :hover) { filter: grayscale(1) brightness(.7); } }
-@media (hover: hover) { .ico:hover:not(:disabled) { filter: none; background: color-mix(in srgb, var(--ink) 13%, transparent); }
-  .crop[aria-pressed="true"]:hover { background: color-mix(in srgb, var(--accent) 50%, transparent); } }
+@media (hover: hover) { .ico:hover:not(:disabled) { filter: none; background: color-mix(in srgb, var(--ink) 13%, transparent); } }
 .rate:disabled { cursor: default; }
-/* Background: the trigger shows the current one. See-through (the default) is half checkerboard, half colour: "this
-   swaps the background". The picker takes the bar's place, at the bar's height, so nothing covers the photo and the
-   cards never resize. */
-.sw { width: 20px; height: 20px; border-radius: 50%; display: block; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 55%, transparent); }
-.sw.none, .swb.sw0 .sw { background: repeating-conic-gradient(var(--check-a) 0 25%, var(--check-b) 0 50%) 0 0 / 8px 8px; }
-.bgb .sw.none { background: linear-gradient(135deg, transparent 0 50%, var(--accent) 50%), repeating-conic-gradient(var(--check-a) 0 25%, var(--check-b) 0 50%) 0 0 / 8px 8px; }
-.bgb { opacity: 1; }
-/* The first cut-out on a device: the background button rings twice, once, until it has been used (app.js). */
-.bgb.hint::after { content: ""; position: absolute; inset: 2px; border-radius: 50%; box-shadow: 0 0 0 2px var(--brand); animation: ring 1.1s ease-out .9s 2 both; pointer-events: none; }
-.bgb { position: relative; }
-@keyframes ring { from { transform: scale(.7); opacity: 1; } to { transform: scale(1.35); opacity: 0; } }
-.bar.picking > :not(.bgs, .opts) { visibility: hidden; }
-/* Rows in the bar's place (swatches, options): never scrolled, never cut off. What doesn't fit goes on the next page
-   (app.js pageRow); › turns the page. */
-.bgs, .opts { position: absolute; inset: 0; display: flex; align-items: center; gap: var(--s1); padding: 0 var(--s2); background: var(--card); overflow: hidden; }
-.bgs { justify-content: safe center; }
-.bgs.measuring, .opts.measuring { justify-content: flex-start; }
-.bgs > .off, .opts > .off { display: none !important; }
-.swb { --d: var(--h-sm); flex: none; position: relative; width: var(--d); height: var(--d); border-radius: 50%; border: 0; padding: 0; display: grid; place-items: center;
-  background: transparent; color: var(--ink); font: inherit; font-size: 18px; line-height: 1; cursor: pointer;
-  animation: swin .28s cubic-bezier(.2,1.5,.4,1) backwards; animation-delay: calc(var(--i, 0) * 25ms); transition: transform .15s; }
-@media (pointer: fine) { .swb { --d: 28px; } } /* a mouse needs less; more swatches fit on a page */
-.swb .sw { width: calc(var(--d) - 8px); height: calc(var(--d) - 8px); }
-.swb[aria-pressed="true"]:not(.pcrop) { box-shadow: 0 0 0 2px var(--brand); }
-.pcrop { background: color-mix(in srgb, var(--ink) 7%, transparent); }
-.pcrop[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 35%, transparent); box-shadow: inset 0 0 0 2px var(--brand); }
-.swb:focus-visible, .swb:has(input:focus-visible) { outline: 2px solid var(--ink); outline-offset: 2px; } /* ink, offset: unlike the brand ring of the chosen swatch; the colour and photo swatches focus their hidden input */
-@media (hover: hover) { .swb:hover { transform: scale(1.12); } }
-.swb:active { transform: scale(.9); }
-@keyframes swin { from { transform: scale(.3); opacity: 0; } }
-.pgnext { margin-left: auto; order: 99; color: var(--muted); background: color-mix(in srgb, var(--ink) 7%, transparent); }
-/* Size, margin, shadow: pinned at the end of every swatch page, next to ›, so it is always one tap from the bar. */
-.bgs .more { order: 98; margin-left: auto; background: color-mix(in srgb, var(--ink) 7%, transparent); }
-.bgs .more + .pgnext { margin-left: 0; }
-.pgnext.back svg { transform: rotate(180deg); }
-.custom .sw { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 45%, transparent); display: grid; place-items: center; }
-.custom:not(.set) .sw::after { content: "+"; font-size: 15px; font-weight: 800; color: var(--muted); }
-.custom input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; border: 0; padding: 0; cursor: pointer; }
-.pcrop, .px { display: none; }
-.bgs.wantcrop .pcrop, .bgs.wantx .px { display: grid; } /* what the bar has no room for (app.js openPick) */
-.prate { display: none; font-size: 16px; background: color-mix(in srgb, var(--ink) 7%, transparent); }
-.bgs.wantrate .prate { display: grid; } /* 👍 👎 ride along too when the bar hides them */
-/* Blur: a soft dot (soft), spread wider (strong). Your photo: its thumbnail, or a picture icon. */
-.sw.blur, .swb.blur .sw { background: radial-gradient(circle, var(--brand) 0 20%, color-mix(in srgb, var(--brand) 40%, transparent) 42%, transparent 68%), var(--card); }
-.sw.blur.b2, .swb.blur.b2 .sw { background: radial-gradient(circle, color-mix(in srgb, var(--brand) 75%, transparent) 0 6%, color-mix(in srgb, var(--brand) 28%, transparent) 48%, transparent 82%), var(--card); }
-.sw.img, .swb.photo .sw { background-size: cover !important; background-position: center !important; }
-.swb.photo .sw { display: grid; place-items: center; color: var(--muted); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 45%, transparent); }
-.swb.photo.set svg { display: none; }
-.swb.photo input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; border: 0; padding: 0; cursor: pointer; font-size: 0; }
-.swb.photo[aria-busy="true"] { animation: pulse .8s ease-in-out infinite alternate; }
-@keyframes pulse { to { opacity: .35; } }
-/* A picture dragged over a card's background row or button: that row lights up (it becomes the background). */
-.bar.backdrop { background: color-mix(in srgb, var(--accent) 30%, var(--card)); }
-.bar.backdrop .bgb { box-shadow: 0 0 0 2px var(--brand); }
-/* Size, margin, shadow: the picker's second row, same place and height. Done (✓) first. Native selects (a phone shows
-   its own wheel). */
-.opts > * { flex: none; animation: swin .28s cubic-bezier(.2,1.5,.4,1) backwards; animation-delay: calc(var(--i, 0) * 25ms); }
-.opts > [hidden] { display: none; }
-.odone { color: var(--accent-ink); background: var(--accent); }
-.selw { position: relative; display: inline-flex; }
-.selw::after { content: ""; position: absolute; right: 9px; top: 50%; width: 6px; height: 6px; margin-top: -5px; pointer-events: none;
-  border: solid currentColor; border-width: 0 2px 2px 0; transform: rotate(45deg); opacity: .6; }
-.osel, .onum { height: var(--h-sm); border-radius: 999px; border: 1.5px solid var(--line); background: var(--card); color: var(--ink);
-  font-size: 13px; font-weight: 700; line-height: 1; cursor: pointer; }
-.osel { appearance: none; -webkit-appearance: none; padding: 0 22px 0 10px; field-sizing: content; } /* as wide as the choice shown (Chrome) */
-.omargin .osel { padding-left: 25px; }
-.omargin::before { content: ""; position: absolute; left: 10px; top: 50%; width: 9px; height: 9px; margin-top: -6px; pointer-events: none;
-  border: 1.5px dashed currentColor; border-radius: 2px; opacity: .7; } /* room around the subject */
-.osel:disabled { opacity: .4; cursor: default; }
-.odim { display: inline-flex; align-items: center; gap: var(--s1); }
-.onum { width: 58px; padding: 0 6px; text-align: center; cursor: text; appearance: textfield; -moz-appearance: textfield; }
-.onum::-webkit-inner-spin-button, .onum::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-.oby { color: var(--muted); font-weight: 700; }
-/* Chips: Shadow and WebP are on/off (a check and a fill when on); "Apply to all" is an action (its own icon). */
-.ochip { --h: var(--h-sm); --px: var(--s3); --fs: 13px; gap: var(--s1); }
-.ochip svg { flex: none; width: 14px; height: 14px; }
-.ochip[aria-pressed="false"] svg { display: none; }
-.ochip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
-.oall { border-style: dashed; }
-@media (hover: hover) { .osel:hover:not(:disabled), .onum:hover { border-color: var(--accent); } }
-.osel:focus-visible, .onum:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
-@media (pointer: coarse) { .opts .osel, .opts .onum { font-size: 16px !important; } } /* under 16 px iPhones zoom the page on focus */
-@container (max-width: 240px) { .osel, .onum { font-size: 12px; } .osel { padding: 0 18px 0 var(--s2); } .omargin .osel { padding-left: 22px; } .omargin::before { left: 8px; } .selw::after { right: 7px; } .ochip { --px: var(--s2); } }
-.pcrop svg { width: 15px; height: 15px; }
 .rate.chosen { opacity: 1; filter: none; transform: scale(1.1); }
 
 /* The ad card: fills an otherwise empty grid cell. Same size as a photo card, but quieter (no card surface, no fill,
@@ -268,7 +181,9 @@ body.moving main, body.moving main *, body.moving .foot, body.moving .foot * { v
 @keyframes shimmer { from { background-position: 120% 0; } to { background-position: -120% 0; } }
 @media (prefers-reduced-motion: reduce) { .adcard.loading .adpic::after { animation: none; } }
 .adpic { position: relative; height: calc(var(--p, 300px) + var(--bar, 0px) - var(--bar1, var(--bar, 0px))); display: grid; place-content: center; justify-items: center; gap: 10px; padding: 16px; text-align: center; }
-/* Ad cards keep a one-row bar (--bar1); a roomy grid's second row goes to the product art instead (app.js layout). */
+/* An ad cell kept for later (app.js adCells): empty, the size of a card, so nothing moves when the ad arrives. */
+.adslot { height: calc(var(--p, 300px) + var(--bar, 0px)); }
+/* Ad cards keep a one-row bar (--bar1); a photo card's second row goes to the product art instead (app.js layout). */
 .adcard .bar { min-height: var(--bar1, var(--bar, 0)); }
 .adicon { font-size: clamp(28px, calc(var(--p, 300px) * 0.18), 56px); line-height: 1; }
 .adart { width: 100%; height: calc(var(--p, 300px) * 0.62); display: block; }
@@ -338,14 +253,6 @@ body:not(.has-work) .foot { margin: 56px auto auto; padding-bottom: max(24px, 8v
 .tell.above.in { animation-name: tellUp; }
 @keyframes tellIn { from { opacity: 0; transform: translateY(-6px); } }
 @keyframes tellUp { from { opacity: 0; transform: translateY(6px); } }
-/* The dock: a narrow card's background and options rows open here, in the footer's place (app.js seat), with that
-   card ringed. Same rows, same pages, just wider. */
-.dock { position: fixed; left: 50%; transform: translateX(-50%); bottom: 16px; z-index: 30; width: min(520px, calc(100vw - 2 * var(--s4))); height: var(--h-lg);
-  background: var(--card); border: 1px solid var(--line); border-radius: 999px; box-shadow: 0 10px 30px -12px rgb(0 0 0 / .35); overflow: hidden; animation: pop .25s cubic-bezier(.2,1.4,.4,1); }
-.dock .bgs, .dock .opts { padding: 0 var(--s2); }
-.card.editing { border-color: var(--brand); position: relative; }
-/* The second pixel of the ring sits inside, over the photo: outside, a scrolling grid clipped it at its edges. */
-.card.editing::after { content: ""; position: absolute; inset: 0; border-radius: 17px; box-shadow: inset 0 0 0 1px var(--brand); pointer-events: none; z-index: 2; }
 /* Undo after Remove: a quiet pill; the ring on the button runs down the seconds left (hover or focus pauses it). */
 .undo { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 31; display: flex; align-items: center; gap: var(--s3);
   padding: 6px 6px 6px 16px; border-radius: 999px; background: var(--ink); color: var(--paper); font-size: 15px; font-weight: 600;
@@ -355,7 +262,7 @@ body:not(.has-work) .foot { margin: 56px auto auto; padding-bottom: max(24px, 8v
 .undo .btn:focus-visible { outline-color: var(--paper); } /* the global ink ring vanished on the ink pill */
 /* The pill sits in the footer's place (app.js measures it): the footer steps back while it is up. */
 .foot { transition: opacity .2s; }
-body.undoing .foot, body.docked .foot { opacity: 0; }
+body.undoing .foot { opacity: 0; }
 .ring { width: 16px; height: 16px; transform: rotate(-90deg); }
 .ring circle { fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 44; stroke-dashoffset: 0;
   animation: undoDrain 5s linear forwards; } /* shows the time left; the deadline is a timer in app.js (UNDO_MS) */
@@ -396,9 +303,12 @@ body.app, body.app * { touch-action: pan-x pan-y; } /* no pinch, no double-tap z
 body.app main { flex: 1; min-height: 0; display: flex; flex-direction: column; padding-bottom: 8px; }
 body.app.has-work main { max-width: 1800px; } /* the grid sizes its cards from both axes (app.js layout): a laptop is height-bound, not capped at 1100 px */
 body.app.has-work .grid { flex: 1; min-height: 0; grid-template-columns: repeat(var(--cols, 1), var(--p, 300px));
-  grid-auto-rows: max-content; justify-content: center; align-content: start; gap: 12px; padding-top: 22px; } /* room under Choose photos / Paste */
+  grid-auto-rows: max-content; justify-content: center; align-content: start; gap: 12px; padding-top: var(--gtop); --gtop: 22px; } /* room under Choose photos / Paste */
 body.app .grid .pic { aspect-ratio: auto; height: var(--p, 300px); }
-body.app .grid.scroll { overflow-y: auto; overscroll-behavior: contain; align-content: start; }
+body.app .grid.scroll { overflow-y: auto; overscroll-behavior: contain; align-content: start;
+  /* Cards scrolled up fade out across the gap under the buttons, so the buttons keep their breathing room (Kevin,
+     2026-11-22: cards ran right up against Choose photos / Paste). At rest the first row sits below the fade. */
+  -webkit-mask-image: linear-gradient(transparent, #000 var(--gtop)); mask-image: linear-gradient(transparent, #000 var(--gtop)); }
 body.app .grid.scroll .allrow { position: sticky; bottom: 0; z-index: 1; padding-top: var(--s2); background: var(--paper); } /* Download all stays in sight */
 /* A last row with empty cells sits in the middle (app.js centreLastRow); it glides aside when an ad fills a cell. */
 body.app .grid > .card, body.app .grid > .adcard { transition: translate .35s cubic-bezier(.2, .9, .3, 1); }
@@ -406,57 +316,26 @@ body.app.has-work .foot { padding: 20px 16px 12px; transition: transform .25s ea
 /* Empty page: hero and footer stay together near the middle (main must not stretch here). */
 body.app:not(.has-work) main { flex: none; margin-top: auto; }
 
-/* Small cards (many photos on a phone): Download becomes an icon and controls drop out (widths below). */
+/* The bar: Download, 👍 👎, remove (Kevin, 2026-11-22: just the cut-out), always one row, always all four. Narrow
+   cards shrink the buttons (32, 26, 24, 22 px; a phone with 12 photos has 110 px cards); under 100 px 👍 steps out
+   (👎 stays: it retries). Download is an icon under 240 px. */
 .card { container-type: inline-size; }
 @container (max-width: 330px) { .bar { gap: var(--s1); padding-inline: var(--s2); } .bar .dl { --px: var(--s3); } }
-/* With the background button in the bar, "Download" needs a card over 300 px; narrower cards show its icon. */
-@container (max-width: 300px) { .dl span { display: none; } .dl svg { display: block; } }
 @container (max-width: 240px) {
   .bar .dl { --h: var(--h-sm); --px: var(--s2); }
   .dl span { display: none; }
   .dl svg { display: block; }
-  .crop svg { width: 14px; height: 14px; }
   .busy { font-size: 12px; gap: 6px; padding: 8px; }
   .say { min-height: var(--h-sm); font-size: 11.5px; line-height: 1.1; }
   .say::before { margin-right: var(--s1); font-size: 15px; }
   .failed .busy::before { font-size: 22px; }
 }
-/* Download keeps at least 40 px; every control is 32 px. What the bar has no room for moves into the background
-   picker, so crop and remove are never lost. Bar by card width (the queries see 2 px less):
-   242+ crop, background, Download, 👍 👎, remove | 206-241 no crop | 162-205 no crop, no remove (a phone in portrait
-   with 1 to 3 photos, 165 px: 👍 👎 stay) | 130-161 background, Download, remove | under 130 background, Download.
-   A roomy grid (app.js: the cards fill the width first, so there is height to spare) gives narrow bars a second row
-   with crop, 👍 👎 and remove instead. */
-@container (max-width: 239px) { .bar > .crop { display: none; } }
-@container (max-width: 203px) { .bar { padding-inline: 6px; } }
-@container (min-width: 160px) and (max-width: 203px) { .picky .bar > .x { display: none; } }
-@container (max-width: 159px) { .rates { display: none; } }
-@container (max-width: 127px) { .picky .bar > .x { display: none; } .bar { padding-inline: 4px; } .bgs, .opts { padding: 0 4px; } }
-/* Cards without a picker (waiting, failed, GIFs) keep remove in the bar: where a picker would hold it, remove takes
-   the background button's place, so Download doesn't move when the card finishes. */
-@container ((min-width: 160px) and (max-width: 203px)) or (max-width: 127px) {
-  .card:not(.picky) .bgb { display: none; }
-  .card:not(.picky) .bar > .x { order: -1; margin-left: 0; }
-}
-/* The quip stays two lines at the bar's height: phone cards hide remove while their photo is worked on;
-   the smallest (a dozen photos) show only the wave. */
-@container (max-width: 203px) { .working .bar > .x { display: none; } }
-@container (max-width: 159px) { .say { font-size: 0; } .say::before { margin: 0; } }
-/* Roomy: row one background and Download, row two crop, 👍 👎 and remove (every control in sight on a phone). */
-.grid.roomy .card .bar { flex-wrap: wrap; row-gap: var(--s1); align-content: center; justify-content: space-between; }
-.grid.roomy .card .bar > .bgb { order: 1; }
-.grid.roomy .card .bar > .dl { order: 2; flex: 1 1 calc(100% - var(--h-sm) - var(--s1)); }
-.grid.roomy .card .bar > .crop { order: 3; }
-.grid.roomy .card .rates { order: 4; }
-.grid.roomy .card .bar > .say { order: 5; }
-.grid.roomy .card .bar > .x { order: 6; margin-left: 0; }
-.grid.roomy .card:not(.working) .bar > .bgb, .grid.roomy .card:not(.working) .bar > .crop, .grid.roomy .card:not(.working) .bar > .x { display: grid; }
-.grid.roomy .card:not(.working) .rates { display: flex; }
-.grid.roomy .bgs, .grid.roomy .opts { flex-wrap: wrap; align-content: center; row-gap: var(--s1); }
-/* A working card in a roomy grid: the quip fills both rows (the wave on top), not one line floating in a tall bar. */
-.grid.roomy .card.working .bar { flex-wrap: nowrap; }
-.grid.roomy .card.working .say { align-self: stretch; flex-direction: column; gap: 2px; font-size: 13px; line-height: 1.2; }
-.grid.roomy .card.working .say::before { margin: 0; font-size: 24px; }
+@container (max-width: 183px) { .bar { padding-inline: 6px; } .rates { gap: 2px; } .x { margin-left: 0; } }
+@container (max-width: 159px) { .bar .ico { width: 26px; height: 26px; font-size: 13px; } .bar .dl { --h: 26px; --px: 6px; } .x { font-size: 17px; } .dl svg { width: 15px; height: 15px; }
+  .working .bar > .x { display: none; } }
+@container (max-width: 129px) { .bar { padding-inline: 4px; gap: 2px; } .bar .ico { width: 24px; height: 24px; font-size: 12px; } .bar .dl { --h: 24px; --px: 4px; } .say { font-size: 0; } .say::before { margin: 0; } }
+@container (max-width: 115px) { .bar .ico { width: 22px; height: 22px; font-size: 11px; } .bar .dl { --h: 22px; min-width: 28px; } .x { font-size: 15px; } }
+@container (max-width: 99px) { .rates .rate:first-child { display: none; } }
 /* Short screens (a phone on its side): the wordmark moves beside the buttons and the spacing tightens, so the
    cards get the height. */
 @media (max-height: 520px) {
@@ -465,7 +344,7 @@ body.app:not(.has-work) main { flex: none; margin-top: auto; }
   body.app:not(.has-work) .hero h1 { font-size: 36px; }
   body.app:not(.has-work) .foot { margin-top: 12px; padding-block: 8px; }
   body.app.has-work .foot { padding: 6px 16px; }
-  body.app.has-work .grid { padding-top: 12px; }
+  body.app.has-work .grid { --gtop: 12px; }
 }
 @media (max-height: 520px) and (min-width: 560px) {
   body.app.has-work .top { position: absolute; top: 0; left: 0; padding: 12px max(24px, env(safe-area-inset-left)); }

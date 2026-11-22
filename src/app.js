@@ -827,10 +827,8 @@ function drawCard(it) {
   const x = c.getContext("2d");
   x.clearRect(0, 0, W, H);
   if (!it.mask) return x.drawImage(it.bmp, 0, 0, W, H);
-  if (!plainOut(it)) return drawPlanned(it);
   const full = render(it, Math.max(1, Math.round(it.w * k)), Math.max(1, Math.round(it.h * k)));
   x.drawImage(full, f.x * k, f.y * k, f.w * k, f.h * k, 0, 0, W, H);
-  underlay(x, null, 1, it, bgOf(it), { k, tx: -f.x * k, ty: -f.y * k });
   still(it);
 }
 
@@ -873,8 +871,8 @@ function reveal(it) {
   const c = it.el.canvas, x = c.getContext("2d");
   const K = Math.min(1, PREVIEW_SIDE / Math.max(it.w, it.h)), W = Math.round(it.w * K), H = Math.round(it.h * K);
   c.width = W; c.height = H;
-  const cut = render(it, W, H), slant = H * 0.4, D = 450, Z = 420, f = frame(it), bg = bgOf(it);
-  const zoom = plainOut(it) && (f.w !== it.w || f.h !== it.h); // with a size, margin or shadow set, drawCard draws that at the end
+  const cut = render(it, W, H), slant = H * 0.4, D = 450, Z = 420, f = frame(it);
+  const zoom = f.w !== it.w || f.h !== it.h;
   let t0 = performance.now();
   const wipe = (now) => {
     if (!items.includes(it)) return; // removed mid-wipe (its bitmap is closed)
@@ -883,7 +881,7 @@ function reveal(it) {
     x.drawImage(it.bmp, 0, 0, W, H);
     x.save();
     x.beginPath(); x.moveTo(0, 0); x.lineTo(edge, 0); x.lineTo(edge - slant, H); x.lineTo(0, H); x.closePath(); x.clip();
-    x.clearRect(0, 0, W, H); x.drawImage(cut, 0, 0); underlay(x, null, 1, it, bg, { k: K, tx: 0, ty: 0 });
+    x.clearRect(0, 0, W, H); x.drawImage(cut, 0, 0);
     x.restore();
     if (t < 1) requestAnimationFrame(wipe);
     else if (zoom) { t0 = performance.now(); requestAnimationFrame(ease); }
@@ -903,7 +901,6 @@ function reveal(it) {
     const ox = (cw - dw) / 2, oy = (ch - dh) / 2;
     x.clearRect(0, 0, cw, ch);
     x.drawImage(cut, rx, ry, rw, rh, ox, oy, dw, dh);
-    if (bg) { x.save(); x.beginPath(); x.rect(ox, oy, dw, dh); x.clip(); underlay(x, null, 1, it, bg, { k: K * s, tx: ox - rx * s, ty: oy - ry * s }); x.restore(); }
     if (t < 1) requestAnimationFrame(ease); else drawCard(it);
   };
   requestAnimationFrame(wipe);
@@ -914,9 +911,8 @@ function reveal(it) {
 // each) were enough, next to the engine, to crash an iPhone.
 const fullBitmap = (it) => decode(it.blob);
 
-// raw: the plain see-through PNG of the crop, whatever the card's options (the cut-out sent to Zazzle).
-async function fullBlob(it, raw = false) {
-  const bg = raw ? null : bgOf(it), webp = !raw && outOf(it).fmt === "webp" && WEBP;
+// The full-size cut-out: the crop, see-through, as a PNG.
+async function fullBlob(it) {
   dbg("png", { w: it.w, h: it.h });
   working("png", it); pngBusy++;
   // One canvas at the saved size: the photo is drawn shifted so the crop lands at 0,0 (the canvas clips the
@@ -925,31 +921,23 @@ async function fullBlob(it, raw = false) {
   // iPhone: a 16 MP PNG built next to a live engine (about 1.8 GB) crashed Safari (crash step "png"). When no photo
   // is waiting for it, the engine goes first; the next photo starts a new one from the cached model.
   if (IOS && worker?.up && !running && !retrying && !jobs.size) { stopEngine("png"); dbg("engine-png"); await nextFrame(); }
-  // With a size, margin or shadow (outPlan) the photo is scaled by k and placed at tx, ty, clipped to the subject's box.
-  const f = frame(it), p = raw || plainOut(it) ? null : outPlan(it);
-  const k = p ? p.k : 1, tx = p ? p.tx : -f.x, ty = p ? p.ty : -f.y;
-  const out = new OffscreenCanvas(p ? p.W : f.w, p ? p.H : f.h), x = out.getContext("2d");
+  const f = frame(it), out = new OffscreenCanvas(f.w, f.h), x = out.getContext("2d");
   try {
-    if (p) { x.save(); x.beginPath(); x.rect(...p.clip); x.clip(); }
     const big = await fullBitmap(it);
-    try { x.imageSmoothingQuality = "high"; x.drawImage(big, tx, ty, it.w * k, it.h * k); }
+    try { x.imageSmoothingQuality = "high"; x.drawImage(big, -f.x, -f.y, it.w, it.h); }
     finally { big.close(); }
-    const r = it.maskRect || FULL, mx = r.x * it.w * k + tx, my = r.y * it.h * k + ty, mw = r.w * it.w * k, mh = r.h * it.h * k;
+    const r = it.maskRect || FULL, mx = r.x * it.w - f.x, my = r.y * it.h - f.y, mw = r.w * it.w, mh = r.h * it.h;
     x.globalCompositeOperation = "source-atop"; // see-through edges, only where the photo has pixels
     if (it.mask.fix) x.drawImage(it.mask.fix, mx, my, mw, mh);
     x.globalCompositeOperation = "destination-in"; // keep the photo only where the mask is opaque
     x.drawImage(it.mask, mx, my, mw, mh);
-    if (p) x.restore();
-    underlay(x, p, 1, it, bg, p || { k: 1, tx: -f.x, ty: -f.y }); // the shadow and the chosen background go behind the cut-out
-    if (webp) return await out.convertToBlob({ type: "image/webp", quality: 0.9 });
-    if (!bg) return await out.convertToBlob({ type: "image/png" });
-    return await out.convertToBlob({ type: "image/jpeg", quality: 0.92 });
+    return await out.convertToBlob({ type: "image/png" });
   } finally { pngBusy--; rested(); }
 }
 
 // Phones save through the share sheet ("Save Image" puts it in Photos) instead of downloading to Files.
 // The share sheet only opens straight from a tap, so phones make each PNG as soon as the cut is done.
-const COARSE = matchMedia("(pointer: coarse)"); // touch: roomy bars and the dock (layout, seat)
+const COARSE = matchMedia("(pointer: coarse)"); // touch
 const PHONE = COARSE.matches && "canShare" in navigator;
 let pngChain = Promise.resolve();
 // One full-size PNG at a time: several at once can run a phone out of memory.
@@ -961,188 +949,8 @@ function png(it) {
   }
   return it.png;
 }
-const ext = (it) => (it.anim ? "gif" : outOf(it).fmt === "webp" && WEBP ? "webp" : bgOf(it) ? "jpg" : "png");
+const ext = (it) => (it.anim ? "gif" : "png");
 const outName = (it) => `${it.name}-goodbye-bg.${ext(it)}`;
-
-/* ---------- output: size, margin, shadow, format ----------
-   For sellers and product shots, set per photo in the bar's second row (see optsRow), or for all at once. All off by
-   default: Original keeps today's crop (the subject with 4% room, never past the photo's edges) and saves PNG, or JPG on
-   a colour. A ratio (1:1, 4:5, 16:9) grows the canvas around the subject at the photo's own resolution; Custom scales it
-   into exactly W x H. Margin is a share of the subject's longer side. The shadow is a soft ellipse under the subject. */
-const OUT0 = { size: "orig", cw: 2000, ch: 2000, margin: 0.04, shadow: false, fmt: null };
-const RATIOS = { "1:1": 1, "4:5": 0.8, "16:9": 16 / 9 };
-const OUT_MAX = IOS ? 4096 : 5000; // a custom side; and no output over 16 MP on iPhones (Safari's canvas limit), 64 elsewhere
-const OUT_PX = IOS ? 16e6 : 64e6;
-const outOf = (it) => ({ ...OUT0, ...it.out });
-const plainOut = (it) => { if (it.anim) return true; const o = outOf(it); return o.size === "orig" && o.margin === OUT0.margin && !o.shadow; };
-let WEBP = false; // browsers that can't encode WebP hand back a PNG instead (Safari): then the option isn't offered
-// An async function, so a browser without OffscreenCanvas (Safari before 16.4) gets a rejected promise here, not a
-// thrown error that stops the whole page; it hears what to do once the page is up (see the end of this file).
-(async () => { const c = new OffscreenCanvas(1, 1); c.getContext("2d"); return c.convertToBlob({ type: "image/webp" }); })().then((b) => { WEBP = b.type === "image/webp"; }, () => {});
-let outAll = null; // after "All": photos added later in this visit get the same background and options
-
-// Where things go on the output canvas, in its pixels: a photo pixel p lands at p * k + (tx, ty); clip is the subject's
-// box with its margin (outside it the canvas stays empty); sh is the shadow ellipse in photo pixels.
-// A subject that runs off the photo (a person cut at the waist, a bottle at its base) has a straight cut there: that
-// side gets no margin and sits on the canvas edge, so the cut never floats in mid-air, and no shadow goes under a cut.
-const CUT = 1.5 / RES; // the mask reaches the photo's edge (within a model pixel)
-const cutSides = (s) => (s ? { l: s.x0 <= CUT, t: s.y0 <= CUT, r: s.x1 >= 1 - CUT, b: s.y1 >= 1 - CUT } : {});
-function outPlan(it) {
-  const o = outOf(it), s = subject(it), cut = cutSides(s);
-  const b = it.crop && s ? s : { x0: 0, y0: 0, x1: 1, y1: 1 };
-  let x0 = b.x0 * it.w, y0 = b.y0 * it.h, x1 = b.x1 * it.w, y1 = b.y1 * it.h;
-  const pad = o.margin * Math.max(x1 - x0, y1 - y0);
-  if (!cut.l) x0 -= pad;
-  if (!cut.t) y0 -= pad;
-  if (!cut.r) x1 += pad;
-  if (!cut.b) y1 += pad;
-  let sh = null;
-  if (o.shadow && s && !cut.b) {
-    const rx = 0.45 * (s.x1 - s.x0) * it.w, ry = Math.max(3, rx * 0.12);
-    sh = { cx: ((s.x0 + s.x1) / 2) * it.w, cy: s.y1 * it.h - ry * 0.35, rx, ry };
-    y1 = Math.max(y1, sh.cy + sh.ry * 1.1); // room for it under the subject
-  }
-  if (o.size === "orig") { x0 = Math.max(0, x0); y0 = Math.max(0, y0); x1 = Math.min(it.w, x1); y1 = Math.min(it.h, y1); } // never past the photo
-  const bw = Math.max(1, x1 - x0), bh = Math.max(1, y1 - y0);
-  let W = bw, H = bh, k = 1;
-  if (o.size === "custom") { W = o.cw; H = o.ch; k = Math.min(W / bw, H / bh); }
-  else if (RATIOS[o.size]) { const r = RATIOS[o.size]; if (bw / bh > r) H = bw / r; else W = bh * r; }
-  const c = Math.min(1, MAX_SIDE / Math.max(W, H), Math.sqrt(OUT_PX / (W * H)));
-  W = Math.max(1, Math.round(W * c)); H = Math.max(1, Math.round(H * c)); k *= c;
-  // Centred, except against a cut side (cut on both sides: centred, there is nothing better).
-  const place = (lo, hi, a, z, S) => (lo && !hi ? -a * k : hi && !lo ? S - z * k : S / 2 - ((a + z) / 2) * k);
-  const tx = place(cut.l, cut.r, x0, x1, W), ty = place(cut.t, cut.b, y0, y1, H);
-  return { W, H, k, tx, ty, clip: [x0 * k + tx, y0 * k + ty, bw * k, bh * k], sh };
-}
-// The shadow, then the background, behind what the canvas holds; q scales the plan (previews). T places the photo on
-// this canvas (a photo pixel lands at p * T.k + T.tx, T.ty): the blurred photo lines up with the cut-out.
-function underlay(x, p, q, it, bg, T) {
-  x.globalCompositeOperation = "destination-over";
-  if (p?.sh) {
-    const { cx, cy, rx, ry } = p.sh, R = rx * p.k * q;
-    x.save(); x.translate((cx * p.k + p.tx) * q, (cy * p.k + p.ty) * q); x.scale(1, ry / rx);
-    const g = x.createRadialGradient(0, 0, 0, 0, 0, R); // a gradient, not a canvas filter (Safari)
-    g.addColorStop(0, "rgba(0,0,0,.34)"); g.addColorStop(0.5, "rgba(0,0,0,.16)"); g.addColorStop(1, "rgba(0,0,0,0)");
-    x.fillStyle = g; x.beginPath(); x.arc(0, 0, R, 0, 2 * Math.PI); x.fill(); x.restore();
-  }
-  backdrop(x, it, bg, T);
-  x.globalCompositeOperation = "source-over";
-}
-// The card with options set: the plan at preview size, never sharper than the preview bitmap.
-function drawPlanned(it) {
-  const p = outPlan(it), c = it.el.canvas, x = c.getContext("2d");
-  const q = Math.min(1, PREVIEW_SIDE / Math.max(p.W, p.H), it.bmp.width / it.w / p.k);
-  c.width = Math.max(1, Math.round(p.W * q)); c.height = Math.max(1, Math.round(p.H * q));
-  x.clearRect(0, 0, c.width, c.height);
-  const s = p.k * q, full = render(it, Math.max(1, Math.round(it.w * s)), Math.max(1, Math.round(it.h * s)));
-  x.save(); x.beginPath(); x.rect(...p.clip.map((v) => v * q)); x.clip();
-  x.drawImage(full, p.tx * q, p.ty * q);
-  x.restore();
-  underlay(x, p, q, it, bgOf(it), { k: p.k * q, tx: p.tx * q, ty: p.ty * q });
-  still(it);
-}
-
-/* ---------- backgrounds: blur and your own photo ----------
-   it.bg is null (see-through), a colour "#rrggbb", "blur:1" or "blur:2" (the photo's own background, blurred; the
-   subject stays sharp), or "img:<id>" (a picture the visitor picked, cover-fit behind the subject; see backs).
-   Everything that draws a background goes through backdrop(): canvas silently ignores a fillStyle it can't read. */
-const backs = new Map(); // id -> { c: the picture (a canvas, at most BACK_SIDE), blob: it as a JPEG, thumb: a small URL }
-const bgKind = (v) => (!v ? null : v.startsWith("blur:") ? "blur" : v.startsWith("img:") ? "img" : "color");
-// What is drawn: GIFs never get one, and a picture that is gone (storage cleared) leaves the cut-out see-through.
-const bgOf = (it) => (it.anim || !it.bg || (bgKind(it.bg) === "img" && !backs.get(it.bg.slice(4))) ? null : it.bg);
-// Draws behind what the canvas holds (the caller has set destination-over).
-function backdrop(x, it, bg, T) {
-  const kind = bgKind(bg), W = x.canvas.width, H = x.canvas.height;
-  if (!kind) return;
-  if (kind === "color") { x.fillStyle = bg; x.fillRect(0, 0, W, H); return; }
-  const src = kind === "blur" ? blurOf(it, +bg.slice(5) || 1) : backs.get(bg.slice(4))?.c;
-  if (!src) return;
-  x.imageSmoothingEnabled = true; x.imageSmoothingQuality = "high";
-  if (kind === "blur") {
-    const w = it.w * T.k, h = it.h * T.k;
-    x.drawImage(src, T.tx, T.ty, w, h);
-    if (T.tx <= 0.5 && T.ty <= 0.5 && T.tx + w >= W - 0.5 && T.ty + h >= H - 0.5) return; // the photo covers the canvas
-  }
-  // Cover-fit: the picture, or (a size wider than the photo) the blur again behind it, so nothing is left see-through.
-  const k = Math.max(W / src.width, H / src.height), dw = src.width * k, dh = src.height * k;
-  x.drawImage(src, (W - dw) / 2, (H - dh) / 2, dw, dh);
-}
-
-// Blur: made once per photo and strength from the preview bitmap at BLUR_SIDE px (never full size: iPhone memory),
-// then scaled up wherever it is drawn. The subject is taken out first (each pixel weighted by how much it is
-// background), so its colours don't smear into a halo around the cut-out. Box blur, two passes: no canvas filter
-// (Safari has none).
-const BLUR_SIDE = 480, BLUR_R = [0, 0.012, 0.03]; // radius as a share of the long side: soft, strong
-function blurOf(it, lv) {
-  const b = it.blurC;
-  if (b && b.m === it.mask && b.r === it.maskRect && b.lv === lv) return b.c;
-  if (!it.bmp || !it.mask) return null;
-  const s = Math.min(1, BLUR_SIDE / Math.max(it.w, it.h)), w = Math.max(1, Math.round(it.w * s)), h = Math.max(1, Math.round(it.h * s)), n = w * h;
-  const c = new OffscreenCanvas(w, h), x = c.getContext("2d", { willReadFrequently: true });
-  x.imageSmoothingQuality = "high";
-  x.drawImage(it.bmp, 0, 0, w, h);
-  const id = x.getImageData(0, 0, w, h), px = id.data;
-  x.clearRect(0, 0, w, h);
-  const r = it.maskRect || FULL;
-  x.drawImage(it.mask, r.x * w, r.y * h, r.w * w, r.h * h);
-  const ma = x.getImageData(0, 0, w, h).data;
-  const R = Math.max(1, Math.round(BLUR_R[lv] * Math.max(w, h))), E = 0.01;
-  const ch = [0, 1, 2, 3, 4, 5, 6].map(() => new Float32Array(n)), t = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    const wt = Math.max(0, 1 - (3 * ma[i * 4 + 3]) / 255); // edge pixels count as subject too
-    for (let k = 0; k < 3; k++) { const v = px[i * 4 + k]; ch[k][i] = v * wt; ch[k + 3][i] = v; }
-    ch[6][i] = wt;
-  }
-  const blur = (a) => { // separable running sums, edges clamped
-    for (let y = 0; y < h; y++) {
-      const o = y * w; let sum = a[o] * (R + 1);
-      for (let q = 1; q <= R; q++) sum += a[o + Math.min(q, w - 1)];
-      for (let q = 0; q < w; q++) { t[o + q] = sum / (2 * R + 1); sum += a[o + Math.min(q + R + 1, w - 1)] - a[o + Math.max(q - R, 0)]; }
-    }
-    for (let q = 0; q < w; q++) {
-      let sum = t[q] * (R + 1);
-      for (let y = 1; y <= R; y++) sum += t[Math.min(y, h - 1) * w + q];
-      for (let y = 0; y < h; y++) { a[y * w + q] = sum / (2 * R + 1); sum += t[Math.min(y + R + 1, h - 1) * w + q] - t[Math.max(y - R, 0) * w + q]; }
-    }
-  };
-  for (const a of ch) { blur(a); blur(a); }
-  for (let i = 0; i < n; i++) {
-    const d = ch[6][i] + E;
-    for (let k = 0; k < 3; k++) px[i * 4 + k] = (ch[k][i] + E * ch[k + 3][i]) / d;
-    px[i * 4 + 3] = 255;
-  }
-  x.putImageData(id, 0, 0);
-  it.blurC = { m: it.mask, r: it.maskRect, lv, c };
-  return c;
-}
-
-// Your own photo: decoded once, scaled to at most BACK_SIDE px (an iPhone holds 16 MB for it, not a 48 MP decode),
-// and shared by every photo that uses it ("All"). Kept on the device once, as a JPEG, in its own store (backs).
-const BACK_SIDE = IOS ? 2048 : 4096;
-async function addBack(file) {
-  while (IOS && (running || retrying)) await new Promise((r) => setTimeout(r, 400)); // a full decode next to a busy engine: no
-  const full = await decode(file);
-  const k = Math.min(1, BACK_SIDE / Math.max(full.width, full.height)), w = Math.max(1, Math.round(full.width * k)), h = Math.max(1, Math.round(full.height * k));
-  const c = new OffscreenCanvas(w, h), x = c.getContext("2d");
-  x.fillStyle = "#fff"; x.fillRect(0, 0, w, h); // a see-through picture sits on white
-  x.imageSmoothingQuality = "high";
-  try { x.drawImage(full, 0, 0, w, h); } finally { full.close(); }
-  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-  backs.set(id, await backEntry(c, await c.convertToBlob({ type: "image/jpeg", quality: 0.9 })));
-  dbg("back", { w, h });
-  return id;
-}
-async function backEntry(c, blob, kept = false) {
-  const k = Math.min(1, 96 / Math.max(c.width, c.height)), t = new OffscreenCanvas(Math.max(1, Math.round(c.width * k)), Math.max(1, Math.round(c.height * k)));
-  t.getContext("2d").drawImage(c, 0, 0, t.width, t.height);
-  return { c, blob, kept, thumb: URL.createObjectURL(await t.convertToBlob({ type: "image/jpeg", quality: 0.8 })) };
-}
-async function useBack(it, file) {
-  const ph = it.el.pick.querySelector(".photo"); ph.setAttribute("aria-busy", "true");
-  try { setBg(it, "img:" + (await addBack(file))); }
-  catch (e) { console.warn(e); tell(t("Could not open that picture. Try a JPG or PNG."), it.el.bgb); }
-  finally { ph.removeAttribute("aria-busy"); if (picking === it) closePick(); }
-}
 
 /* ---------- animated GIFs ----------
    Each frame goes through the model (the first one already has), is cut out at the GIF's size, and the frames
@@ -1208,7 +1016,6 @@ function unopened(it) {
   const at = items.indexOf(it);
   if (at < 0) return;
   items.splice(at, 1); clearInterval(it.quip);
-  if (picking === it) closePick();
   it.el.card.remove(); forget(it); sync();
 }
 // "Paste was blocked" and other bubbles about adding photos are done once photos arrive.
@@ -1240,7 +1047,7 @@ async function addSources(list, origin = "") {
   // All cards appear at once, so the layout settles once instead of jumping with every photo.
   const cards = document.createDocumentFragment(); // the batch goes on top, in the order it was picked
   const batch = list.map((src, i) => {
-    const it = { id: ++uid, key: top + i, name: "image", bmp: null, blob: null, w: 0, h: 0, mask: null, crop: bgKind(outAll?.bg) !== "blur", cropBack: bgKind(outAll?.bg) === "blur", bg: outAll?.bg || null, out: outAll?.out ? { ...outAll.out } : null };
+    const it = { id: ++uid, key: top + i, name: "image", bmp: null, blob: null, w: 0, h: 0, mask: null, crop: true };
     items.push(it);
     cards.append(makeCard(it));
     named(it, baseName(src instanceof Blob ? src.name : String(src).startsWith("data:") ? "pasted" : String(src)));
@@ -1264,7 +1071,7 @@ async function openOne(it, src) {
     const { blob, name } = await toBlob(src);
     named(it, baseName(name));
     if (/gif/i.test(blob.type) || /\.gif$/i.test(name || "")) { // animated: every frame gets cut out
-      try { const g = (await loadGif()).readGif(await blob.arrayBuffer(), await maxFrames()); if (g) { it.anim = g; it.crop = false; it.bg = null; it.out = null; dbg("gif", { frames: g.frames.length, total: g.total }); } }
+      try { const g = (await loadGif()).readGif(await blob.arrayBuffer(), await maxFrames()); if (g) { it.anim = g; it.crop = false; dbg("gif", { frames: g.frames.length, total: g.total }); } }
       catch (e) { console.warn("GIF frames skipped", e); }
     }
     dbg("decode", { bytes: blob.size, type: blob.type });
@@ -1388,9 +1195,6 @@ function makeCard(it) {
   card.classList.add("queued"); // waits quietly; only the photo being worked on waves and talks
   card.setAttribute("aria-busy", "true");
   const x = document.createElement("button"); x.type = "button"; x.className = "x"; x.textContent = "×"; x.setAttribute("aria-label", t("Remove")); x.title = t("Remove");
-  const crop = document.createElement("button"); crop.type = "button"; crop.className = "crop"; crop.style.visibility = "hidden"; // keeps its place, so the bar never shifts
-  crop.setAttribute("aria-label", t("Crop to subject")); crop.title = t("Crop to subject"); crop.setAttribute("aria-pressed", "true");
-  crop.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M2 6h14a2 2 0 0 1 2 2v14"/></svg>';
   const img = document.createElement("img"); img.alt = t("Cut-out"); img.draggable = true;
   img.addEventListener("touchstart", () => holdFull(it), { passive: true });
   img.addEventListener("contextmenu", () => holdFull(it));
@@ -1408,25 +1212,15 @@ function makeCard(it) {
   up.addEventListener("click", () => { tick(); rate(it, "up"); });
   down.addEventListener("click", () => { tick(); rate(it, "down"); });
   const rates = document.createElement("div"); rates.className = "rates"; rates.append(up, down);
-  x.classList.add("ico"); crop.classList.add("ico");
-  const bgb = document.createElement("button"); bgb.type = "button"; bgb.className = "ico bgb"; bgb.style.visibility = "hidden";
-  bgb.setAttribute("aria-label", t("Background")); bgb.title = t("Background"); bgb.setAttribute("aria-expanded", "false");
-  bgb.innerHTML = '<span class="sw"></span>';
-  const pick = bgPicker(it, crop, x), opts = optsRow(it);
+  x.classList.add("ico");
   const say = document.createElement("p"); say.className = "say"; // the quip while this photo is worked on: in the bar, never on the photo
-  bar.append(crop, bgb, dl, rates, say, x, pick, opts);
+  // Just the cut-out (Kevin, 2026-11-22: "It's not a full image editor"): Download, 👍 👎, remove. Always cropped to
+  // the subject, always a see-through PNG. One row; narrow cards get smaller buttons (style.css).
+  bar.append(dl, rates, say, x);
   card.append(pic, bar);
-  bgb.addEventListener("click", () => { tick(); if (picking === it) closePick(); else openPick(it); });
-
-  crop.addEventListener("click", () => {
-    it.crop = !it.crop; it.cropBack = false; tick();
-    paintCrop(it);
-    it.png = null; drawCard(it); if (PHONE && !running && !retrying) png(it); keep(it); paintOpts(it);
-  });
   x.addEventListener("click", () => { dbg("removed"); clearInterval(it.quip);
     const at = items.indexOf(it); if (at < 0) return;
     items.splice(at, 1);
-    if (picking === it) closePick(); // removed from inside its own picker (narrow cards): no full-size PNG for it later
     // Focus goes to the next card's Remove (or the one before), not back to the top of the page.
     const next = card.nextElementSibling, near = next?.querySelector?.(".x") || card.previousElementSibling?.querySelector?.(".x");
     card.remove(); swapAds(it); forget(it); sync();
@@ -1444,358 +1238,10 @@ function makeCard(it) {
     finally { clearTimeout(slow); dl.removeAttribute("aria-busy"); it.saving = false; }
   });
 
-  it.el = { card, pic, canvas, img, busy, dl, crop, up, down, bar, bgb, pick, opts, say };
+  it.el = { card, pic, canvas, img, busy, dl, up, down, bar, say };
   return card;
 }
 
-/* ---------- background ----------
-   A finished cut-out stays see-through unless the person picks a background: white, black, two from the palette
-   or any colour. The card, Download (a JPG then: smaller, and nothing to see through), a long press and Download all
-   follow it. Ad cards and the cut-out sent to Zazzle stay see-through (a product looks wrong on a white square).
-   The picker takes the bar's place, so it never covers the photo; on narrow cards it also holds the controls the
-   bar had no room for (crop, remove). */
-const BGS = [[null, "See-through"], ["#ffffff", "White"], ["#000000", "Black"], ["#a7dbd8", "Light aqua"], ["#e0e4cc", "Sage"]];
-const BLURS = [["blur:1", "Soft blur"], ["blur:2", "Strong blur"]];
-const CHEV = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>';
-let picking = null;
-// Every swatch is one tap: it sets the background and closes the row (your photo once the picture is picked).
-function bgPicker(it, crop, x) {
-  const pick = document.createElement("div"); pick.className = "bgs"; pick.hidden = true;
-  pick.setAttribute("role", "group"); pick.setAttribute("aria-label", t("Background"));
-  // Pages break between groups (pageRow): the colours, then blur soft + strong (never split) and your photo, then crop
-  // and remove when the bar has no room for them. Size, margin, shadow (sliders) is pinned next to ›, on every page.
-  const pcrop = crop.cloneNode(true); pcrop.className = "swb crop pcrop pg"; pcrop.style.visibility = ""; pcrop.dataset.g = "ctl";
-  pcrop.addEventListener("click", () => crop.click());
-  const swatch = (v, label, cls) => {
-    const b = document.createElement("button"); b.type = "button"; b.className = `swb pg ${cls}`; b.dataset.bg = v || "";
-    b.dataset.g = String(v).startsWith("blur") ? "back" : "colour"; if (String(v).startsWith("blur")) b.dataset.u = "blur";
-    label = t(label); b.setAttribute("aria-label", label); b.title = label;
-    b.innerHTML = '<span class="sw"></span>';
-    b.addEventListener("click", () => { setBg(it, v); closePick(); });
-    return b;
-  };
-  BGS.forEach(([v, label], i) => { const b = swatch(v, label, `sw${i}`); if (v) b.firstChild.style.background = v; pick.append(b); });
-  const own = document.createElement("label"); own.className = "swb custom pg"; own.title = t("Any colour"); own.dataset.g = "colour";
-  own.innerHTML = '<span class="sw"></span><input type="color" value="#69d2e7">';
-  own.querySelector("input").setAttribute("aria-label", t("Any colour"));
-  const input = own.querySelector("input");
-  let raf = 0;
-  input.addEventListener("input", () => { // live on the card while the colour picker is open
-    wholeForBlur(it, input.value); it.bg = input.value; it.png = null; paintBg(it);
-    cancelAnimationFrame(raf); raf = requestAnimationFrame(() => drawCard(it));
-  });
-  input.addEventListener("change", () => { cancelAnimationFrame(raf); setBg(it, input.value, true); closePick(); });
-  pick.append(own);
-  // Blur: the photo's own background, soft or strong (the subject stays sharp).
-  BLURS.forEach(([v, label], i) => pick.append(swatch(v, label, `blur b${i + 1}`)));
-  // Your own picture behind the subject: picked here or dropped on the row (see the drop handler). Never uploaded.
-  const photo = document.createElement("label"); photo.className = "swb photo pg"; photo.title = t("Your photo"); photo.dataset.g = "back";
-  photo.innerHTML = '<span class="sw"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 16 5-5 4 4 3-3 6 6"/></svg></span><input type="file" accept="image/*">';
-  photo.querySelector("input").setAttribute("aria-label", t("Your photo as the background"));
-  const file = photo.querySelector("input");
-  file.addEventListener("change", () => { const f = file.files[0]; file.value = ""; if (f) useBack(it, f); });
-  pick.append(photo);
-  const more = document.createElement("button"); more.type = "button"; more.className = "swb more";
-  more.setAttribute("aria-label", t("Size, margin, shadow")); more.title = t("Size, margin, shadow");
-  more.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>';
-  more.addEventListener("click", () => { tick(); openOpts(it); });
-  const px = x.cloneNode(true); px.className = "swb px pg"; px.dataset.g = "ctl"; px.addEventListener("click", () => x.click());
-  // 👍 👎 too, when the bar has no room for them (a phone in portrait with 3 or more photos): votes are never lost.
-  const prates = ["up", "down"].map((v) => {
-    const b = document.createElement("button"); b.type = "button"; b.className = `swb rate prate pg p${v}`; b.dataset.g = "vote"; // first, on the page the row opens on
-    b.textContent = v === "up" ? "👍" : "👎";
-    b.addEventListener("click", () => { const o = it.el[v]; closePick(); if (!o.disabled) o.click(); });
-    return b;
-  });
-  pick.prepend(...prates); pick.append(pcrop, px, more, pager(pick));
-  [...pick.children].forEach((c, i) => c.style.setProperty("--i", i));
-  pick.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); closePick(true); } });
-  leaveCloses(it, pick);
-  return pick;
-}
-// Tabbing out of an open row closes it (it used to stay open and keep that card's controls hidden).
-function leaveCloses(it, row) {
-  row.addEventListener("focusout", (e) => { const to = e.relatedTarget; if (picking === it && to && !it.el.bar.contains(to) && !$("dock").contains(to)) closePick(); });
-}
-/* Pages: a row in the bar's place (swatches, options) never scrolls and never cuts a control off. What doesn't fit
-   goes on the next page; › at the end turns the page, and on the last page it points back to the first. */
-function pager(row) {
-  const b = document.createElement("button"); b.type = "button"; b.className = "swb pgnext"; b.innerHTML = CHEV; b.hidden = true;
-  b.addEventListener("click", () => { tick(); showPage(row, (row.page + 1) % row.pages.length, true); });
-  return b;
-}
-const overflows = (row) => row.scrollWidth > row.clientWidth + 1 || row.scrollHeight > row.clientHeight + 1;
-function pageRow(row, at = 0) {
-  const next = row.querySelector(".pgnext"), done = row.querySelector(".odone");
-  done?.classList.remove("pg");
-  row.classList.add("measuring");
-  for (let pass = 0; pass < 2; pass++) {
-    const items = [...row.querySelectorAll(":scope > .pg")];
-    for (const e of items) e.classList.remove("off");
-    const shown = items.filter((e) => getComputedStyle(e).display !== "none");
-    next.hidden = true;
-    let pages = [shown];
-    if (overflows(row)) {
-      next.hidden = false; pages = [];
-      for (const e of shown) e.classList.add("off");
-      // Units (the blur pair) never split; groups (data-g) start a new page rather than straddle one, unless a whole
-      // group can't fit on a page of its own.
-      const groups = [];
-      for (const e of shown) {
-        const g = groups.at(-1), u = g?.at(-1);
-        if (u && e.dataset.u && u.u === e.dataset.u) u.els.push(e);
-        else if (g && e.dataset.g && g.g === e.dataset.g) g.push({ u: e.dataset.u, els: [e] });
-        else groups.push(Object.assign([{ u: e.dataset.u, els: [e] }], { g: e.dataset.g }));
-      }
-      const on = (els, v) => { for (const e of els) e.classList.toggle("off", !v); };
-      let cur = [];
-      const turn = () => { on(cur, false); pages.push(cur); cur = []; };
-      for (const g of groups) {
-        const els = g.flatMap((u) => u.els);
-        on(els, true);
-        if (!cur.length || !overflows(row)) { cur.push(...els); if (!overflows(row)) continue; on(els, false); cur.length -= els.length; }
-        else on(els, false);
-        if (cur.length) turn();
-        for (const u of g) {
-          on(u.els, true);
-          if (cur.length && overflows(row)) { on(u.els, false); turn(); on(u.els, true); }
-          cur.push(...u.els);
-        }
-      }
-      pages.push(cur);
-      for (const e of shown) e.classList.add("off");
-    }
-    row.pages = pages;
-    // Too narrow for Done, a control and ›: Done becomes the last control of the last page.
-    const tight = done && !pass && pages.some((pg) => { for (const e of pg) e.classList.remove("off"); const o = overflows(row); for (const e of pg) e.classList.add("off"); return o; });
-    if (!tight) break;
-    done.classList.add("pg");
-  }
-  row.classList.remove("measuring");
-  showPage(row, typeof at === "number" ? at : Math.max(0, row.pages.findIndex((pg) => pg.includes(at))));
-}
-function showPage(row, i, focus = false) {
-  const n = row.pages.length, next = row.querySelector(".pgnext");
-  row.page = Math.min(i, n - 1);
-  row.pages.forEach((pg, k) => { for (const e of pg) e.classList.toggle("off", k !== row.page); });
-  const last = row.page === n - 1 && n > 1;
-  next.classList.toggle("back", last);
-  const label = t(last ? "Back to the first" : "More"); next.setAttribute("aria-label", label); next.title = label;
-  if (focus) (row.pages[row.page][0] || next).focus({ preventScroll: true });
-}
-// The background button is easy to miss: on a device's first cut-out it rings twice, until the picker has been opened.
-const HINT_KEY = "gb-bg-seen";
-let hinted = false;
-function hintBg(it) {
-  if (hinted) return;
-  hinted = true;
-  try { if (localStorage.getItem(HINT_KEY)) return; } catch { return; }
-  it.el.bgb.classList.add("hint");
-}
-function openPick(it) {
-  closePick();
-  picking = it;
-  hinted = true; try { localStorage.setItem(HINT_KEY, "1"); } catch {}
-  for (const b of document.querySelectorAll(".bgb.hint")) b.classList.remove("hint");
-  const { bgb, pick } = it.el;
-  paintBg(it);
-  // What the bar has no room for (crop, remove) rides along in the picker.
-  pick.classList.toggle("wantcrop", getComputedStyle(it.el.crop).display === "none");
-  pick.classList.toggle("wantx", getComputedStyle(it.el.bar.querySelector(":scope > .x")).display === "none");
-  const wantRate = !!it.mask && !it.el.up.disabled && getComputedStyle(it.el.bar.querySelector(".rates")).display === "none";
-  pick.classList.toggle("wantrate", wantRate); // unvoted only: a vote already given shows on the card
-  for (const v of ["up", "down"]) { const o = it.el[v], b = pick.querySelector(`.p${v}`); b.title = o.title; b.setAttribute("aria-label", o.getAttribute("aria-label")); }
-  pick.hidden = false; bgb.setAttribute("aria-expanded", "true");
-  const on = pick.querySelector('[aria-pressed="true"]:not(.pcrop)');
-  seat(it, pick, wantRate ? 0 : on || 0); // on the page with the current background (the votes' page while unvoted)
-  (on && !on.classList.contains("off") ? on : pick.querySelector(".pg:not(.off)"))?.focus({ preventScroll: true });
-}
-/* A row goes in the bar's place when it fits on two pages there. A narrower card (a dozen photos) would need many
-   pages of 32 px buttons, so the row opens in the dock instead: a strip in the footer's place (the footer steps back
-   meanwhile) with the card ringed. Either way nothing covers a photo and no card moves. */
-const PAGES_MAX = 2;
-function seat(it, row, at = 0) {
-  const dock = $("dock");
-  // With a mouse the row stays in the card's bar, however many pages (a dock at the bottom of a big window was far
-  // from the card), unless a page can't hold even one control next to the sliders and › (cards under ~130 px, dozens
-  // of photos): then it docks like on touch screens.
-  if (!dock.contains(row)) { it.el.bar.classList.add("picking"); pageRow(row, at); if (row.pages.length <= PAGES_MAX || (!COARSE.matches && pagesFit(row))) return; }
-  it.el.bar.classList.remove("picking"); it.el.card.classList.add("editing"); document.body.classList.add("docked");
-  dock.append(it.el.pick, it.el.opts); dock.hidden = false;
-  placeDock(); pageRow(row, at);
-}
-// Every page fits on its own (a page holds at least one control even when that control doesn't fit).
-function pagesFit(row) {
-  const ok = row.pages.every((pg, k) => { row.pages.forEach((q, j) => { for (const e of q) e.classList.toggle("off", j !== k); }); return !overflows(row); });
-  showPage(row, row.page);
-  return ok;
-}
-function placeDock() {
-  const dock = $("dock"), f = document.querySelector(".foot").getBoundingClientRect();
-  dock.style.bottom = `${Math.max(8, Math.round(innerHeight - f.bottom + (f.height - dock.offsetHeight) / 2))}px`;
-}
-function closePick(refocus = false) {
-  const it = picking; picking = null;
-  if (!it) return;
-  const { bar, bgb, pick } = it.el;
-  const { opts } = it.el, inside = pick.contains(document.activeElement) || opts.contains(document.activeElement);
-  bar.classList.remove("picking"); pick.hidden = true; opts.hidden = true; bgb.setAttribute("aria-expanded", "false");
-  if ($("dock").contains(pick)) { bar.append(pick, opts); $("dock").hidden = true; it.el.card.classList.remove("editing"); document.body.classList.remove("docked"); }
-  if (PHONE && items.includes(it) && it.mask && !it.png && !it.anim && !running && !retrying) png(it); // the share sheet needs it ready at the tap
-  if (refocus || inside) bgb.focus({ preventScroll: true });
-}
-// After a layout (photos added or removed, a resized window) the open row is measured again; a docked one stays docked.
-function repick() {
-  if (!picking) return;
-  const it = picking, row = it.el.opts.hidden ? it.el.pick : it.el.opts, at = row.pages?.[row.page]?.[0] || 0;
-  if ($("dock").contains(row)) { placeDock(); pageRow(row, at); } else seat(it, row, at);
-}
-// A tap anywhere else puts the bar back.
-document.addEventListener("pointerdown", (e) => { if (picking && !picking.el.bar.contains(e.target) && !$("dock").contains(e.target)) closePick(); }, true);
-function setBg(it, v, force = false) {
-  tick();
-  if (!force && (v || null) === (it.bg || null)) return;
-  wholeForBlur(it, v);
-  it.bg = v || null;
-  paintBg(it);
-  it.png = null; drawCard(it); if (PHONE && !running && !retrying) png(it); keep(it); // not next to a busy engine (iPhone memory)
-}
-// The crop button and its copy in the picker (which may sit in the dock, outside the card).
-function paintCrop(it) { for (const b of [it.el.crop, it.el.pick?.querySelector(".pcrop")]) b?.setAttribute("aria-pressed", String(it.crop)); }
-// Blur is the portrait-mode look: the whole frame, not a tight crop around the subject (the crop button puts it back).
-// Leaving blur for anything else puts back the crop blur took away (cropBack), unless crop was toggled meanwhile.
-function wholeForBlur(it, v) {
-  if (it.anim) return;
-  const toBlur = bgKind(v) === "blur";
-  if (toBlur && bgKind(it.bg) !== "blur" && it.crop) { it.crop = false; it.cropBack = true; }
-  else if (!toBlur && it.cropBack) { it.crop = true; it.cropBack = false; }
-  else return;
-  if (it.el) paintCrop(it);
-}
-const bgName = (v) => { const k = bgKind(v); const n = k === "blur" ? (v === "blur:2" ? "Strong blur" : "Soft blur") : k === "img" ? "Your photo" : BGS.find(([c]) => c === (v || null))?.[1]; return n ? t(n) : v; };
-// The trigger shows the current background; the picker marks it.
-function paintBg(it) {
-  const { bgb, pick } = it.el, v = it.bg || null, kind = bgKind(v), own = kind === "color" && !BGS.some(([c]) => c === v);
-  const sw = bgb.firstChild, back = kind === "img" ? backs.get(v.slice(4)) : null;
-  sw.className = "sw" + (!v ? " none" : kind === "blur" ? ` blur b${v.slice(5)}` : kind === "img" ? " img" : "");
-  sw.style.background = kind === "color" ? v : ""; sw.style.backgroundImage = back?.thumb ? `url("${back.thumb}")` : "";
-  it.el.card.classList.toggle("solid", !!bgOf(it)); // a solid background downloads as a plain JPG: no checkerboard around it
-  for (const b of pick.querySelectorAll("[data-bg]")) b.setAttribute("aria-pressed", String((b.dataset.bg || null) === v));
-  const c = pick.querySelector(".custom");
-  c.classList.toggle("set", !!own); c.setAttribute("aria-pressed", String(!!own));
-  c.firstChild.style.background = own ? v : "";
-  if (own) c.querySelector("input").value = v;
-  c.querySelector("input").setAttribute("aria-label", t(own ? "Any colour, chosen" : "Any colour")); // the label's aria-pressed isn't announced
-  const ph = pick.querySelector(".photo"), psw = ph.firstChild;
-  ph.setAttribute("aria-pressed", String(kind === "img")); ph.classList.toggle("set", !!back?.thumb);
-  ph.querySelector("input").setAttribute("aria-label", t(kind === "img" ? "Your photo as the background, chosen" : "Your photo as the background"));
-  psw.style.backgroundImage = back?.thumb ? `url("${back.thumb}")` : "";
-  const label = t("Background: {name}", { name: bgName(v) });
-  bgb.setAttribute("aria-label", label); bgb.title = label;
-}
-
-/* The second row: size, margin, shadow, WebP, and "Apply to all", which gives every photo this one's background and
-   options. Like the swatches it takes the bar's place at the bar's height; Done (first) puts the bar back, and what
-   doesn't fit goes on the next page (Custom's width and height come up on their own page when they don't fit). */
-const SIZES = [["orig", "Original"], ["1:1", "Square"], ["4:5", "4:5"], ["16:9", "16:9"], ["custom", "Custom"]];
-const MARGINS = [[0, "0%"], [0.04, "4%"], [0.1, "10%"], [0.2, "20%"]];
-const CHECK = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
-const COPY = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 4H6a2 2 0 0 0-2 2v10"/></svg>';
-function optsRow(it) {
-  const o = document.createElement("div"); o.className = "opts"; o.hidden = true;
-  o.setAttribute("role", "group"); o.setAttribute("aria-label", t("Size, margin, shadow"));
-  const done = document.createElement("button"); done.type = "button"; done.className = "swb odone"; done.innerHTML = CHECK;
-  done.setAttribute("aria-label", t("Done")); done.title = t("Done");
-  done.addEventListener("click", () => { tick(); closePick(true); });
-  const sel = (cls, label, list) => {
-    const w = document.createElement("span"); w.className = "selw pg " + cls;
-    const s = document.createElement("select"); s.className = "osel"; s.setAttribute("aria-label", label = t(label));
-    for (const [v, text] of list) { const op = document.createElement("option"); op.value = String(v); op.textContent = t(text); s.append(op); }
-    w.title = label; w.append(s); return w;
-  };
-  const size = sel("osize", "Size", SIZES), margin = sel("omargin", "Margin around the subject", MARGINS);
-  size.firstChild.addEventListener("change", (e) => setOut(it, { size: e.target.value }));
-  margin.firstChild.addEventListener("change", (e) => {
-    const v = +e.target.value;
-    if (v && !it.crop && outOf(it).size === "orig" && !it.anim) { // a margin needs the crop: turn it on
-      it.crop = true; it.cropBack = false;
-      paintCrop(it);
-    }
-    setOut(it, { margin: v });
-  });
-  const num = (cls, label, key) => {
-    const n = document.createElement("input"); n.type = "number"; n.inputMode = "numeric"; n.min = "16"; n.max = String(OUT_MAX); n.step = "1";
-    n.className = "onum " + cls; label = t(label); n.setAttribute("aria-label", label); n.title = label;
-    n.addEventListener("change", () => { const v = Math.round(Math.min(OUT_MAX, Math.max(16, +n.value || OUT0[key]))); n.value = v; setOut(it, { [key]: v }); });
-    return n;
-  };
-  const dim = document.createElement("span"); dim.className = "odim pg";
-  const by = document.createElement("span"); by.className = "oby"; by.textContent = "×"; by.setAttribute("aria-hidden", "true");
-  dim.append(num("ocw", "Width in pixels", "cw"), by, num("och", "Height in pixels", "ch"));
-  // On/off chips show a check mark when on; "Apply to all" is an action (its own icon, never "on").
-  const chip = (cls, text, label) => {
-    const b = document.createElement("button"); b.type = "button"; b.className = `btn ochip pg ${cls}`; b.title = t(label);
-    b.innerHTML = `${CHECK}<span>${t(text)}</span>`; b.setAttribute("aria-pressed", "false"); return b;
-  };
-  const shadow = chip("oshadow", "Shadow", "Shadow under the subject");
-  shadow.addEventListener("click", () => { tick(); setOut(it, { shadow: !outOf(it).shadow }); });
-  const webp = chip("owebp", "WebP", "Save as WebP (smaller files)");
-  webp.addEventListener("click", () => { tick(); setOut(it, { fmt: outOf(it).fmt ? null : "webp" }); });
-  const all = document.createElement("button"); all.type = "button"; all.className = "btn ochip oall pg";
-  all.title = t("Use this background and these options for every photo");
-  all.innerHTML = `${COPY}<span>${t("Apply to all")}</span>`;
-  all.addEventListener("click", () => {
-    tick(); useForAll(it);
-    all.innerHTML = `${CHECK}<span>${t("Applied")}</span>`; clearTimeout(all.t);
-    all.t = setTimeout(() => (all.innerHTML = `${COPY}<span>${t("Apply to all")}</span>`), 1400);
-  });
-  o.append(done, size, dim, margin, shadow, all, webp, pager(o)); // most used first
-  [...o.children].forEach((c, i) => c.style.setProperty("--i", i));
-  o.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); closePick(true); } });
-  leaveCloses(it, o);
-  return o;
-}
-function openOpts(it) {
-  const { pick, opts } = it.el;
-  pick.hidden = true; opts.hidden = false;
-  paintOpts(it);
-  seat(it, opts, 0);
-  opts.querySelector(".osel")?.focus({ preventScroll: true });
-}
-function paintOpts(it) {
-  const o = outOf(it), el = it.el.opts; if (!el) return;
-  const q = (s) => el.querySelector(s), custom = o.size === "custom", dimWas = !q(".odim").hidden;
-  q(".osize select").value = o.size;
-  // The whole frame at its own size has no room around the subject: the select shows 0%, and picking a margin turns the
-  // crop on (it used to grey out with no reason given).
-  const whole = o.size === "orig" && !it.crop;
-  q(".omargin select").value = whole ? "0" : String(MARGINS.some(([v]) => v === o.margin) ? o.margin : OUT0.margin);
-  q(".omargin").title = t(whole ? "Margin around the subject (turns the crop on)" : "Margin around the subject");
-  q(".ocw").value = o.cw; q(".och").value = o.ch;
-  q(".odim").hidden = !custom;
-  q(".oshadow").setAttribute("aria-pressed", String(!!o.shadow));
-  q(".owebp").setAttribute("aria-pressed", String(o.fmt === "webp")); q(".owebp").hidden = !WEBP;
-  if (it.mask) { const p = plainOut(it) ? frame(it) : outPlan(it), w = p.W || p.w, h = p.H || p.h; q(".osize select").title = `${w} × ${h} px`; }
-  // Custom chosen or dropped while the row is open: measure the pages again, and show the width and height.
-  if (!el.hidden && el.pages && custom !== dimWas) pageRow(el, custom ? q(".odim") : q(".osize"));
-}
-function setOut(it, patch) {
-  it.out = { ...outOf(it), ...patch };
-  it.png = null; paintOpts(it);
-  if (it.mask) { drawCard(it); keep(it); } // phones build the PNG ahead once the row closes (closePick), not once per change
-}
-// This photo's background and options for every photo, and for photos added later in this visit.
-function useForAll(from) {
-  outAll = { bg: from.bg || null, out: from.out ? { ...from.out } : null };
-  for (const it of items) {
-    if (it === from || it.anim || it.failed) continue;
-    wholeForBlur(it, outAll.bg); it.bg = outAll.bg; it.out = outAll.out && { ...outAll.out }; it.png = null;
-    if (it.mask && it.el) { paintBg(it); drawCard(it); keep(it); }
-  }
-  preparePngs(); // phones: one at a time, after a pause, never next to a busy engine
-}
-
-// The file name tells screen readers which photo a card (and its Download, Remove…) belongs to.
 function named(it, name) {
   it.name = name;
   it.el.card.setAttribute("aria-label", name); it.el.img.alt = t("{name}, background removed", { name }); it.el.canvas.setAttribute("aria-label", name);
@@ -1896,11 +1342,7 @@ function unshow(it) {
 function ready(it) {
   clearInterval(it.quip); it.el.card.classList.remove("queued", "working"); it.el.card.removeAttribute("aria-busy");
   it.el.busy.hidden = true; it.el.dl.disabled = false;
-  for (const b of [it.anim ? null : it.el.crop, it.anim ? null : it.el.bgb, it.el.up, it.el.down]) if (b) b.style.visibility = "";
-  it.el.card.classList.toggle("picky", !it.anim); // has a background picker, so narrow bars may move remove into it
-  if (!it.anim) hintBg(it);
-  paintCrop(it);
-  paintBg(it);
+  for (const b of [it.el.up, it.el.down]) b.style.visibility = "";
   downLabel(it);
 }
 
@@ -2117,10 +1559,10 @@ async function retry(it) {
 // Only past a minimum size (dozens of photos on a phone) does the grid scroll.
 // Cards are square and sized to fit the screen. Under MIN_PIC the grid scrolls (bulk: about 50 photos on a laptop);
 // 84 px still leaves Download 40 px next to the background button. A phone in portrait fits 12 (3 x 4).
-const GAP = 12, MIN_PIC = 84, MAX_PIC = 640, RATE_MIN = 160, X_MIN = 204; // the bar shows 👍 👎 from 160 px, remove from 204 (style.css container queries)
-// The bar's height by card width (style.css): cards up to 242 px use the small Download (--h-sm). ROW2: the second row a
-// roomy bar adds (32 px controls and a 4 px gap). FULL_BAR: the card width from which one row holds every control.
-const BAR_SM = 49, BAR_MD = 57, ROW2 = 36, FULL_BAR = 242, ROOMY_MIN = 154;
+const GAP = 12, MIN_PIC = 84, MAX_PIC = 640;
+// The bar's height by card width (style.css): one row, Download, 👍 👎, remove, the buttons smaller on narrow cards.
+// Cards up to 242 px use the small Download.
+const BAR_SM = 49, BAR_MD = 57, FULL_BAR = 242;
 const barFor = (p) => (p <= FULL_BAR ? BAR_SM : BAR_MD);
 COARSE.addEventListener?.("change", () => requestAnimationFrame(layout));
 // A phone on its side (short and wide): "Download all" moves up beside Choose photos and Paste, where the width is
@@ -2137,7 +1579,7 @@ const gridEnd = () => ($("tools").parentNode === $("grid") ? $("tools") : null);
 SIDEWAYS.addEventListener("change", () => layout());
 function layout() {
   const g = $("grid"), n = g.querySelectorAll(".card").length, all = $("tools");
-  if (!n) { document.body.classList.remove("packed"); placeAds(0, 0); hugFooter(0); return; } // the last photo was removed: the ads go with it
+  if (!n) { document.body.classList.remove("packed"); placeAds(0, 0, 0); hugFooter(0); return; } // the last photo was removed: the ads go with it
   try { if (adsOn()) load3d(); } catch {} // fetch the 3D code while the first photo is still being worked on, so ads draw at once
   // "Download all" sits under the cards. Its padding (only while the grid scrolls, where it sticks to the bottom) is left
   // out: counted, a grid that had scrolled stayed scrolling once a card went (13 to 12 photos on a phone).
@@ -2156,9 +1598,13 @@ function layout() {
     }
     return b;
   };
-  // Ads fill the grid (Kevin, 2026-11-20): up to 3 photos are laid out as 4 cells, more photos fill out their
-  // last row. The cells are reserved from the start, so the photos never resize when the ads arrive.
-  let slots = adsOn() && n < 4 ? 4 : n, best = fit(slots);
+  // Ads among the photos (Kevin, 2026-11-22): their cells are reserved from the start (adCount), so the photos never
+  // resize or move when the ads arrive.
+  // Ads never make the photos scroll: fewer of them when the photos alone would fit on the screen.
+  let ads = adCount(n);
+  while (ads && fit(n + ads).p < MIN_PIC && fit(n).p >= MIN_PIC) ads--;
+  const slots = n + ads;
+  let best = fit(slots);
   // When the photos would scroll with the footer in place, the footer steps aside and the grid gets its room (Kevin,
   // 2026-11-22: on a phone with 10 photos the footer sat under Download all while the cards scrolled). Decided as if the
   // footer were there, so taking it away never brings it back in a loop.
@@ -2166,33 +1612,19 @@ function layout() {
   if (foot && !packed) footH = foot.offsetHeight;
   const crowded = fit(slots, 1, packed ? H - footH : H).p < MIN_PIC;
   if (crowded !== packed && !SIDEWAYS.matches) { document.body.classList.toggle("packed", crowded); requestAnimationFrame(layout); return; } // again, with the grid's new height
-  // A phone in portrait (Kevin's iPhone: 402 x 654): 1 or 2 photos in the 4 kept cells came out 136 px, too small for
-  // 👍 👎. Then they keep 2 cells (1 photo + 1 ad, or 2 photos side by side), which leaves room for the bar's second row.
-  // Also when the bar would hide remove (under 204 px, Kevin 2026-11-22: "I can't remove the last one"): 2 cells leave
-  // room for the second row, which holds crop, 👍 👎 and remove.
-  if (slots === 4 && n < 3 && COARSE.matches && best.p < X_MIN) {
-    const two = fit(2, 2); // side by side: stacked, a card came out 205 px with no room for remove and no second row
-    if (two.p >= ROOMY_MIN && two.p < FULL_BAR && two.row - barFor(two.p) - ROW2 >= two.p) { slots = 2; best = two; }
-  }
   const scroll = best.p < MIN_PIC;
   let p = Math.min(MAX_PIC, Math.max(best.p, MIN_PIC));
   // On its side the grid scrolls anyway: a row as tall as the screen allows (bars keep 👍 👎), not many tiny columns.
   if (scroll && SIDEWAYS.matches) p = Math.max(MIN_PIC, Math.min(MAX_PIC, H - BAR_MD));
   const c = scroll ? Math.max(1, Math.floor((W + GAP) / (p + GAP))) : best.c;
   if (scroll) p = Math.min(MAX_PIC, Math.floor((W - GAP * (c - 1)) / c), SIDEWAYS.matches ? p : Infinity); // scrolling anyway: the columns use the full width (on its side, no taller than the screen)
-  // Roomy: the cards fill the width before the height (a phone in portrait, 1 to 4 photos) and their bar has no room
-  // for every control. The bar takes a second row (crop, 👍 👎, remove) instead of hiding them in the picker.
-  // Touch only: with a mouse the photos get the height (a laptop with 12 photos keeps one row) and the picker carries
-  // crop and remove.
-  const roomy = !scroll && COARSE.matches && p >= ROOMY_MIN && p < FULL_BAR && best.row - barFor(p) - ROW2 >= p;
-  g.classList.toggle("scroll", scroll); g.classList.toggle("roomy", roomy);
+  g.classList.toggle("scroll", scroll);
   const m = $("main").style;
   m.setProperty("--cols", c); m.setProperty("--p", `${p}px`); // grid and tools row share them
-  m.setProperty("--bar", `${barFor(p) + (roomy ? ROW2 : 0)}px`); // every photo card's bar, so the cards in a row line up
-  m.setProperty("--bar1", `${barFor(p)}px`); // ad cards keep one row; the second row's height goes to the product
-  placeAds(n, scroll ? 0 : Math.ceil(slots / c) * c - n);
+  m.setProperty("--bar", `${barFor(p)}px`); // every photo card's bar, so the cards in a row line up
+  m.setProperty("--bar1", `${barFor(p)}px`);
+  placeAds(n, c, ads);
   centreLastRow(scroll ? 0 : c, p);
-  repick();
   requestAnimationFrame(() => {
     hugFooter(scroll ? 0 : Math.ceil(slots / c)); // rows, the cells kept for ads included
     placeTell(); // the buttons it points at may have moved (the hero stepped aside)
@@ -2204,7 +1636,7 @@ function layout() {
 // A last row with empty cells (one photo before its ads arrive, or no ads at all) sits in the middle, under the
 // centred buttons, not on the left. A translate, so nothing is laid out again; it glides aside when an ad fills a cell.
 function centreLastRow(c, p) {
-  const cells = [...$("grid").children].filter((e) => e.matches(".card, .adcard"));
+  const cells = [...$("grid").children].filter((e) => e.matches(".card, .adcard, .adslot"));
   for (const e of cells) e.style.translate = "";
   const inRow = c ? cells.length % c : 0;
   if (!inRow) return;
@@ -2263,8 +1695,30 @@ let adsAt = 0;
 // Kept photos coming back: no reveal plays, so the ads are there from the first frame, without the pause or the
 // entrance (adsQuiet). A flag of its own: a layout before the masks are back resets adsAt.
 let adsStraight = false, adsQuiet = false;
-function placeAds(n, free) {
-  let want = adReady() && n >= 1 ? Math.min(free, adVariants.length) : 0; // each card a different product: a partner with one leaves the other cells empty
+// How many ad cells a grid of n photos keeps: one beside 1 to 3 photos, then one every AD_EVERY photos, at most AD_MAX
+// (and never more than the partner has products: each card is a different one).
+const AD_EVERY = 6, AD_MAX = 3;
+function adCount(n) {
+  if (!adsOn() || !n) return 0;
+  return Math.min(adVariants.length, n <= 3 ? 1 : Math.min(AD_MAX, Math.max(1, Math.floor(n / AD_EVERY))));
+}
+// Where the ad cells go, as cell indexes: after every AD_EVERY-th photo (after the last when there are fewer), never in
+// the first row of a grid that has more than one (an ad there would greet people before their photos).
+function adCells(n, c, k = adCount(n)) {
+  const total = n + k, out = [];
+  for (let i = 1; i <= k; i++) {
+    let at = Math.min(i * AD_EVERY, n) + (i - 1);
+    if (total > c && at < c) at = c;
+    at = Math.max(at, (out.at(-1) ?? -1) + 1);
+    out.push(Math.min(at, total - 1));
+  }
+  return out;
+}
+// The reserved cells are empty placeholders (.adslot) until the first cut-out is done; then each becomes an ad card.
+const adSlots = [];
+function placeAds(n, c, k) {
+  const at = adCells(n, c, k);
+  let want = adReady() ? at.length : 0;
   if (!want) { adsAt = 0; adsQuiet = false; }
   else if (!adsAt) {
     adsQuiet = adsStraight; adsStraight = false;
@@ -2283,6 +1737,14 @@ function placeAds(n, free) {
     try { adEls.push(buildAd(adEls.length)); }
     catch (e) { console.warn("Ad card failed", e); report("ad-failed", e); adVariants = []; break; } // no ads rather than broken ones
   }
+  while (adSlots.length > at.length - adEls.length) adSlots.pop().remove();
+  while (adSlots.length < at.length - adEls.length) { const d = document.createElement("div"); d.className = "adslot"; d.setAttribute("aria-hidden", "true"); adSlots.push(d); }
+  // Into their cells: the photo cards in order, an ad (or its placeholder) at each index in at.
+  const g = $("grid"), cards = [...g.children].filter((e) => e.matches(".card")), ads = [...adEls, ...adSlots];
+  const order = []; let ci = 0, ai = 0;
+  for (let i = 0; ci < cards.length || ai < ads.length; i++) order.push(ai < ads.length && (at[ai] === i || ci >= cards.length) ? ads[ai++] : cards[ci++]);
+  let ref = g.firstElementChild;
+  for (const e of order) { if (e !== ref) g.insertBefore(e, ref); else ref = ref.nextElementSibling; }
 }
 function buildAd(i) {
   const p = adPartner, x = adVariants[i % adVariants.length], a = document.createElement("a");
@@ -2378,11 +1840,8 @@ async function capSend(a, it) {
   a.capBusy = false;
   if (!w) location.href = href; // pop-up blocked: go in this tab
 }
-// What ad cards save or send: the cut-out as Download gives it, but always see-through, at its own size, as a PNG (cropped
-// to the subject unless the card shows the whole frame; a GIF stays the GIF). A product looks wrong on a white square.
-function plainBlob(it) {
-  return it.bg || !plainOut(it) || outOf(it).fmt ? (pngChain = pngChain.then(() => fullBlob(it, true), () => fullBlob(it, true))) : png(it);
-}
+// What ad cards save or send: the cut-out Download gives (a GIF stays the GIF).
+function plainBlob(it) { return png(it); }
 const plainName = (it) => `${it.name}-goodbye-bg.${it.anim ? "gif" : "png"}`;
 // The cut-out sent to Zazzle: plainBlob, at most CAP_MAX px.
 async function capBlob(it) {
@@ -2785,16 +2244,11 @@ async function writeKept(it) {
   const mask = await maskRec(it.mask), first = it.first ? { rect: it.first.rect || null, mask: await maskRec(it.first.mask) } : null;
   const gif = it.anim && it.gifUrl ? await it.png : null;
   const size = (r) => (r ? r.png.size + (r.fix?.size || 0) : 0);
-  const state = { id: it.key, name: it.name, w: it.w, h: it.h, crop: it.crop, cropBack: !!it.cropBack, rect: it.maskRect || null, mask, first, retried: !!it.retried,
-    vote: it.vote || null, bg: it.bg || null, out: it.out || null, anim: !!it.anim, gif, ms: it.ms || 0, engine: it.engine || null,
+  const state = { id: it.key, name: it.name, w: it.w, h: it.h, crop: it.crop, rect: it.maskRect || null, mask, first, retried: !!it.retried,
+    vote: it.vote || null, anim: !!it.anim, gif, ms: it.ms || 0, engine: it.engine || null,
     bytes: it.blob.size + it.prev.size + size(mask) + size(first?.mask) + (gif?.size || 0) };
   if (state.bytes > KEEP_BYTES) return; // never fits (see trim)
   const db = await kdb();
-  const back = bgKind(it.bg) === "img" && backs.get(it.bg.slice(4));
-  if (back && !back.kept) { // once, however many photos use it
-    await new Promise((ok, no) => { const t = db.transaction("backs", "readwrite"); t.objectStore("backs").put({ id: it.bg.slice(4), blob: back.blob }); t.oncomplete = ok; t.onerror = t.onabort = () => no(t.error); });
-    back.kept = true;
-  }
   const put = () => tx(db, "readwrite", (f, s) => { if (!it.filed) f.put({ id: it.key, blob: it.blob, prev: it.prev }); s.put(state); });
   // A full disk: make room by dropping the oldest, a few times, then give up quietly.
   for (let n = 0; ; n++) {
@@ -2837,20 +2291,14 @@ async function restore() {
     [files, states] = await tx(db, "readonly", (f, s) => { const a = f.getAll(), b = s.getAll(); return { get result() { return [a.result, b.result]; } }; });
   } catch (e) { console.info("goodbye.bg: nothing kept here", e?.name || e); unrestore(); return []; }
   const byId = new Map(files.map((f) => [f.id, f]));
-  // Background photos: the ones a kept photo uses come back (before any card is drawn); the rest are deleted.
-  const used = new Set(states.map((st) => bgKind(st.bg) === "img" && st.bg.slice(4)).filter(Boolean));
-  try {
-    const rows = await new Promise((ok, no) => { const q = db.transaction("backs").objectStore("backs").getAll(); q.onsuccess = () => ok(q.result); q.onerror = () => no(q.error); });
-    const stale = rows.filter((r) => !used.has(r.id)).map((r) => r.id);
-    for (const r of rows) if (used.has(r.id) && !backs.has(r.id)) try { backs.set(r.id, await backEntry(await canvasOf(r.blob), r.blob, true)); } catch (e) { console.warn("Background photo not restored", e); }
-    if (stale.length) { const t = db.transaction("backs", "readwrite"); for (const id of stale) t.objectStore("backs").delete(id); }
-  } catch (e) { console.info("goodbye.bg: no background photos kept", e?.name || e); }
+  // Background photos are gone (2026-11-22): the store that held them is emptied.
+  try { db.transaction("backs", "readwrite").objectStore("backs").clear(); } catch {}
   const list = [], orphans = [];
   for (const st of states) {
     const f = byId.get(st.id); byId.delete(st.id);
     if (!f?.blob || !f.prev) { orphans.push(st.id); continue; }
-    const it = { id: ++uid, key: st.id, name: st.name, bmp: null, blob: f.blob, prev: f.prev, w: st.w, h: st.h, mask: null, crop: st.crop, cropBack: !!st.cropBack,
-      maskRect: st.rect, retried: st.retried, vote: st.vote, bg: st.bg || null, out: st.out || null, ms: st.ms, engine: st.engine || "", filed: true, st };
+    const it = { id: ++uid, key: st.id, name: st.name, bmp: null, blob: f.blob, prev: f.prev, w: st.w, h: st.h, mask: null, crop: !st.anim,
+      maskRect: st.rect, retried: st.retried, vote: st.vote, ms: st.ms, engine: st.engine || "", filed: true, st };
     items.push(it); list.push(it);
   }
   orphans.push(...byId.keys());
@@ -2940,25 +2388,13 @@ let depth = 0, ownDrag = false;
 addEventListener("dragstart", () => { ownDrag = true; });
 addEventListener("dragend", () => { ownDrag = false; });
 addEventListener("dragenter", (e) => { e.preventDefault(); if (ownDrag) return; depth++; document.body.classList.add("hot"); });
-// A picture dropped on a card's background row (or its background button) becomes that photo's background instead.
-const backTarget = (el) => { const t = el?.closest?.(".bgs, .bgb"); return t ? items.find((i) => i.el && (i.el.pick === t || i.el.bgb === t) && i.mask && !i.anim) : null; };
-let backOver = null;
-function markBack(it) {
-  if (backOver === it) return;
-  backOver?.el.bar.classList.remove("backdrop"); backOver = it; it?.el.bar.classList.add("backdrop");
-  document.body.classList.toggle("hot", !it && depth > 0 && !ownDrag); // the full-window target would hide the row
-}
-addEventListener("dragover", (e) => { e.preventDefault(); if (!ownDrag) markBack(backTarget(e.target)); });
-addEventListener("dragleave", () => { if (--depth <= 0) { depth = 0; document.body.classList.remove("hot"); markBack(null); } });
+addEventListener("dragover", (e) => { e.preventDefault(); });
+addEventListener("dragleave", () => { if (--depth <= 0) { depth = 0; document.body.classList.remove("hot"); } });
 addEventListener("drop", async (e) => {
   e.preventDefault(); depth = 0; document.body.classList.remove("hot");
-  const to = backTarget(e.target); markBack(null); document.body.classList.remove("hot");
   if (ownDrag) { ownDrag = false; return; }
   if (!e.dataTransfer) return;
-  const got = await fromDataTransfer(e.dataTransfer);
-  if (!to) return addSources(got);
-  const f = got.find((g) => g instanceof Blob && !isZip(g));
-  if (f) useBack(to, f); else tell(t("Drop a picture file here."), to.el.bgb);
+  addSources(await fromDataTransfer(e.dataTransfer));
 });
 
 
