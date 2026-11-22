@@ -64,6 +64,7 @@ Extra usage capped at $0. Stop starting new work at 85% weekly; never pass 90%.
 | 08:15 | Kevin: pull-to-refresh and pinch-zoom are back 👎 | coordinator | 49% | 6f499b1, live: overflow hidden + overscroll-behavior none on touch screens, touch-action pan-x pan-y, Safari gesture events cancelled; computers keep scrolling at 300–400% zoom. Cause: tonight's accessibility zoom fix (2354326) made the page scroll; pinch had been allowed since 2026-11-20. CLAUDE.md updated. |
 | 08:30 | Translations shipped (Kevin: ship when ready) | coordinator | 49% | Native-editor review 94014c2 (de du, es tú, fr vous, pt-BR você, id Anda). Rebased onto main (kept both early.js changes: zoom block and language), tests 25/25 + 44/44, merged kevinebaugh/goodbye.bg#6 (f1820c3..b699a48). Production: German, Spanish and English browsers get their language with no errors; /de/, /es/, /pt-br/ pages 200. A native speaker should still read each language. |
 | 08:50 | Kevin: wrap it up | coordinator | 49% | Check-in timer deleted; tl;dr added to the summary artifact. Last running item: rebase of PRs #2–#4 onto main (branches only). |
+| 08:55 | Kevin: "Skip the bulk tool for now. Merge the rest and we'll test forward." | coordinator | 49% | PRs #4, #3, #2 merge in that order after rebase and both suites; #5 stays a draft. |
 
 Check-in 23:46: weekly 28%, 5-hour window 6% (reset 04:30 UTC). About 4 weekly points in the first 45 min.
 
