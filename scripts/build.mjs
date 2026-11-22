@@ -15,9 +15,36 @@ cpSync(join(root, "src"), dist, { recursive: true });
 // Public origin for canonical links, the sitemap and structured data. Switch to https://goodbye.bg
 // once the domain resolves (and 301 pages.dev to it; see docs/seo.md).
 const SITE = process.env.SITE || "https://goodbye-bg-git.pages.dev";
-for (const f of ["index.html", "robots.txt", "sitemap.xml", "remove-bg-alternative/index.html", "how-to-remove-background/index.html"]) {
+// The text pages, English and translated (src/<lang>/<page>/index.html, see docs/i18n.md).
+const TEXT_PAGES = readdirSync(dist, { recursive: true }).filter((f) => /(^|\/)(remove-bg-alternative|how-to-remove-background)\/index\.html$/.test(f)).sort();
+// Each text page names all its translations (hreflang), English being the default.
+const { LANGS } = await import(join(root, "src/i18n.js"));
+const hreflang = (slug) => [["en", ""], ...Object.entries(LANGS).map(([code, l]) => [code, l.path + "/"]), ["x-default", ""]]
+  .map(([code, dir]) => `<link rel="alternate" hreflang="${code}" href="${SITE}/${dir}${slug}/">`).join("\n");
+for (const f of ["index.html", "robots.txt", "sitemap.xml", ...TEXT_PAGES]) {
   const p = join(dist, f);
-  writeFileSync(p, readFileSync(p, "utf8").replaceAll("%SITE%", SITE));
+  let s = readFileSync(p, "utf8").replaceAll("%SITE%", SITE);
+  if (TEXT_PAGES.includes(f)) {
+    if (!s.includes("<!--%HREFLANG%-->")) throw new Error(`${f} must hold <!--%HREFLANG%--> after its canonical link`);
+    s = s.replace("<!--%HREFLANG%-->", hreflang(f.split("/").at(-2)));
+  }
+  writeFileSync(p, s);
+}
+
+// The app page in other languages: src/i18n.js goes inside early.js (it runs before the first paint, so the page never
+// shows English first). Every language must have every key the others have.
+{
+  const src = readFileSync(join(root, "src/i18n.js"), "utf8");
+  const keys = new Set(Object.values(LANGS).flatMap((l) => Object.keys(l.t)));
+  for (const [code, l] of Object.entries(LANGS)) {
+    const missing = [...keys].filter((k) => !(k in l.t));
+    if (missing.length) throw new Error(`src/i18n.js: ${code} has no ${missing.slice(0, 3).map((k) => JSON.stringify(k)).join(", ")}`);
+    if (!l.quips?.length || !l.path) throw new Error(`src/i18n.js: ${code} needs quips and a path`);
+  }
+  const early = readFileSync(join(dist, "early.js"), "utf8");
+  if (!early.includes("/*%I18N%*/")) throw new Error("early.js must hold the /*%I18N%*/ placeholder");
+  writeFileSync(join(dist, "early.js"), early.replace("/*%I18N%*/", () => src.replace(/^export const LANGS/m, "const LANGS")));
+  rmSync(join(dist, "i18n.js"));
 }
 
 // Split a big file into parts under the Pages per-file limit, with a manifest the engine reads.
@@ -65,7 +92,7 @@ cpSync(join(nm, "canvas-confetti/dist/confetti.module.mjs"), join(dist, "vendor/
 const NUNITO = JSON.parse(readFileSync(join(nm, "@fontsource-variable/nunito/package.json"), "utf8")).version;
 const fontFile = `nunito-latin-${NUNITO}.woff2`;
 // The text pages preload it too: with font-display: optional, a first visit without the preload shows the fallback font.
-for (const f of ["style.css", "index.html", "404.html", "remove-bg-alternative/index.html", "how-to-remove-background/index.html"]) if (!readFileSync(join(dist, f), "utf8").includes(fontFile)) throw new Error(`${f} must use fonts/${fontFile}`);
+for (const f of ["style.css", "index.html", "404.html", ...TEXT_PAGES]) if (!readFileSync(join(dist, f), "utf8").includes(fontFile)) throw new Error(`${f} must use fonts/${fontFile}`);
 mkdirSync(join(dist, "fonts"));
 cpSync(join(nm, "@fontsource-variable/nunito/files/nunito-latin-wght-normal.woff2"), join(dist, "fonts", fontFile));
 
