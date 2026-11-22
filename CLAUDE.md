@@ -13,6 +13,7 @@ zero friction: fun copy and small animations are fine, delays and popups are not
     npm run deploy       # manual fallback: wrangler pages deploy to project goodbye-bg-git
     npm run test         # smoke tests (about 40 s): build, serve, headless Chrome; run before pushing
     node scripts/test/offline.mjs   # offline/install test (about 1.5 min); its upgrade step edits dist/: rebuild after
+    npm run test:x       # WebKit (computer + iPhone) and Firefox via Playwright (about 2 min); once: npx playwright install webkit firefox
 
 `npm run test` (`scripts/test/smoke.mjs`, no dependencies beyond Chrome; `--no-build` reuses dist/, `CHROME=` picks
 another Chrome) drives headless Chrome over the DevTools protocol, each check in a fresh profile, and prints PASS/FAIL/SKIP;
@@ -24,6 +25,31 @@ GIF staying animated, a ZIP opening, the 404 page and `/share`, the SEO pages (C
 visit drawn in Nunito). Test photos are generated. Each cut-out adds to the public count (serve.mjs passes `/api/count` to
 the live site); ad cards are never clicked. `scripts/serve.mjs` mirrors Pages for unknown paths (404.html, status 404),
 `/dir` -> `/dir/`, `.html` -> clean URL and `_redirects`.
+
+`npm run test:x` (`scripts/test/xbrowser.mjs`; `--browser webkit|firefox`, `--device desktop|iphone`, `--no-build`)
+runs the same flow in Playwright (devDependency; browsers in ~/Library/Caches/ms-playwright, nothing global) on
+webkit-desktop (1280x800), webkit-iphone (Playwright's iPhone 15: touch, iPhone user agent, so the app takes its iPhone
+paths; the share sheet is stubbed to record the files) and firefox-desktop: cross-origin isolation, the landing View
+Transition, one photo + Download, 3D ad cards, White -> JPG and the colour input, the options row (Square; WebP button
+only where the browser encodes WebP; 16 px controls on touch), 3 photos + Download all, a tell() bubble, reload with kept
+photos, Remove/Undo, offline through the service worker, HEIC, an animated GIF, `?engine=cpu`, 404 and SEO pages, and
+a WebKit private window. Persistent profiles, because an ephemeral WebKit context acts like Private Browsing.
+
+Tested 2026-11-22 (Playwright 1.65.0: WebKit 27.2 = Safari's engine on macOS, Firefox 159), all passing:
+- WebKit: cross-origin isolated with COEP require-corp (threads on), also offline from the service worker's cache.
+  Computer: WebGPU with shader-f16, so it picks BiRefNet on the GPU, and it works (warm-up 0.4 to 1.6 s, about 1 s a
+  photo here). iPhone profile: CPU engine with 2 threads, about 4 s a photo. View Transition runs and finishes. WebGL2 3D
+  ad cards draw. HEIC opens natively (createImageBitmap; libheif not fetched). WebP can't be encoded (it hands back a
+  PNG), so the WebP button stays hidden and those photos save as PNG/JPG. A 16384x16384 canvas works on the Mac (the
+  16 MP cap is the iPhone's).
+- WebKit private window: IndexedDB refuses Blobs ("Not kept: null" warning), so nothing is kept across a reload; photos
+  still work. Real Safari Private Browsing likely the same.
+- Firefox: WebGPU is blocklisted in headless (so the CPU engine; real Firefox may differ), isolated, View Transition,
+  WebGL2, HEIC through libheif, WebP encodes. Firefox's default for a downloaded .webp is to save it and also open it
+  in a new tab (WebP is "viewable internally"; an octet-stream blob doesn't change that, it goes by extension).
+- Not covered by Playwright: real iOS memory limits, the real share sheet (stubbed; Download all awaits the PNGs before
+  `navigator.share`, which a real iPhone may refuse once the tap's activation has lapsed), touch gestures (clicks are
+  mouse events), select wheels and focus zoom (only the 16 px font size is checked).
 
 Deploys: Cloudflare Pages project `goodbye-bg-git` builds from GitHub. Every push to `main`
 deploys; other branches get preview URLs (`<branch>.goodbye-bg-git.pages.dev`). No GitHub
@@ -418,9 +444,9 @@ blob3 first/retry, double1 ms, double2 megapixels):
 
 ## Next steps
 
-1. Mac Safari still picks the GPU engine; not tested there. A smaller GPU footprint might make WebGPU
-   safe on iPhones again (try once ORT or the model changes).
-2. BiRefNet untested on Safari's WebGPU, Windows and Linux GPUs, and 8 GB Macs (3 GB GPU peak).
+1. Mac Safari picks the GPU engine (BiRefNet); it works in Playwright's WebKit 27.2 (see Commands), not yet checked in
+   Safari itself. A smaller GPU footprint might make WebGPU safe on iPhones again (try once ORT or the model changes).
+2. BiRefNet untested on Windows and Linux GPUs and 8 GB Macs (3 GB GPU peak).
 3. Not yet tested on real devices: Android share target, desktop "Open with", folder drops, live link fetching.
 
 ## Open items outside the code
