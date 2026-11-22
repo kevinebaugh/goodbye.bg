@@ -7,7 +7,7 @@ Before posting:
 - Re-check every claim against the site that day (features land fast). Facts used below: free, no account, no
   watermark; cut out in the browser (WebGPU on computers, WebAssembly on phones); PNG at the photo's own resolution
   (16 MP cap in Safari/iPhone, 64 MP elsewhere); batches up to 50 per drop with a zip; HEIC, TIFF, camera RAW, ZIP
-  and animated GIF in; AGPL source on GitHub; product ads (Zazzle etc.) are how it pays for itself. No API, no
+  and animated GIF in; AGPL source on GitHub; supported by optional product ads (Zazzle etc.). No API, no
   background color/photo replacement (unless the color picker has shipped by then), no brush.
 - Timing (docs/seo.md §5): HN on a weekday morning US time, Product Hunt the same week, both before 1 December.
 
@@ -37,7 +37,7 @@ Before posting:
 >
 > It takes JPG, PNG, WebP, HEIC, TIFF, camera RAW (the embedded preview), ZIPs and animated GIFs, gives back
 > transparent PNGs at the original size, and keeps your photos in IndexedDB so a reload doesn't lose them.
-> No account, no watermark. It pays for itself with optional product cards (put the cut-out on a mug, etc.).
+> No account, no watermark. It's supported by optional product cards (put the cut-out on a mug, etc.).
 >
 > What it doesn't do yet: no API, no brush to fix edges, no replacing the background. Hair is OK, not great.
 >
@@ -81,7 +81,7 @@ Answer the question first; disclose that it's yours. One reply per thread, no fo
 
 2. For people who used the API:
 
-   > If you need the API, there's no drop-in free one that I know of. rembg (open source, Python) on your own
+   > remove.bg's API page says background removal moves to Leonardo.Ai, so start there. For free, rembg (open source, Python) on your own
    > server is the closest. If you just need the web tool, I made goodbye.bg (free, runs on your device, no
    > account), and its source shows how to run the model in a browser.
 
