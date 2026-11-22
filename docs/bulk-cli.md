@@ -14,6 +14,34 @@ computer, sold once. Nothing here has been bought, signed up for or published.
 - Not done: Windows and Linux runs, a single-file build, signing, a licence check, a window for people who
   don't use a terminal.
 
+## Drop-in for the remove.bg API (`goodbye-bg serve`, prototype 2026-11-22)
+
+Question 3 below, answered with a working prototype: **yes, for most scripts, with one URL changed.** `goodbye-bg
+serve` runs on `http://localhost:5000/v1.0` and answers `POST /v1.0/removebg` and `GET /v1.0/account` as remove.bg's
+API reference documents them (https://www.remove.bg/api; the OpenAPI file https://www.remove.bg/api/swagger.yaml,
+read 2026-11-22). Details and the full list in `tools/bulk/README.md`.
+
+- Checked: remove.bg's own two curl samples, run unchanged but for the URL (the `image_url` one needs `--allow-urls`);
+  47 checks in `tools/bulk/test/serve-test.mjs` (parameters, headers, JSON replies, 20 of remove.bg's error codes); the Python `removebg` 0.4 and Node `remove.bg` 1.3.0 wrappers, file, URL and base64 calls each,
+  with a dummy key and no account.
+- Covered: the three image sources, `size` (with remove.bg's default `preview` = 0.25 MP and its caps), `format`
+  auto/png/jpg/webp/zip, `channels=alpha`, `bg_color`, `bg_image_file`/`bg_image_url`, `crop` + `crop_margin`,
+  `scale`, `position`, `roi`, `X-Width`/`X-Height`/`X-Foreground-*`/`X-Credits-Charged: 0`, their error shape and codes.
+- Not covered: shadows (a 400 `unsupported_parameter`), foreground classification (`type` is ignored, no `X-Type`),
+  car-window semitransparency, rate-limit headers, `/improve`. The cut-out is ours, not theirs.
+- The catch: both wrappers hard-code `https://api.remove.bg`. Python is a one-line override at run time; Node needs
+  the constant in `dist/index.js` replaced. Scripts that call the API directly (curl, `requests`, `fetch`, most
+  in-house code) only change the URL.
+- Speed: 216 photos a minute with 4 requests in flight (BiRefNet, GPU, 1.6 MP photos, full-size PNG), the same as
+  the folder mode; 129 a minute for a script that sends one photo at a time. remove.bg's own limit is 500
+  megapixel-images a minute.
+- Safety: binds to 127.0.0.1 and ::1 only, never goes online unless `--allow-urls`, refuses requests from web pages
+  (`Origin` header) and unknown `Host` names. No key check, so `--host 0.0.0.0` shares it with the whole network.
+- macOS: AirPlay Receiver holds port 5000 on every address; `localhost:5000` would reach it (a 403 from AirTunes)
+  without the extra ::1 listener.
+- For selling: it makes the CLI the obvious buy for remove.bg API users (keep the scripts, stop paying per image),
+  and the page could say "change one URL". A paid build would be BiRefNet-only (MIT).
+
 ## Who would pay, honestly
 
 - People who ran remove.bg's API or desktop app over whole folders: shops, marketplaces, photographers. They lose it
@@ -90,8 +118,8 @@ Mac), libheif-js (9 MB) and the 93 MB model.
    with a "support" link?
 2. CLI only, or wait for a window (Tauri around the web app, 6 to 10 days per `removebg-parity.md`)? Shops mostly
    want the window.
-3. A local remove.bg-compatible server (`goodbye-bg serve`, same request and response as their `/v1.0/removebg`
-   on localhost) would let API users keep their scripts by changing one URL. Worth a day?
+3. A local remove.bg-compatible server: built as a prototype (`goodbye-bg serve`, section above). It works with one
+   URL changed (one line for the common Python and Node wrappers). Keep it, and say so on the remove.bg page?
 4. Licence keys: none, or offline signed keys?
 5. Pay $99 a year for Apple signing, and a Windows certificate? (Needed before selling to non-developers.)
 6. Default model on the CPU: BiRefNet everywhere (MIT, better, 17.5 a minute here) or ISNet on machines without a

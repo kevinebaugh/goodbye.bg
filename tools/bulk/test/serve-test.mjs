@@ -1,0 +1,129 @@
+// Checks a running `goodbye-bg serve` against remove.bg's documented behaviour.
+//   node test/serve-test.mjs <photo.jpg> [base URL, default http://localhost:5000/v1.0]
+// Needs a photo with a clear subject. Start the server with --allow-urls to include the image_url checks
+// (they fetch the photo back from a tiny server this script runs on 127.0.0.1).
+import fs from "node:fs";
+import http from "node:http";
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+const sharp = require("sharp");
+const { unzipSync } = require("fflate");
+
+const photo = process.argv[2];
+const BASE = (process.argv[3] || "http://localhost:5000/v1.0").replace(/\/$/, "");
+if (!photo) { console.error("usage: node test/serve-test.mjs <photo.jpg> [base URL]"); process.exit(2); }
+const jpg = fs.readFileSync(photo);
+const meta = await sharp(jpg).metadata();
+const blank = await sharp({ create: { width: 800, height: 600, channels: 3, background: "#808080" } }).jpeg().toBuffer();
+
+let failed = 0, passed = 0;
+const check = (name, ok, info = "") => { ok ? passed++ : failed++; console.log(`${ok ? "ok  " : "FAIL"} ${name}${info ? `  (${info})` : ""}`); };
+
+async function post(fields, { headers = {}, as = "multipart" } = {}) {
+  let body;
+  if (as === "multipart") {
+    body = new FormData();
+    for (const [k, v] of Object.entries(fields)) Buffer.isBuffer(v) ? body.append(k, new Blob([v], { type: "image/jpeg" }), "photo.jpg") : body.append(k, String(v));
+  } else if (as === "json") { body = JSON.stringify(fields); headers["content-type"] = "application/json"; }
+  else { body = new URLSearchParams(fields).toString(); headers["content-type"] = "application/x-www-form-urlencoded"; }
+  const res = await fetch(`${BASE}/removebg`, { method: "POST", body, headers: { "X-Api-Key": "anything", ...headers } });
+  const buf = Buffer.from(await res.arrayBuffer());
+  let json = null; try { json = JSON.parse(buf.toString()); } catch {}
+  return { status: res.status, h: res.headers, buf, json, code: json?.errors?.[0]?.code };
+}
+const dims = async (buf) => { const m = await sharp(buf).metadata(); return { w: m.width, h: m.height, ch: m.channels, fmt: m.format }; };
+
+// The documented default is size=preview: 0.25 megapixels.
+let r = await post({ image_file: jpg });
+let d = await dims(r.buf);
+check("default size=preview is at most 0.25 MP", r.status === 200 && d.w * d.h <= 250000 && d.w * d.h > 240000, `${d.w}x${d.h}`);
+check("X-Width/X-Height match the image", +r.h.get("x-width") === d.w && +r.h.get("x-height") === d.h);
+check("X-Credits-Charged is 0", r.h.get("x-credits-charged") === "0");
+check("X-Foreground-* present", ["top", "left", "width", "height"].every((k) => r.h.get(`x-foreground-${k}`) !== null));
+check("format=auto gives PNG for a cut-out", r.h.get("content-type") === "image/png" && d.fmt === "png" && d.ch === 4);
+
+r = await post({ image_file: jpg, size: "full" }); d = await dims(r.buf);
+check("size=full keeps the photo's size (under 10 MP)", d.w === meta.width && d.h === meta.height, `${d.w}x${d.h}`);
+r = await post({ image_file: jpg, size: "auto", format: "jpg" }); d = await dims(r.buf);
+check("format=jpg", r.h.get("content-type") === "image/jpeg" && d.fmt === "jpeg");
+r = await post({ image_file: jpg, size: "auto", format: "webp" }); d = await dims(r.buf);
+check("format=webp keeps alpha", d.fmt === "webp" && d.ch === 4);
+r = await post({ image_file: jpg, size: "auto", format: "zip" });
+const z = r.status === 200 && unzipSync(new Uint8Array(r.buf));
+check("format=zip holds color.jpg and alpha.png", z && z["color.jpg"] && z["alpha.png"], z ? Object.keys(z).join(", ") : r.status);
+r = await post({ image_file: jpg, size: "auto", bg_color: "81d4fa" }); d = await dims(r.buf);
+check("bg_color hex: format=auto gives JPG", r.h.get("content-type") === "image/jpeg");
+r = await post({ image_file: jpg, size: "preview", bg_color: "green" });
+check("bg_color name", r.status === 200 && r.h.get("content-type") === "image/jpeg");
+r = await post({ image_file: jpg, size: "preview", bg_color: "81d4fa77" }); d = await dims(r.buf);
+check("bg_color with alpha stays see-through (PNG)", r.h.get("content-type") === "image/png" && d.ch === 4);
+r = await post({ image_file: jpg, size: "preview", channels: "alpha" }); d = await dims(r.buf);
+check("channels=alpha gives a one-channel matte", r.status === 200 && d.ch === 1, `${d.ch} channel(s)`);
+r = await post({ image_file: jpg, size: "auto", crop: "true" }); d = await dims(r.buf);
+const fw = +r.h.get("x-foreground-width"), fh = +r.h.get("x-foreground-height");
+check("crop=true is tight to the subject", d.w === fw && d.h === fh, `${d.w}x${d.h}, foreground ${fw}x${fh}`);
+r = await post({ image_file: jpg, size: "auto", crop: "true", crop_margin: "30px" }); d = await dims(r.buf);
+check("crop_margin=30px adds 30 px a side", d.w === fw + 60 && d.h === fh + 60, `${d.w}x${d.h}`);
+r = await post({ image_file: jpg, size: "auto", crop: "true", crop_margin: "10% 0" }); d = await dims(r.buf);
+check("crop_margin two values (10% top/bottom, 0 left/right)", d.w === fw && d.h === fh + 2 * Math.round(fh * 0.1), `${d.w}x${d.h}`);
+r = await post({ image_file: jpg, size: "auto", scale: "50%" }); d = await dims(r.buf);
+const sw = +r.h.get("x-foreground-width"), sh = +r.h.get("x-foreground-height");
+check("scale=50%: subject half the canvas, canvas the photo's size, centred", d.w === meta.width && Math.max(sw / d.w, sh / d.h) > 0.49 && Math.max(sw / d.w, sh / d.h) < 0.51, `fg ${sw}x${sh} at ${r.h.get("x-foreground-left")},${r.h.get("x-foreground-top")}`);
+r = await post({ image_file: jpg, size: "auto", scale: "50%", position: "0% 100%" });
+check("position=0% 100% puts it bottom left", +r.h.get("x-foreground-left") === 0 && +r.h.get("x-foreground-top") + +r.h.get("x-foreground-height") === meta.height);
+r = await post({ image_file: jpg, size: "auto", roi: "0% 0% 50% 100%" });
+check("roi: nothing right of it", r.status === 200 && +r.h.get("x-foreground-left") + +r.h.get("x-foreground-width") <= Math.ceil(meta.width / 2) + 2, `fg right edge ${+r.h.get("x-foreground-left") + +r.h.get("x-foreground-width")}`);
+r = await post({ image_file_b64: jpg.toString("base64"), size: "preview" }, { as: "json" });
+check("JSON body with image_file_b64", r.status === 200 && r.h.get("content-type") === "image/png");
+r = await post({ image_file_b64: jpg.toString("base64"), size: "preview" }, { as: "urlencoded" });
+check("urlencoded body with image_file_b64", r.status === 200);
+r = await post({ image_file: jpg, size: "preview" }, { headers: { accept: "application/json" } });
+check("Accept: application/json gives result_b64 and foreground_*", r.json?.data?.result_b64 && Number.isInteger(r.json.data.foreground_width));
+r = await post({ image_file: jpg, size: "preview", type: "person", type_level: "2", semitransparency: "false", add_shadow: "false", shadow_type: "none", shadow_opacity: "auto" });
+check("no-op values are accepted", r.status === 200, r.code);
+
+// Errors: status 400 and remove.bg's codes.
+const errs = [
+  ["missing_source", {}],
+  ["multiple_sources", { image_file: jpg, image_url: "https://example.com/a.jpg" }],
+  ["invalid_image_url", { image_url: "not a url" }],
+  ["invalid_size", { image_file: jpg, size: "huge" }],
+  ["invalid_format", { image_file: jpg, format: "gif" }],
+  ["invalid_channels", { image_file: jpg, channels: "rgb" }],
+  ["invalid_roi", { image_file: jpg, roi: "0 0 10" }],
+  ["roi_exceeds_bounds", { image_file: jpg, roi: "0% 0% 120% 100%" }],
+  ["roi_region_empty", { image_file: jpg, roi: "50% 0% 50% 100%" }],
+  ["invalid_crop_margin", { image_file: jpg, crop: "true", crop_margin: "1 2 3" }],
+  ["invalid_scale", { image_file: jpg, scale: "5%" }],
+  ["invalid_position", { image_file: jpg, position: "left" }],
+  ["invalid_bg_color", { image_file: jpg, bg_color: "notacolour" }],
+  ["multiple_bg_sources", { image_file: jpg, bg_color: "fff", bg_image_url: "https://example.com/b.jpg" }],
+  ["invalid_semitransparency", { image_file: jpg, semitransparency: "maybe" }],
+  ["multiple_shadow_params", { image_file: jpg, add_shadow: "true", shadow_type: "drop" }],
+  ["invalid_shadow_opacity", { image_file: jpg, shadow_opacity: "300" }],
+  ["unsupported_parameter", { image_file: jpg, shadow_type: "drop" }],
+  ["invalid_file_type", { image_file: Buffer.from("this is not an image at all") }],
+  ["unknown_foreground", { image_file: blank }],
+];
+for (const [code, fields] of errs) {
+  r = await post(fields);
+  check(`error ${code}`, r.status === 400 && r.code === code && typeof r.json.errors[0].title === "string", `${r.status} ${r.code || ""}`);
+}
+r = await post({ image_file: Buffer.alloc(23 * 1024 * 1024, 1) });
+check("error file_too_large", r.status === 400 && r.code === "file_too_large", `${r.status} ${r.code}`);
+
+// image_url: off unless --allow-urls; with it, the photo comes from a little server here.
+const pics = http.createServer((q, s) => { s.writeHead(200, { "content-type": "image/jpeg" }); s.end(jpg); });
+await new Promise((res) => pics.listen(0, "127.0.0.1", res));
+r = await post({ image_url: `http://127.0.0.1:${pics.address().port}/photo.jpg`, size: "preview" });
+if (r.code === "url_fetch_disabled") check("image_url is off by default", true);
+else check("image_url fetches with --allow-urls", r.status === 200 && r.h.get("content-type") === "image/png", `${r.status} ${r.code || ""}`);
+pics.close();
+
+const acc = await fetch(`${BASE}/account`, { headers: { "X-Api-Key": "x" } }).then((x) => x.json());
+check("GET /account has the documented shape", typeof acc?.data?.attributes?.credits?.total === "number" && typeof acc.data.attributes.api.free_calls === "number");
+const web = await fetch(`${BASE}/account`, { headers: { origin: "https://evil.example" } });
+check("requests from web pages are refused", web.status === 403);
+
+console.log(`\n${passed} passed, ${failed} failed`);
+process.exitCode = failed ? 1 : 0;

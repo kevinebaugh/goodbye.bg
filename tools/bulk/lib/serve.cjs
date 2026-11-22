@@ -23,7 +23,7 @@ Usage: goodbye-bg serve [options]
 
 Point a remove.bg client at http://localhost:5000/v1.0 instead of https://api.remove.bg/v1.0. Any API key, or none.`;
 
-const MAX_FILE = 22 * 1024 * 1024, MAX_BODY = 32 * 1024 * 1024; // remove.bg: files up to 22 MB; base64 is a third bigger
+const MAX_FILE = 22 * 1024 * 1024, MAX_BODY = 40 * 1024 * 1024; // remove.bg: files up to 22 MB; base64 (url-encoded) is a third bigger and more
 const LOOPBACK = new Set(["127.0.0.1", "::1", "localhost"]);
 
 function fail(msg) { console.error(`goodbye-bg serve: ${msg}`); process.exit(2); }

@@ -111,7 +111,7 @@ async function parseRequest(fields, { harden }) {
   bool(g("semitransparency"), true, "invalid_semitransparency", "semitransparency"); // car windows only at remove.bg; nothing to do here
   const addShadow = bool(g("add_shadow"), false);
   const shadowType = str(g("shadow_type")).toLowerCase();
-  if (present(g("add_shadow")) && shadowType) throw bad("multiple_shadow_params", "Multiple shadow parameters given: Please provide either the add_shadow or the shadow_type parameter.");
+  if (addShadow && shadowType) throw bad("multiple_shadow_params", "Multiple shadow parameters given: Please provide either the add_shadow or the shadow_type parameter.");
   const so = str(g("shadow_opacity")).toLowerCase();
   if (so && so !== "auto" && !(/^\d+$/.test(so) && +so <= 100)) throw bad("invalid_shadow_opacity", "Invalid shadow_opacity parameter given");
   // add_shadow only ever made a car shadow, and only for a car; this server never detects one, so only type=car asks for it.
