@@ -107,7 +107,7 @@ decode and encode around it.
 Covered, as documented:
 - Image from `image_file` (multipart), `image_file_b64` (multipart, url-encoded or JSON body) or `image_url`.
   `image_url` and `bg_image_url` are fetched only with `--allow-urls` (http/https, 22 MB, 20 s); without it they get a
-  400 `url_fetch_disabled` that says so, and the server never goes online.
+  400 `url_fetch_disabled` that says so; the only other network use is the one-time model download.
 - `size`: `preview` is the default (0.25 MP, as at remove.bg), plus `small`/`regular`, `medium` (1.5 MP), `hd` (4 MP),
   `full`/`4k` (25 MP, PNG 10 MP), `50MP` (PNG 10 MP), `auto` (25 MP). Scripts that want full size must send
   `size=auto` or `full` here too.
@@ -165,10 +165,11 @@ Numbers (same Mac, 100 photos from the quality set at 1.6 MP, BiRefNet on the GP
 | 8 | 215 |
 | 4, `size=preview` | 217 |
 | folder mode, same photos | 215 |
+| 4, `--model isnet` | 449 |
 
 One client at a time leaves the GPU idle while its photo is decoded, encoded and sent; two or more keep it busy and
 reach the model's limit (about 275 ms a photo), the same as the folder mode. Peak memory footprint 4.1 GB, as in
-folder mode. `node test/serve-test.mjs <photo>` checks 47 behaviours against a running server (all pass);
+folder mode. `node test/serve-test.mjs <photo>` checks 53 behaviours against a running server started with `--allow-urls` (all pass), including HEIC and background images;
 `node test/serve-bench.mjs <folder> --clients 4` measures.
 
 ## Licences

@@ -15,7 +15,7 @@ Usage: goodbye-bg serve [options]
 
   --port <n>           port (default: 5000)
   --host <addr>        address to listen on (default: 127.0.0.1, and ::1 so "localhost" works)
-  --allow-urls         fetch image_url and bg_image_url (off by default: this server then never goes online)
+  --allow-urls         fetch image_url and bg_image_url (off by default; otherwise the only network use is the one-time model download)
   --model <m>          birefnet (default, MIT) or isnet (AGPL)
   --engine <e>         auto (default), gpu or cpu
   --jobs <n>           photos prepared at once (default: 3)

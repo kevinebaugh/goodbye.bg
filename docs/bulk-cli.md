@@ -22,7 +22,7 @@ API reference documents them (https://www.remove.bg/api; the OpenAPI file https:
 read 2026-11-22). Details and the full list in `tools/bulk/README.md`.
 
 - Checked: remove.bg's own two curl samples, run unchanged but for the URL (the `image_url` one needs `--allow-urls`);
-  47 checks in `tools/bulk/test/serve-test.mjs` (parameters, headers, JSON replies, 20 of remove.bg's error codes); the Python `removebg` 0.4 and Node `remove.bg` 1.3.0 wrappers, file, URL and base64 calls each,
+  53 checks in `tools/bulk/test/serve-test.mjs` (parameters, headers, JSON replies, HEIC, 23 of remove.bg's error codes); the Python `removebg` 0.4 and Node `remove.bg` 1.3.0 wrappers, file, URL and base64 calls each,
   with a dummy key and no account.
 - Covered: the three image sources, `size` (with remove.bg's default `preview` = 0.25 MP and its caps), `format`
   auto/png/jpg/webp/zip, `channels=alpha`, `bg_color`, `bg_image_file`/`bg_image_url`, `crop` + `crop_margin`,
@@ -35,7 +35,7 @@ read 2026-11-22). Details and the full list in `tools/bulk/README.md`.
 - Speed: 216 photos a minute with 4 requests in flight (BiRefNet, GPU, 1.6 MP photos, full-size PNG), the same as
   the folder mode; 129 a minute for a script that sends one photo at a time. remove.bg's own limit is 500
   megapixel-images a minute.
-- Safety: binds to 127.0.0.1 and ::1 only, never goes online unless `--allow-urls`, refuses requests from web pages
+- Safety: binds to 127.0.0.1 and ::1 only, no network use but the one-time model download unless `--allow-urls`, refuses requests from web pages
   (`Origin` header) and unknown `Host` names. No key check, so `--host 0.0.0.0` shares it with the whole network.
 - macOS: AirPlay Receiver holds port 5000 on every address; `localhost:5000` would reach it (a 403 from AirTunes)
   without the extra ::1 listener.

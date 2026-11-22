@@ -4,6 +4,7 @@
 // (they fetch the photo back from a tiny server this script runs on 127.0.0.1).
 import fs from "node:fs";
 import http from "node:http";
+import path from "node:path";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const sharp = require("sharp");
@@ -111,13 +112,48 @@ for (const [code, fields] of errs) {
 }
 r = await post({ image_file: Buffer.alloc(23 * 1024 * 1024, 1) });
 check("error file_too_large", r.status === 400 && r.code === "file_too_large", `${r.status} ${r.code}`);
+const huge = await sharp({ create: { width: 8000, height: 6400, channels: 3, background: "#808080" } }).jpeg().toBuffer(); // 51.2 MP
+r = await post({ image_file: huge });
+check("error resolution_too_high", r.status === 400 && r.code === "resolution_too_high", `${r.status} ${r.code}`);
 
-// image_url: off unless --allow-urls; with it, the photo comes from a little server here.
-const pics = http.createServer((q, s) => { s.writeHead(200, { "content-type": "image/jpeg" }); s.end(jpg); });
+// A background image: cover-resized under the cut-out, so the result is opaque (JPG with format=auto).
+const bgJpg = await sharp({ create: { width: 500, height: 900, channels: 3, background: "#2a9d8f" } }).jpeg().toBuffer();
+r = await post({ image_file: jpg, size: "auto", bg_image_file: bgJpg }); d = await dims(r.buf);
+check("bg_image_file: opaque JPG at the photo's size", r.status === 200 && r.h.get("content-type") === "image/jpeg" && d.w === meta.width && d.h === meta.height, `${r.status} ${r.code || ""} ${d.w}x${d.h}`);
+
+// HEIC (macOS: made with sips).
+if (process.platform === "darwin") {
+  const os = await import("node:os"), { execFileSync } = await import("node:child_process");
+  const heic = path.join(os.tmpdir(), `serve-test-${process.pid}.heic`);
+  try {
+    execFileSync("sips", ["-s", "format", "heic", photo, "--out", heic], { stdio: "ignore" });
+    r = await post({ image_file: fs.readFileSync(heic), size: "auto" }); d = await dims(r.buf);
+    check("HEIC input", r.status === 200 && d.w === meta.width && d.h === meta.height, `${r.status} ${r.code || ""} ${d.w}x${d.h}`);
+  } finally { fs.rmSync(heic, { force: true }); }
+}
+
+// image_url and bg_image_url: off unless --allow-urls; with it, pictures come from a little server here.
+const pics = http.createServer((q, s) => {
+  const body = q.url === "/photo.jpg" ? jpg : q.url === "/bg.jpg" ? bgJpg : null;
+  if (!body) { s.writeHead(404); return s.end(); }
+  s.writeHead(200, { "content-type": "image/jpeg" }); s.end(body);
+});
 await new Promise((res) => pics.listen(0, "127.0.0.1", res));
-r = await post({ image_url: `http://127.0.0.1:${pics.address().port}/photo.jpg`, size: "preview" });
-if (r.code === "url_fetch_disabled") check("image_url is off by default", true);
-else check("image_url fetches with --allow-urls", r.status === 200 && r.h.get("content-type") === "image/png", `${r.status} ${r.code || ""}`);
+const at = (p) => `http://127.0.0.1:${pics.address().port}${p}`;
+r = await post({ image_url: at("/photo.jpg"), size: "preview" });
+if (r.code === "url_fetch_disabled") {
+  check("image_url is off by default", true);
+  r = await post({ image_file: jpg, bg_image_url: at("/bg.jpg") });
+  check("bg_image_url is off by default", r.code === "url_fetch_disabled");
+} else {
+  check("image_url fetches with --allow-urls", r.status === 200 && r.h.get("content-type") === "image/png", `${r.status} ${r.code || ""}`);
+  r = await post({ image_file: jpg, size: "preview", bg_image_url: at("/bg.jpg") });
+  check("bg_image_url fetches with --allow-urls", r.status === 200 && r.h.get("content-type") === "image/jpeg", `${r.status} ${r.code || ""}`);
+  r = await post({ image_url: at("/missing.jpg") });
+  check("error failed_image_download", r.status === 400 && r.code === "failed_image_download", `${r.status} ${r.code}`);
+  r = await post({ image_file: jpg, bg_image_url: at("/missing.jpg") });
+  check("error failed_bg_download", r.status === 400 && r.code === "failed_bg_download", `${r.status} ${r.code}`);
+}
 pics.close();
 
 const acc = await fetch(`${BASE}/account`, { headers: { "X-Api-Key": "x" } }).then((x) => x.json());
