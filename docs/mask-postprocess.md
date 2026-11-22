@@ -10,7 +10,7 @@ Contact sheets hold dataset photos, so they stay in `~/goodbye-bg-quality/sheets
 - **Picking pieces (largest component, components above X% of it, drop small ones at the border, centre-weighted
   choice): don't ship.** On these photos they only hurt: 0 to 2 photos better, 4 to 9 worse on the held-out half, for
   both engines. By eye the photos they hurt lose real parts of the subject: leaves cut off by the frame, splashes and
-  drops, a chair-back next to a child, a lamp's cord. "Which thing it keeps" (BiRefNet's main flaw) is a choice
+  drops, strands of a spider web, blades of grass. "Which thing it keeps" (BiRefNet's main flaw) is a choice
   between whole objects; size and position don't make that choice better than the model does. A tap to drop a piece
   (idea 3 in `docs/quality-1000.md`) still looks like the way to fix it.
 - **Filling holes: don't ship.** Even holes under 0.2% of the subject are mostly real (gaps between fingers, legs,
@@ -35,7 +35,7 @@ after the edge curve, only within 4 px of soft zones that are wider than 3 px (s
 
 The opening is the part that matters. The plain filter (everywhere along the soft edge) scored a little higher on IoU
 (16 better, 2 worse) but made crisp edges worse: edge error up on all 75 DIS photos (0.058 to 0.081) and on 30 of 45
-furniture photos, and by eye a white sofa against a pale sky got a ragged, feathered top edge. A crisp edge is a thin
+furniture photos, and by eye a white tufted headboard against a pale sky got a ragged, feathered top edge. A crisp edge is a thin
 soft line; hair is a wide soft band. Limited to wide bands, the filter leaves crisp edges exactly as they were (DIS and
 furniture edge error unchanged) and keeps nearly all of the gain on fur, hair and plants.
 
