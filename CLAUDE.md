@@ -339,7 +339,7 @@ Quips must fit two lines in a 165 px card's bar.
 
 Anonymous counts the page sends (never photo data), to Workers Analytics Engine dataset `goodbye_bg_ratings`:
 - 👍/👎 to `/api/rate`: blob1 vote, blob2 engine, blob3 first/retry, double1 ms, double2 megapixels.
-- Translation votes (other languages only): one line at the end of the footer's links, "Übersetzung 👍 👎" (Kevin,
+- Translation votes (other languages only): one line at the end of the footer's links, "Gute Übersetzung? 👍 👎" (Kevin,
   2026-11-22: "a super subtle way to rate the translation"); one tap, then "Danke." and never again in that browser
   (`gb-tr`). `/api/rate` with `kind: "lang"`: blob1 'tr-up'/'tr-down', blob2 the language. Per language, not per string.
 - Crash reports to `/api/crash`: the page leaves a note in localStorage while working on a photo; the next visit sends

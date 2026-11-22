@@ -1520,7 +1520,7 @@ function landing(change) {
 if (LANG !== "en") try {
   if (localStorage.getItem("gb-tr") !== LANG) {
     const p = document.querySelector(".foot p:last-child"), s = document.createElement("span"); s.className = "trrate";
-    s.append(" · " + t("Translation") + " ");
+    s.append(" · " + t("Good translation?") + " ");
     for (const [vote, e, label] of [["up", "👍", t("Good translation")], ["down", "👎", t("Bad translation")]]) {
       const b = document.createElement("button"); b.type = "button"; b.textContent = e; b.title = label; b.setAttribute("aria-label", label);
       b.addEventListener("click", () => {
