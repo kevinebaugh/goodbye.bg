@@ -60,22 +60,29 @@ Actions. The old upload-only project `goodbye-bg` can be deleted.
 
 ## Engines
 
-Two models, three tiers. `src/engine.js` runs ONNX Runtime Web 1.31.1 in its own module Worker; the page sends RGBA
-pixels, the worker builds its model's input. Both models are fixed at 1024x1024.
+Two models (BiRefNet at two sizes), three tiers. `src/engine.js` runs ONNX Runtime Web 1.31.1 in its own module Worker;
+the page sends RGBA pixels at 1024x1024, the worker builds its model's input (BiRefNet 640 boxes it down to 640 and
+scales the mask back up).
 - **BiRefNet lite** (MIT, fp16, 93 MB after the rewrite) on WebGPU, computers only (`any-pointer: fine`): 280 to 300 ms
   a photo, GPU peak +3.0 GB. ImageNet mean/std in, logits out (the worker applies the sigmoid).
   `refineEdge` in app.js (`docs/mask-postprocess.md`; `?pp=0` off, skipped for ISNet and GIF frames): a colour guided
-  filter redraws the mask from the photo in soft zones wider than 3 px (hair, fur, fluff); crisp edges stay. Held-out
-  half: 12 photos better, 0 worse. Streams rows (12 MB at most); 0.27 s median at 6x CPU throttling, 45 ms unthrottled.
+  filter redraws the mask from the photo in soft zones wider than 3 px (hair, fur, fluff); crisp edges stay. Runs on
+  BiRefNet 640 too. Held-out half: 12 photos better, 0 worse (640: 8 and 0). Streams rows (12 MB at most); 0.27 s median at 6x CPU throttling, 45 ms unthrottled.
 - **ISNet medium** (IMG.LY, fp16, AGPL, 88 MB) on WebGPU: 150 to 300 ms a photo, GPU peak +1.0 GB. Input (x-128)/256,
   output 0..1. `hardenHaze` in app.js (ISNet only; `?haze=0` off): wide half see-through areas become solid at 0.3 or
   more, else clear.
-- **ISNet on the CPU** (WebAssembly, 4 threads; 2 on iPhones): 5 to 7 s a photo on the M5 Pro.
+- **BiRefNet lite at 640 on the CPU** (WebAssembly, 4 threads; 2 on iPhones; `weights/birefnet640/`, 95 MB, made by
+  `scripts/birefnet640.sh`): the CPU engine since 2026-11-22 (`docs/phone-birefnet640.md`). Headless Chrome with the
+  iPhone UA: 2.9 to 3.7 s inferred, peak about 50 MB above ISNet (under 2.0 GB). Loses thin legs, cables and frames
+  that ISNet keeps (`docs/quality-products.md`), so a 👎 on its result runs **ISNet 1024 on the whole photo** (one
+  engine at a time: the 640 worker goes, 3 s gap on iPhones; `retryModel`). `?model=isnet` runs ISNet on the CPU as
+  before. Untested on a real iPhone: watch crashes by engine and 👎 on `cpu-birefnet640` for a week.
 - WebGPU is used when the adapter has `shader-f16`. iPhones and iPads always use the CPU engine (2 threads: 4 threads peaked at 2.1 GB in the Simulator and crashed an
   18.75 MP photo half the time on Kevin's iPhone; 2 threads peak about 300 MB lower; 5.0 s a photo). WebGPU crashed
   the tab there one try in two (2026-11-20). Safari needs `Cross-Origin-Embedder-Policy: require-corp` (it ignores
   `credentialless`) to be cross-origin isolated, which threads need.
-- Votes and crash reports call the engines `gpu-birefnet`, `gpu` (ISNet) and `cpu` (ISNet). A vote names the engine
+- Votes and crash reports call the engines `gpu-birefnet`, `gpu` (ISNet), `cpu-birefnet640` and `cpu` (ISNet: a 👎
+  retry on a 640 result, or `?model=isnet`). A vote names the engine
   that made that photo's mask, even after a fallback.
 
 GPU gate (for weak GPUs; `docs/platforms-and-phone-model.md`, decision 3). The GPU worker does a warm-up run before
@@ -198,7 +205,7 @@ without a visit; private windows refuse Blobs, so nothing is kept there.
 - Results are cropped to the subject by default (crop icon switches to the whole frame). 👎 retries zoomed in on the
   subject (merged into the first result outside the zoomed part, feathered where they meet; `mergeRetry`), only when
   the subject's padded box is under 80% of the photo; otherwise it is a vote only, labelled "Bad result" instead of
-  "Bad result, try again". A second 👎 restores the first result. One vote per result: the chosen emoji stays lit and
+  "Bad result, try again". A 640 result's 👎 always runs ISNet on the whole photo instead. A second 👎 restores the first result. One vote per result: the chosen emoji stays lit and
   the other steps aside; a retry that finds a new result brings both back.
 - Nothing ever overlaps the image. Every card control (crop, Download, 👍 👎, remove) lives in the bar below it.
 - A finished cut-out is an `<img>`, so long-press on iPhone offers Save to Photos (a press swaps in the
