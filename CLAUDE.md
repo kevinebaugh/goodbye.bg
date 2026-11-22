@@ -282,7 +282,7 @@ and redirects; a POST there counts the card being shown ('adseen').
 - Ads among the photos (Kevin, 2026-11-22, replacing 2026-11-20's "always fill the grid"): one beside 1 to 3 photos;
   from 4 photos one after every 6th photo (after the last when there are fewer), at most 3, never in the first row of a
   grid with more than one (it moves to the second row's start) (`adCount`, `adCells`). Ads never make the photos
-  scroll: fewer of them when the photos alone would fit. Their cells are reserved from the start as empty `.adslot`s,
+  scroll: fewer of them when the photos alone would fit. Their cells are reserved from the start as empty `.spare` cells,
   so no photo moves when an ad arrives (smoke test "ads: one after the 6th photo of 8"). Ads appear once the first cut-out is done, 1.1 s after it (`ADS_PAUSE`), one after another with a shimmering
   placeholder; the 3D code is fetched while the first photo is worked on.
 - Zazzle's 8 variants draw the visitor's cut-out on a product (mug, sticker, shirt, tote, ornament, phone case, pillow,
@@ -302,7 +302,7 @@ and redirects; a POST there counts the card being shown ('adseen').
   `cap/` after a day). Upload fails or times out: the usual link, and computers still get the cut-out saved. Clicks
   that sent one count as 'adcap'. Templates, findings and the open commission question in `docs/zazzle-cap.md`.
 - Other partners, GIFs, or `?zazzlecap=0`: the partner opens in a new tab and this tab saves the cut-out on the card
-  (`artIt`) as the plain see-through PNG (`plainBlob`): a download on computers; on phones the share sheet first
+  (`artIt`) as the see-through PNG Download saves (`png`): a download on computers; on phones the share sheet first
   (Safari won't save from a tab that went to the background), then the partner (tested in the iOS Simulator).
 - Ad blockers hide the card and block `/go/` beacons; that is the visitor's choice, so we don't work around it. A
   failing card is reported as 'ad-failed' or 'mug-failed'. EthicalAds: see `docs/ads.md`.

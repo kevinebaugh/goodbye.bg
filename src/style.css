@@ -144,18 +144,14 @@ body.moving main, body.moving main *, body.moving .foot, body.moving .foot * { v
 .pic img { display: none; -webkit-touch-callout: default; -webkit-tap-highlight-color: transparent; }
 .pic.still img { display: block; }
 .pic.still canvas { display: none; }
-/* The checkerboard means "see-through". With a colour picked the download is a plain JPG, so the card shows it as a
-   picture on a plain surface, with a soft shadow. */
-.solid .pic { background: color-mix(in srgb, var(--ink) 6%, var(--card)); }
-.solid .pic img, .solid .pic canvas { filter: drop-shadow(0 2px 6px rgb(0 0 0 / .22)); }
-/* Nothing sits on the image. Its controls live in the bar below: crop, Download, 👍 👎, remove. Every control is at
-   least --h-sm (32 px) across, a comfortable tap. */
+/* Nothing sits on the image. Its controls live in the bar below: Download, 👍 👎, remove. Controls are --h-sm
+   (32 px) on most cards; narrow cards shrink them (container queries below). */
 .bar { position: relative; display: flex; align-items: center; gap: var(--s2); padding: var(--s2) var(--s3); border-top: 1px solid var(--line); min-height: var(--bar, 0); }
 .bar .dl { flex: 1; min-width: 0; }
 .dl svg { display: none; }
 .rates { display: flex; gap: var(--s1); }
-/* Bar icons (background, crop, 👍 👎, remove) share one resting look: full strength on a faint chip, on every device
-   (faded grey thumbs read as disabled). Crop on: a teal ring on an aqua tint. Thumbs stay grey until chosen: yellow on
+/* Bar icons (👍 👎, remove) share one resting look: full strength on a faint chip, on every device
+   (faded grey thumbs read as disabled). Thumbs stay grey until chosen: yellow on
    every card would break the cool palette. */
 .ico { flex: none; width: var(--h-sm); height: var(--h-sm); border-radius: 50%; border: 0; padding: 0; display: grid; place-items: center; cursor: pointer;
   background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); font-size: 15px; line-height: 1; transition: background .15s, box-shadow .15s, filter .15s, transform .15s; }
@@ -167,7 +163,7 @@ body.moving main, body.moving main *, body.moving .foot, body.moving .foot * { v
 .rate:disabled { cursor: default; }
 .rate.chosen { opacity: 1; filter: none; transform: scale(1.1); }
 
-/* The ad card: fills an otherwise empty grid cell. Same size as a photo card, but quieter (no card surface, no fill,
+/* The ad card: sits among the photos in a cell kept for it (app.js adCells). Same size as a photo card, but quieter (no card surface, no fill,
    a solid hairline: dashes read as an empty slot), no checkerboard and an "Ad" label, so it never passes for one of
    your photos. */
 .adcard { display: flex; flex-direction: column; background: transparent; border: 1px solid color-mix(in srgb, var(--ink) 16%, transparent); border-radius: 18px; overflow: hidden;
@@ -183,11 +179,9 @@ body.moving main, body.moving main *, body.moving .foot, body.moving .foot * { v
 .adcard.loading .adpic::after { animation: shimmer 1.3s ease-in-out infinite; opacity: .9; transition: none; }
 @keyframes shimmer { from { background-position: 120% 0; } to { background-position: -120% 0; } }
 @media (prefers-reduced-motion: reduce) { .adcard.loading .adpic::after { animation: none; } }
-.adpic { position: relative; height: calc(var(--p, 300px) + var(--bar, 0px) - var(--bar1, var(--bar, 0px))); display: grid; place-content: center; justify-items: center; gap: 10px; padding: 16px; text-align: center; }
+.adpic { position: relative; height: var(--p, 300px); display: grid; place-content: center; justify-items: center; gap: 10px; padding: 16px; text-align: center; }
 /* An ad cell kept for later (app.js adCells): empty, the size of a card, so nothing moves when the ad arrives. */
-.adslot { height: calc(var(--p, 300px) + var(--bar, 0px)); }
-/* Ad cards keep a one-row bar (--bar1); a photo card's second row goes to the product art instead (app.js layout). */
-.adcard .bar { min-height: var(--bar1, var(--bar, 0)); }
+.spare { height: calc(var(--p, 300px) + var(--bar, 0px) + 2px); } /* + the cards' 1 px borders */
 .adicon { font-size: clamp(28px, calc(var(--p, 300px) * 0.18), 56px); line-height: 1; }
 .adart { width: 100%; height: calc(var(--p, 300px) * 0.62); display: block; }
 .artcard .adline { display: none; }

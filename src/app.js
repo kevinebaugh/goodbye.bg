@@ -596,10 +596,10 @@ function subject(it) {
   return b ? { x0: r.x + b.x0 * r.w, y0: r.y + b.y0 * r.h, x1: r.x + b.x1 * r.w, y1: r.y + b.y1 * r.h } : null;
 }
 
-// What a card shows and saves, in image pixels: the subject with a little room when cropped, else the whole photo.
-function frame(it) {
+// What a card shows and saves, in image pixels: the subject with a little room (a GIF keeps its whole frame).
+function frame(it, crop = !it.anim) {
   const b = subject(it);
-  if (!it.crop || !b) return { x: 0, y: 0, w: it.w, h: it.h };
+  if (!crop || !b) return { x: 0, y: 0, w: it.w, h: it.h };
   const pad = 0.04 * Math.max((b.x1 - b.x0) * it.w, (b.y1 - b.y0) * it.h);
   const x0 = Math.max(0, Math.floor(b.x0 * it.w - pad)), y0 = Math.max(0, Math.floor(b.y0 * it.h - pad));
   const x1 = Math.min(it.w, Math.ceil(b.x1 * it.w + pad)), y1 = Math.min(it.h, Math.ceil(b.y1 * it.h + pad));
@@ -824,8 +824,8 @@ function render(it, W, H, bmp = it.bmp) {
 
 function drawCard(it) {
   if (!items.includes(it)) return; // removed (its bitmap is closed)
-  // The shown image stays up until the new one is decoded (still() swaps it), so a crop toggle doesn't flicker.
-  const f = it.mask ? frame(it) : { x: 0, y: 0, w: it.w, h: it.h };
+  // The shown image stays up until the new one is decoded (still() swaps it), so a redraw (a 👎 retry) doesn't flicker.
+  const f = frame(it);
   // Never draw bigger than the preview bitmap holds (a tight crop would otherwise blow up to full size).
   const k = Math.min(1, PREVIEW_SIDE / Math.max(f.w, f.h), it.bmp.width / it.w);
   const W = Math.max(1, Math.round(f.w * k)), H = Math.max(1, Math.round(f.h * k)), c = it.el.canvas;
@@ -849,7 +849,7 @@ function still(it) {
     it.previewUrl = URL.createObjectURL(b);
     img.src = it.gifUrl || it.previewUrl; // an animated cut-out plays
     try { await img.decode(); } catch {}
-    if (old) URL.revokeObjectURL(old); // even when a newer draw came in meanwhile (the live colour picker), or it leaks
+    if (old) URL.revokeObjectURL(old); // even when a newer draw came in meanwhile, or it leaks
     if (gen !== it.gen) return;
     pic.classList.add("still");
   }, "image/png");
@@ -943,8 +943,7 @@ async function fullBlob(it) {
 
 // Phones save through the share sheet ("Save Image" puts it in Photos) instead of downloading to Files.
 // The share sheet only opens straight from a tap, so phones make each PNG as soon as the cut is done.
-const COARSE = matchMedia("(pointer: coarse)"); // touch
-const PHONE = COARSE.matches && "canShare" in navigator;
+const PHONE = matchMedia("(pointer: coarse)").matches && "canShare" in navigator; // touch
 let pngChain = Promise.resolve();
 // One full-size PNG at a time: several at once can run a phone out of memory.
 // A failed one is forgotten, so the next tap tries again instead of failing forever.
@@ -1053,7 +1052,7 @@ async function addSources(list, origin = "") {
   // All cards appear at once, so the layout settles once instead of jumping with every photo.
   const cards = document.createDocumentFragment(); // the batch goes on top, in the order it was picked
   const batch = list.map((src, i) => {
-    const it = { id: ++uid, key: top + i, name: "image", bmp: null, blob: null, w: 0, h: 0, mask: null, crop: true };
+    const it = { id: ++uid, key: top + i, name: "image", bmp: null, blob: null, w: 0, h: 0, mask: null };
     items.push(it);
     cards.append(makeCard(it));
     named(it, baseName(src instanceof Blob ? src.name : String(src).startsWith("data:") ? "pasted" : String(src)));
@@ -1077,7 +1076,7 @@ async function openOne(it, src) {
     const { blob, name } = await toBlob(src);
     named(it, baseName(name));
     if (/gif/i.test(blob.type) || /\.gif$/i.test(name || "")) { // animated: every frame gets cut out
-      try { const g = (await loadGif()).readGif(await blob.arrayBuffer(), await maxFrames()); if (g) { it.anim = g; it.crop = false; dbg("gif", { frames: g.frames.length, total: g.total }); } }
+      try { const g = (await loadGif()).readGif(await blob.arrayBuffer(), await maxFrames()); if (g) { it.anim = g; dbg("gif", { frames: g.frames.length, total: g.total }); } }
       catch (e) { console.warn("GIF frames skipped", e); }
     }
     dbg("decode", { bytes: blob.size, type: blob.type });
@@ -1200,7 +1199,7 @@ function makeCard(it) {
   const busy = document.createElement("div"); busy.className = "busy";
   card.classList.add("queued"); // waits quietly; only the photo being worked on waves and talks
   card.setAttribute("aria-busy", "true");
-  const x = document.createElement("button"); x.type = "button"; x.className = "x"; x.textContent = "×"; x.setAttribute("aria-label", t("Remove")); x.title = t("Remove");
+  const x = document.createElement("button"); x.type = "button"; x.className = "ico x"; x.textContent = "×"; x.setAttribute("aria-label", t("Remove")); x.title = t("Remove");
   const img = document.createElement("img"); img.alt = t("Cut-out"); img.draggable = true;
   img.addEventListener("touchstart", () => holdFull(it), { passive: true });
   img.addEventListener("contextmenu", () => holdFull(it));
@@ -1218,7 +1217,6 @@ function makeCard(it) {
   up.addEventListener("click", () => { tick(); rate(it, "up"); });
   down.addEventListener("click", () => { tick(); rate(it, "down"); });
   const rates = document.createElement("div"); rates.className = "rates"; rates.append(up, down);
-  x.classList.add("ico");
   const say = document.createElement("p"); say.className = "say"; // the quip while this photo is worked on: in the bar, never on the photo
   // Just the cut-out (Kevin, 2026-11-22: "It's not a full image editor"): Download, 👍 👎, remove. Always cropped to
   // the subject, always a see-through PNG. One row; narrow cards get smaller buttons (style.css).
@@ -1227,10 +1225,11 @@ function makeCard(it) {
   x.addEventListener("click", () => { dbg("removed"); clearInterval(it.quip);
     const at = items.indexOf(it); if (at < 0) return;
     items.splice(at, 1);
-    // Focus goes to the next card's Remove (or the one before), not back to the top of the page.
-    const next = card.nextElementSibling, near = next?.querySelector?.(".x") || card.previousElementSibling?.querySelector?.(".x");
+    // Focus goes to the next photo's Remove (or the one before), not back to the top of the page; ads in between are skipped.
+    const sib = (dir) => { let e = card[dir]; while (e && !e.matches(".card")) e = e[dir]; return e; };
+    const nextCard = sib("nextElementSibling"), prevCard = sib("previousElementSibling"), near = (nextCard || prevCard)?.querySelector(".x");
     card.remove(); swapAds(it); forget(it); sync();
-    offerUndo({ it, card, at, next, near });
+    offerUndo({ it, card, at, near, nextCard, prevCard });
     // From the keyboard, Undo is the next stop (its countdown pauses while it has focus); with a pointer, the next card.
     if (performance.now() - keyAt < 600) $("undobtn").focus({ preventScroll: true });
     else if (near) near.focus({ preventScroll: true }); else $("pick").focus({ preventScroll: true }); });
@@ -1244,7 +1243,7 @@ function makeCard(it) {
     finally { clearTimeout(slow); dl.removeAttribute("aria-busy"); it.saving = false; }
   });
 
-  it.el = { card, pic, canvas, img, busy, dl, up, down, bar, say };
+  it.el = { card, pic, canvas, img, busy, dl, up, down, say };
   return card;
 }
 
@@ -1302,10 +1301,11 @@ function settle(u) {
 function undoRemove() {
   const u = pendingUndo; if (!u) return;
   pendingUndo = null; $("undo").hidden = true; document.body.classList.remove("undoing");
-  const { it, card, at, next } = u, g = $("grid");
-  // Back where it was: before the card that followed it, else after the photos (ahead of the ads and Download all).
-  const before = next?.parentNode === g ? next : g.querySelector(".adcard") || gridEnd();
-  g.insertBefore(card, before);
+  const { it, card, at, nextCard, prevCard } = u, g = $("grid");
+  // Back between the photos it sat between (layout puts the ads back into their cells around it).
+  if (nextCard?.parentNode === g) g.insertBefore(card, nextCard);
+  else if (prevCard?.parentNode === g) prevCard.after(card);
+  else g.insertBefore(card, gridEnd());
   items.splice(Math.min(at, items.length), 0, it);
   it.filed = false; // its stored file was deleted on Remove: write it again, not only its state
   show(); keep(it); sync(); dbg("undo");
@@ -1561,16 +1561,13 @@ async function retry(it) {
   announce(t(changed ? "{name}: tried again, new result" : "{name}: tried again, no better result", { name: it.name }));
 }
 
-// Everything fits on one screen: cards are square and sized so they all fit the space left.
-// Only past a minimum size (dozens of photos on a phone) does the grid scroll.
-// Cards are square and sized to fit the screen. Under MIN_PIC the grid scrolls (bulk: about 50 photos on a laptop);
-// 84 px still leaves Download 40 px next to the background button. A phone in portrait fits 12 (3 x 4).
+// Everything fits on one screen: cards are square and sized so they all fit the space left. Under MIN_PIC the grid
+// scrolls (bulk: about 50 photos on a laptop). 84 px still fits Download, 👎 and remove; a phone in portrait fits 12 (3 x 4).
 const GAP = 12, MIN_PIC = 84, MAX_PIC = 640;
 // The bar's height by card width (style.css): one row, Download, 👍 👎, remove, the buttons smaller on narrow cards.
 // Cards up to 242 px use the small Download.
 const BAR_SM = 49, BAR_MD = 57, FULL_BAR = 242;
 const barFor = (p) => (p <= FULL_BAR ? BAR_SM : BAR_MD);
-COARSE.addEventListener?.("change", () => requestAnimationFrame(layout));
 // A phone on its side (short and wide): "Download all" moves up beside Choose photos and Paste, where the width is
 // spare, and the footer steps aside (style.css), so the cards get the height and keep 👍 👎 (Kevin, 2026-11-22:
 // on its side the bars were cut off under Download all and 👎 was gone). Otherwise it is the row under the cards.
@@ -1593,14 +1590,14 @@ function layout() {
   const allH = all.hidden || all.parentNode !== g ? 0 : all.offsetHeight - (parseFloat(getComputedStyle(all).paddingTop) || 0) + GAP;
   const W = g.clientWidth, H = g.clientHeight - (parseFloat(getComputedStyle(g).paddingTop) || 0) - allH;
   // The bar's height depends on the card's width, so it is worked out for each candidate, not measured from the cards.
-  const fit = (k, from = 1, h = H) => {
+  const fit = (k, h = H) => {
     let b = { p: 0, c: 1 };
-    for (let c = from; c <= k; c++) {
+    for (let c = 1; c <= k; c++) {
       const r = Math.ceil(k / c), pw = (W - GAP * (c - 1)) / c, row = (h - GAP * (r - 1)) / r;
       let p = Math.min(pw, row - barFor(pw));
       if (barFor(p) !== barFor(pw)) p = Math.min(pw, FULL_BAR, row - barFor(p)); // height-bound: smaller cards, smaller bar
       p = Math.floor(p);
-      if (p > b.p) b = { p, c, row };
+      if (p > b.p) b = { p, c };
     }
     return b;
   };
@@ -1610,13 +1607,13 @@ function layout() {
   let ads = adCount(n);
   while (ads && fit(n + ads).p < MIN_PIC && fit(n).p >= MIN_PIC) ads--;
   const slots = n + ads;
-  let best = fit(slots);
+  const best = fit(slots);
   // When the photos would scroll with the footer in place, the footer steps aside and the grid gets its room (Kevin,
   // 2026-11-22: on a phone with 10 photos the footer sat under Download all while the cards scrolled). Decided as if the
   // footer were there, so taking it away never brings it back in a loop.
   const foot = document.querySelector(".foot"), packed = document.body.classList.contains("packed");
   if (foot && !packed) footH = foot.offsetHeight;
-  const crowded = fit(slots, 1, packed ? H - footH : H).p < MIN_PIC;
+  const crowded = fit(slots, packed ? H - footH : H).p < MIN_PIC;
   if (crowded !== packed && !SIDEWAYS.matches) { document.body.classList.toggle("packed", crowded); requestAnimationFrame(layout); return; } // again, with the grid's new height
   const scroll = best.p < MIN_PIC;
   let p = Math.min(MAX_PIC, Math.max(best.p, MIN_PIC));
@@ -1628,7 +1625,6 @@ function layout() {
   const m = $("main").style;
   m.setProperty("--cols", c); m.setProperty("--p", `${p}px`); // grid and tools row share them
   m.setProperty("--bar", `${barFor(p)}px`); // every photo card's bar, so the cards in a row line up
-  m.setProperty("--bar1", `${barFor(p)}px`);
   placeAds(n, c, ads);
   centreLastRow(scroll ? 0 : c, p);
   requestAnimationFrame(() => {
@@ -1642,7 +1638,7 @@ function layout() {
 // A last row with empty cells (one photo before its ads arrive, or no ads at all) sits in the middle, under the
 // centred buttons, not on the left. A translate, so nothing is laid out again; it glides aside when an ad fills a cell.
 function centreLastRow(c, p) {
-  const cells = [...$("grid").children].filter((e) => e.matches(".card, .adcard, .adslot"));
+  const cells = [...$("grid").children].filter((e) => e.matches(".card, .adcard, .spare"));
   for (const e of cells) e.style.translate = "";
   const inRow = c ? cells.length % c : 0;
   if (!inRow) return;
@@ -1666,9 +1662,9 @@ function hugFooter(rows) {
 new ResizeObserver(layout).observe($("grid"));
 
 /* ---------- ad cards ----------
-   Affiliate cards fill the grid's empty cells once the whole batch is done: 1 photo gets 3, 2 get 2, 3 get 1,
-   more photos fill out their last row. Each card shows a different product drawn from one of the visitor's
-   cut-outs. Never between photos, not part of Download all, no rating, clearly marked. Links go through
+   Affiliate cards among the photos: one beside 1 to 3 photos, then one after every 6th, at most 3, in cells kept from
+   the start (adCount, adCells). Each card shows a different product drawn from one of the visitor's
+   cut-outs. Not part of Download all, no rating, clearly marked. Links go through
    /go/<id>, which counts the click. */
 let adPartner = null, adVariants = [];
 const adEls = [];
@@ -1710,7 +1706,7 @@ function adCount(n) {
 }
 // Where the ad cells go, as cell indexes: after every AD_EVERY-th photo (after the last when there are fewer), never in
 // the first row of a grid that has more than one (an ad there would greet people before their photos).
-function adCells(n, c, k = adCount(n)) {
+function adCells(n, c, k) {
   const total = n + k, out = [];
   for (let i = 1; i <= k; i++) {
     let at = Math.min(i * AD_EVERY, n) + (i - 1);
@@ -1720,7 +1716,7 @@ function adCells(n, c, k = adCount(n)) {
   }
   return out;
 }
-// The reserved cells are empty placeholders (.adslot) until the first cut-out is done; then each becomes an ad card.
+// The reserved cells are empty placeholders (.spare: not a name ad blockers hide) until the first cut-out is done; then each becomes an ad card.
 const adSlots = [];
 function placeAds(n, c, k) {
   const at = adCells(n, c, k);
@@ -1744,13 +1740,14 @@ function placeAds(n, c, k) {
     catch (e) { console.warn("Ad card failed", e); report("ad-failed", e); adVariants = []; break; } // no ads rather than broken ones
   }
   while (adSlots.length > at.length - adEls.length) adSlots.pop().remove();
-  while (adSlots.length < at.length - adEls.length) { const d = document.createElement("div"); d.className = "adslot"; d.setAttribute("aria-hidden", "true"); adSlots.push(d); }
-  // Into their cells: the photo cards in order, an ad (or its placeholder) at each index in at.
+  while (adSlots.length < at.length - adEls.length) { const d = document.createElement("div"); d.className = "spare"; d.setAttribute("aria-hidden", "true"); adSlots.push(d); }
+  // Into their cells: ad k (or its placeholder) goes right before photo at[k] - k. Only the ads move, never the photos
+  // (a moved card would replay its entrance and lose focus). Last to first, so ads side by side keep their order.
   const g = $("grid"), cards = [...g.children].filter((e) => e.matches(".card")), ads = [...adEls, ...adSlots];
-  const order = []; let ci = 0, ai = 0;
-  for (let i = 0; ci < cards.length || ai < ads.length; i++) order.push(ai < ads.length && (at[ai] === i || ci >= cards.length) ? ads[ai++] : cards[ci++]);
-  let ref = g.firstElementChild;
-  for (const e of order) { if (e !== ref) g.insertBefore(e, ref); else ref = ref.nextElementSibling; }
+  for (let k = ads.length - 1; k >= 0; k--) {
+    const before = at[k] - k, next = k + 1 < ads.length && at[k + 1] - k - 1 === before ? ads[k + 1] : cards[before] || gridEnd();
+    if (ads[k].parentNode !== g || ads[k].nextElementSibling !== next) g.insertBefore(ads[k], next);
+  }
 }
 function buildAd(i) {
   const p = adPartner, x = adVariants[i % adVariants.length], a = document.createElement("a");
@@ -1793,9 +1790,9 @@ function buildAd(i) {
     const it = a.artIt;
     if (!it?.mask) return;
     if (CAP && p.id === "zazzle" && !it.anim) { e.preventDefault(); return capSend(a, it); }
-    if (!PHONE) { try { save(plainName(it), await plainBlob(it)); } catch (err) { report("ad-failed", err); } return; }
+    if (!PHONE) { try { save(outName(it), await png(it)); } catch (err) { report("ad-failed", err); } return; }
     e.preventDefault();
-    try { await share([{ name: plainName(it), blob: await plainBlob(it) }]); } catch (err) { report("ad-failed", err); }
+    try { await share([{ name: outName(it), blob: await png(it) }]); } catch (err) { report("ad-failed", err); }
     const w = window.open(a.href, "_blank"); // not "noopener": that always returns null
     if (w) w.opener = null; else location.href = a.href; // pop-up blocked: go in this tab
   });
@@ -1841,17 +1838,14 @@ async function capSend(a, it) {
     if (!r.ok) throw new Error(`cap upload ${r.status}`);
   } catch (err) { // /go gives up after a few seconds and opens the usual page; computers still get the cut-out saved
     report("cap-failed", err);
-    if (!PHONE) try { save(plainName(it), await plainBlob(it)); } catch {}
+    if (!PHONE) try { save(outName(it), await png(it)); } catch {}
   }
   a.capBusy = false;
   if (!w) location.href = href; // pop-up blocked: go in this tab
 }
-// What ad cards save or send: the cut-out Download gives (a GIF stays the GIF).
-function plainBlob(it) { return png(it); }
-const plainName = (it) => `${it.name}-goodbye-bg.${it.anim ? "gif" : "png"}`;
-// The cut-out sent to Zazzle: plainBlob, at most CAP_MAX px.
+// The cut-out sent to Zazzle: what Download saves (png), at most CAP_MAX px.
 async function capBlob(it) {
-  const full = await plainBlob(it);
+  const full = await png(it);
   const bm = await createImageBitmap(full);
   try {
     const k = Math.min(1, CAP_MAX / Math.max(bm.width, bm.height));
@@ -2033,7 +2027,7 @@ function swapArt(a, next) { // next becomes the card's once it shows, so a click
   }, () => c.remove());
 }
 function mugArt(it) {
-  const keep = it.crop; it.crop = true; const f = frame(it); it.crop = keep;
+  const f = frame(it, true); // a GIF's product art is cropped too
   const k = Math.min(1, 640 / Math.max(f.w, f.h), it.bmp.width / it.w);
   const full = render(it, Math.max(1, Math.round(it.w * k)), Math.max(1, Math.round(it.h * k)));
   const w = Math.max(1, Math.round(f.w * k)), h = Math.max(1, Math.round(f.h * k));
@@ -2196,7 +2190,7 @@ document.addEventListener("dblclick", (e) => e.preventDefault(), { passive: fals
 
 /* ---------- kept on this device ----------
    Photos and their cut-outs stay in this browser (IndexedDB), so leaving (a partner's site, a reload, a closed tab,
-   an iPhone throwing away a background tab) and coming back finds them where they were, with the same crop and vote,
+   an iPhone throwing away a background tab) and coming back finds them where they were, with the same cut-out and vote,
    without running the model again. Nothing here is ever sent anywhere. The newest KEEP_MAX photos stay, within
    KEEP_BYTES; past that the oldest go first (Kevin, 2026-11-21: "local cache into perpetuity, sane limit FIFO").
    Removing a card deletes its copy. Where storage throws (some private windows, a full disk) nothing is kept.
@@ -2228,7 +2222,7 @@ const queueKeep = (fn) => (keepChain = keepChain.then(fn).catch((e) => console.w
 function keep(it) { queueKeep(() => writeKept(it)); }
 function forget(it) { if (it.key != null) queueKeep(async () => { const db = await kdb(); await tx(db, "readwrite", (f, s) => { f.delete(it.key); s.delete(it.key); }); }); }
 
-const maskBlobs = new WeakMap(); // mask -> its PNGs, so a vote or a crop doesn't encode it again
+const maskBlobs = new WeakMap(); // mask -> its PNGs, so a vote doesn't encode it again
 function maskRec(m) {
   if (!m) return null;
   let r = maskBlobs.get(m);
@@ -2250,7 +2244,7 @@ async function writeKept(it) {
   const mask = await maskRec(it.mask), first = it.first ? { rect: it.first.rect || null, mask: await maskRec(it.first.mask) } : null;
   const gif = it.anim && it.gifUrl ? await it.png : null;
   const size = (r) => (r ? r.png.size + (r.fix?.size || 0) : 0);
-  const state = { id: it.key, name: it.name, w: it.w, h: it.h, crop: it.crop, rect: it.maskRect || null, mask, first, retried: !!it.retried,
+  const state = { id: it.key, name: it.name, w: it.w, h: it.h, rect: it.maskRect || null, mask, first, retried: !!it.retried,
     vote: it.vote || null, anim: !!it.anim, gif, ms: it.ms || 0, engine: it.engine || null,
     bytes: it.blob.size + it.prev.size + size(mask) + size(first?.mask) + (gif?.size || 0) };
   if (state.bytes > KEEP_BYTES) return; // never fits (see trim)
@@ -2285,7 +2279,7 @@ async function maskFrom(r) {
   if (!r) return null;
   const m = await canvasOf(r.png); m.box = r.box;
   if (r.fix) m.fix = await canvasOf(r.fix);
-  maskBlobs.set(m, Promise.resolve(r));
+  maskBlobs.set(m, Promise.resolve({ png: r.png, fix: r.fix || null, box: r.box })); // not old fields (the mask editor's raw bytes)
   return m;
 }
 
@@ -2297,13 +2291,13 @@ async function restore() {
     [files, states] = await tx(db, "readonly", (f, s) => { const a = f.getAll(), b = s.getAll(); return { get result() { return [a.result, b.result]; } }; });
   } catch (e) { console.info("goodbye.bg: nothing kept here", e?.name || e); unrestore(); return []; }
   const byId = new Map(files.map((f) => [f.id, f]));
-  // Background photos are gone (2026-11-22): the store that held them is emptied.
-  try { db.transaction("backs", "readwrite").objectStore("backs").clear(); } catch {}
+  // Background photos are gone (2026-11-22): the store that held them is emptied, once per browser.
+  try { if (!localStorage.getItem("gb-backs")) { db.transaction("backs", "readwrite").objectStore("backs").clear(); localStorage.setItem("gb-backs", "0"); } } catch {}
   const list = [], orphans = [];
   for (const st of states) {
     const f = byId.get(st.id); byId.delete(st.id);
     if (!f?.blob || !f.prev) { orphans.push(st.id); continue; }
-    const it = { id: ++uid, key: st.id, name: st.name, bmp: null, blob: f.blob, prev: f.prev, w: st.w, h: st.h, mask: null, crop: !st.anim,
+    const it = { id: ++uid, key: st.id, name: st.name, bmp: null, blob: f.blob, prev: f.prev, w: st.w, h: st.h, mask: null,
       maskRect: st.rect, retried: st.retried, vote: st.vote, ms: st.ms, engine: st.engine || "", filed: true, st };
     items.push(it); list.push(it);
   }

@@ -367,7 +367,7 @@ try {
     try {
       await b.go(app());
       await addPhotos(b, ["a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8"]);
-      const at = () => b.ev(`[...document.getElementById("grid").children].filter((e) => e.matches(".card, .adcard, .adslot")).map((e) => e.matches(".card") ? "P" : "A").join("")`);
+      const at = () => b.ev(`[...document.getElementById("grid").children].filter((e) => e.matches(".card, .adcard, .spare")).map((e) => e.matches(".card") ? "P" : "A").join("")`);
       const pos = () => b.ev(`${CARDS}.map((c) => { const r = c.getBoundingClientRect(); return Math.round(r.x) + "," + Math.round(r.y); }).join(" ")`);
       await sleep(700); // after the cards' pop-in (0.35 s), before the first cut-out
       const before = await pos(), slots = await at();
@@ -694,9 +694,9 @@ try {
     assert(cls < 0.001, `layout shift on load: ${cls.toFixed(4)}`);
     await addPhotos(d, ["eins"]);
     await allDone(d, 1, 120000);
-    const card = await d.ev(`({ dl: document.querySelector("#grid > .card .dl").getAttribute("aria-label"), crop: document.querySelector("#grid > .card .x").title,
+    const card = await d.ev(`({ dl: document.querySelector("#grid > .card .dl").getAttribute("aria-label"), x: document.querySelector("#grid > .card .x").title,
       w: document.querySelector("#grid > .card .dl").getBoundingClientRect().width, wide: document.documentElement.scrollWidth > innerWidth + 1 })`);
-    assert(card.dl === "Speichern" && card.crop === "Entfernen", `card not German: ${card.dl} / ${card.crop}`);
+    assert(card.dl === "Speichern" && card.x === "Entfernen", `card not German: ${card.dl} / ${card.x}`);
     assert(card.w >= 40 && !card.wide, `Download ${card.w} px wide, page wider than the screen: ${card.wide}`);
     noErrors(d); await cspClean(d);
     await d.close();
