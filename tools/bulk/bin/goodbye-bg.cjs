@@ -107,6 +107,9 @@ function plan(files, outAbs, format) {
   }
 }
 
+// Any cut-out (a file that isn't a dot-file) anywhere under dir.
+const hasFiles = (dir) => fs.readdirSync(dir, { withFileTypes: true }).some((e) => !e.name.startsWith(".") && (e.isDirectory() ? hasFiles(path.join(dir, e.name)) : true));
+
 const fmtTime = (s) => { s = Math.round(s); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60; return (h ? `${h}:${String(m).padStart(2, "0")}` : `${m}`) + `:${String(x).padStart(2, "0")}`; };
 
 async function main() {
@@ -124,7 +127,7 @@ async function main() {
   if (!o.force && fs.existsSync(settingsFile)) {
     let old = {}; try { old = JSON.parse(fs.readFileSync(settingsFile, "utf8")); } catch {}
     const diff = Object.keys(settings).filter((k) => JSON.stringify(old[k] ?? null) !== JSON.stringify(settings[k] ?? null));
-    if (diff.length && files.some((f) => fs.existsSync(f.dst))) fail(`${o.out} has cut-outs made with other settings (${diff.join(", ")}). Add --force to redo them, or pick another --out.`);
+    if (diff.length && hasFiles(outAbs)) fail(`${o.out} has cut-outs made with other settings (${diff.join(", ")}). Add --force to redo them, or pick another --out.`);
   }
   fs.writeFileSync(settingsFile, JSON.stringify(settings) + "\n");
   const todo = o.force ? files : files.filter((f) => {

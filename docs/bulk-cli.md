@@ -73,7 +73,7 @@ Mac), libheif-js (9 MB) and the 93 MB model.
 - **Windows**: without signing, SmartScreen warns. A code-signing certificate (a few hundred dollars a year) or
   Microsoft's Trusted Signing (monthly). onnxruntime-node ships WebGPU and DirectML for Windows; the tool tries
   WebGPU, then DirectML, then the CPU. Untested: needs a Windows PC with a GPU.
-- **Linux**: CPU only in onnxruntime-node's default build (CUDA is an extra download). Lowest priority.
+- **Linux**: untested; probably CPU only in onnxruntime-node's default build (CUDA is an extra download). Lowest priority.
 
 ## Licences (details in the README)
 
@@ -97,4 +97,7 @@ Mac), libheif-js (9 MB) and the 93 MB model.
 6. Default model on the CPU: BiRefNet everywhere (MIT, better, 17.5 a minute here) or ISNet on machines without a
    GPU (4x faster, but AGPL)?
 7. Where models come from once goodbye.bg is live: the site (as now, `goodbye-bg-git.pages.dev`) or a release asset.
+   The CLI pins `m/birefnet-f71d1be4/`; the build names that folder after the model's hash, so the next BiRefNet
+   export removes it from the site and breaks the first download of any copy already handed out. A paid build needs
+   a fixed home for its model (a release asset, or the site keeping old model folders).
 8. HEIC in a paid build: Apple's decoder on Macs and none on Windows, or pay attention to HEVC licensing?

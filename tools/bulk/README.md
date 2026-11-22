@@ -41,8 +41,8 @@ Examples:
 - See-through inputs (PNG cut-outs, logos) go to the model on white, or on black when the subject is light, as on the site.
 - Stops cleanly on Ctrl-C. Run the same command again to carry on: a cut-out newer than its photo is skipped. Files
   are written whole and then renamed, so a crash never leaves a half file behind that would be skipped.
-- The settings are kept in `<out>/.goodbye-bg.json`. Running again into the same folder with other settings stops
-  and asks for `--force`, so one folder never mixes two looks.
+- The settings are kept in `<out>/.goodbye-bg.json`. Running into a folder that holds cut-outs made with other
+  settings stops and asks for `--force` (or another `--out`), so one folder doesn't mix two looks by accident.
 - `a.jpg` and `a.png` in one folder become `a.png` and `a-png.png`.
 - If the GPU fails to start, fails a run or returns NaN, the rest runs on the CPU. `GOODBYE_BG_GPUFAIL=init|run`
   simulates that.
@@ -72,7 +72,8 @@ Apple M5 Pro, 18 cores, 48 GB, Node 26.13.1. 100 photos from the quality set (50
   share of memory: resident memory was 1.2 GB for BiRefNet on the GPU and 3.7 GB for ISNet on the CPU.
 - BiRefNet on the GPU is limited by the model (100 x 275 ms is 27.5 s of the 28 s). ISNet on the GPU is limited by the
   post-processing, which is why more jobs help it.
-- BiRefNet on the CPU is native here: 3.4 s and 4.8 GB, against 10 s and 6.7 GB for the browser's WebAssembly build.
+- BiRefNet on the CPU: 3.4 s a photo and 4.8 GB peak here over 20 photos, against 9.9 s and 6.7 GB for one photo
+  noted before in `docs/birefnet.md` (also onnxruntime-node). Not looked into; start-up and thread count may differ.
 - At 24 MP, encoding the full-size PNG is the main extra cost.
 - The 24 MP photos are the same photos scaled up, so they measure size, not quality.
 
