@@ -25,7 +25,7 @@ const hreflang = (slug) => {
   return !langs.length ? "" : [["en", ""], ...langs.map(([code, l]) => [code, l.path + "/"]), ["x-default", ""]]
     .map(([code, dir]) => `<link rel="alternate" hreflang="${code}" href="${SITE}/${dir}${slug}/">`).join("\n");
 };
-for (const f of ["index.html", "robots.txt", "sitemap.xml", ...TEXT_PAGES]) {
+for (const f of ["index.html", "robots.txt", "llms.txt", "sitemap.xml", ...TEXT_PAGES]) {
   const p = join(dist, f);
   let s = readFileSync(p, "utf8").replaceAll("%SITE%", SITE);
   if (TEXT_PAGES.includes(f)) {

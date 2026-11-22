@@ -2313,10 +2313,14 @@ async function restore() {
   return list;
 }
 // early.js guessed photos were kept and none came back: the landing as usual.
+// On a slow connection this lands after the first paint: the hero would jump from the photos layout to the landing
+// (CLS 0.19 at 2 s latency), so the one frame that changes is hidden (body.moving, as in landing()).
 function unrestore() {
-  document.body.classList.remove("restoring");
-  if (!items.length) document.body.classList.remove("has-work");
+  const b = document.body;
   try { localStorage.setItem("gb-kept", "0"); } catch {}
+  if (items.length || !b.classList.contains("has-work")) { b.classList.remove("restoring"); return; }
+  b.classList.add("moving"); b.classList.remove("restoring", "has-work");
+  requestAnimationFrame(() => requestAnimationFrame(() => b.classList.remove("moving")));
 }
 // The page stays hidden ("restoring", early.js) until the first kept photo is drawn: up to then its card would show an
 // empty frame and the ad cells nothing. Not the whole first row: a slow phone (6x CPU) hit early.js's 1.5 s failsafe.
@@ -2347,9 +2351,9 @@ const restoring = restore().then((list) => { fillRestored(list); }, () => {});
 
 /* ---------- ways in ---------- */
 
-// 1. Choose files (on phones this also offers the camera and photo library). The button is a label for the hidden
-// input, which a keyboard can't reach on its own: Enter and Space open the picker too.
-$("pick").addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("file").click(); } });
+// 1. Choose files (on phones this also offers the camera and photo library). A real button (a label with
+// role="button" failed Lighthouse's accessibility-tree audit) that opens the hidden input's picker.
+$("pick").addEventListener("click", () => $("file").click());
 $("file").addEventListener("change", (e) => { addSources([...e.target.files]); e.target.value = ""; });
 
 // 2. Paste anywhere: copied images, screenshots, copied files, image links, web page selections.
