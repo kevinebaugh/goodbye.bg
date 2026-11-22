@@ -18,7 +18,7 @@ export async function onRequestPost({ request, env }) {
   try { b = await request.json(); } catch { return new Response("Bad request", { status: 400 }); }
   if (isTest(request, b)) return new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } }); // a test visit (lib/test-traffic.mjs)
   const step = STEPS.has(b?.step) ? b.step : "other";
-  const engine = ["gpu", "gpu-birefnet"].includes(b?.engine) ? b.engine : "cpu";
+  const engine = ["gpu", "gpu-birefnet", "cpu-birefnet640"].includes(b?.engine) ? b.engine : "cpu";
   const dev = DEVICES.has(b?.dev) ? b.dev : "other";
   const done = Math.max(0, Math.min(1000, Number(b?.done) || 0));
   const mp = Math.max(0, Math.min(1000, Number(b?.mp) || 0));
