@@ -49,11 +49,33 @@ function subjectBox(d) {
   return x1 < 0 ? null : { x0: x0 / RES, y0: y0 / RES, x1: (x1 + 1) / RES, y1: (y1 + 1) / RES };
 }
 
-exports.postprocess = (m) => {
+// Experiment: ISNet leaves wide areas half see-through where it is unsure (a dark body, white on white). An edge is a thin
+// unsure line; an area still unsure 6 px in from its rim is haze. Haze at or above `t` becomes solid, the rest clear.
+function hardenHaze(d, t) {
+  const n = RES * RES, unsure = new Uint8Array(n);
+  for (let i = 0; i < n; i++) unsure[i] = d[i] > 51 && d[i] < 204 ? 1 : 0; // the range the edge curve leaves soft
+  const wide = exports.morph(exports.morph(unsure, RES, RES, 6), RES, RES, 6, true), cut = t * 255;
+  // Decide on a blurred copy, so the new outline follows the haze's shape, not its noise; then soften that outline a little.
+  const sm = boxBlur(d, 8), hard = Uint8ClampedArray.from(d);
+  for (let i = 0; i < n; i++) if (wide[i] && unsure[i]) hard[i] = sm[i] >= cut ? 255 : 0;
+  const soft = boxBlur(hard, 2);
+  for (let i = 0; i < n; i++) d[i] = wide[i] && unsure[i] ? soft[i] : hard[i];
+}
+function boxBlur(src, r) { // separable, edges clamped
+  const t = new Float32Array(RES * RES), out = new Float32Array(RES * RES), k = 1 / (2 * r + 1);
+  for (let y = 0; y < RES; y++) { const o = y * RES; let s = 0; for (let x = -r; x <= r; x++) s += src[o + Math.min(RES - 1, Math.max(0, x))];
+    for (let x = 0; x < RES; x++) { t[o + x] = s * k; s += src[o + Math.min(RES - 1, x + r + 1)] - src[o + Math.max(0, x - r)]; } }
+  for (let x = 0; x < RES; x++) { let s = 0; for (let y = -r; y <= r; y++) s += t[Math.min(RES - 1, Math.max(0, y)) * RES + x];
+    for (let y = 0; y < RES; y++) { out[y * RES + x] = s * k; s += t[Math.min(RES - 1, y + r + 1) * RES + x] - t[Math.max(0, y - r) * RES + x]; } }
+  return out;
+}
+
+exports.postprocess = (m, harden = 0) => {
   const n = RES * RES, alpha = new Uint8ClampedArray(n);
   for (let i = 0; i < n; i++) alpha[i] = Math.max(0, Math.min(255, m[i] * 255));
   const raw = alpha.slice();
   despeck(alpha);
+  if (harden) hardenHaze(alpha, harden);
   const box = subjectBox(alpha);
   for (let i = 0; i < n; i++) alpha[i] = LUT[alpha[i]];
   return { alpha, box, raw };
@@ -93,6 +115,43 @@ exports.edgeColors = (px, a8) => {
   }
   for (let i = 0; i < n; i++) fd[i * 4 + 3] = a[i] > 0 && a[i] < 1 ? Math.min(255, ((1 - a[i]) / 0.35) * 255) : 0;
   return fd;
+};
+
+// Where the page's retry zooms in (zoomRect in app.js): the subject with 15% room; null when that covers more than `max` of the photo.
+exports.zoomRect = (b, max = 0.8) => {
+  if (!b) return null;
+  const padX = 0.15 * (b.x1 - b.x0), padY = 0.15 * (b.y1 - b.y0);
+  const x0 = Math.max(0, b.x0 - padX), y0 = Math.max(0, b.y0 - padY), x1 = Math.min(1, b.x1 + padX), y1 = Math.min(1, b.y1 + padY);
+  return (x1 - x0) * (y1 - y0) > max ? null : { x0, y0, x1, y1 };
+};
+
+// mergeRetry in app.js on arrays: `first` (side x side) keeps its values outside the zoomed part (rw x rh at rx, ry); inside,
+// the new mask wins, fading in over a band of 4% of the part's short side on the sides that are inside the photo.
+// edgeOnly (experiment): the new mask counts only within 2% of the side of the first mask's outline, so the second pass
+// can sharpen an edge but not change what is kept.
+exports.merge = (first, side, part, rx, ry, rw, rh, edgeOnly) => {
+  const out = Uint8ClampedArray.from(first), band = Math.max(4, 0.04 * Math.min(rw, rh));
+  let near = null;
+  if (edgeOnly) {
+    const b = new Uint8Array(side * side); for (let i = 0; i < b.length; i++) b[i] = first[i] >= 128 ? 1 : 0;
+    const r = Math.round(0.02 * side), er = exports.morph(b, side, side, r), di = exports.morph(b, side, side, r, true);
+    near = new Uint8Array(side * side); for (let i = 0; i < b.length; i++) near[i] = di[i] && !er[i] ? 1 : 0;
+  }
+  for (let y = 0; y < rh; y++) for (let x = 0; x < rw; x++) {
+    const X = rx + x, Y = ry + y; if (X < 0 || Y < 0 || X >= side || Y >= side) continue;
+    let w = 1;
+    if (rx > 1) w = Math.min(w, x / band); if (rx + rw < side - 1) w = Math.min(w, (rw - 1 - x) / band);
+    if (ry > 1) w = Math.min(w, y / band); if (ry + rh < side - 1) w = Math.min(w, (rh - 1 - y) / band);
+    w = Math.max(0, Math.min(1, w));
+    if (near && !near[Y * side + X]) continue;
+    out[Y * side + X] = first[Y * side + X] * (1 - w) + part[y * rw + x] * w;
+  }
+  return out;
+};
+exports.boxOf = (d, side) => {
+  let x0 = side, y0 = side, x1 = -1, y1 = -1;
+  for (let y = 0; y < side; y++) for (let x = 0; x < side; x++) { if (d[y * side + x] < 128) continue; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  return x1 < 0 ? null : { x0: x0 / side, y0: y0 / side, x1: (x1 + 1) / side, y1: (y1 + 1) / side };
 };
 
 /* ---------- scores ---------- */

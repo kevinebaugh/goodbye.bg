@@ -62,7 +62,7 @@ even with no warm-up run (one try in two); the CPU engine never crashed: 7.3 s a
 Debugging on phones: `?debug=1` sends step names and numbers (never photo data) to `/api/diag`, which
 only writes to the Functions log. Read it with `npx wrangler pages deployment tail <deployment-id>
 --project-name goodbye-bg-git --format json` (find the ID with `wrangler pages deployment list`).
-Other test switches: `?keepmax=N`, `?keepmb=N` (kept-photo limits), `?engine=gpu|cpu`, `?model=isnet|birefnet`, `?threads=N`, `?nowarm=1`, `?gpufail=init|run|hang`, `?adpartner=zazzle|printful|printify` (with `?adtest=1`).
+Other test switches: `?keepmax=N`, `?keepmb=N` (kept-photo limits), `?engine=gpu|cpu`, `?model=isnet|birefnet`, `?threads=N`, `?nowarm=1`, `?gpufail=init|run|hang`, `?haze=0` (ISNet without haze hardening), `?adpartner=zazzle|printful|printify` (with `?adtest=1`).
 
 Memory on phones (measured in the iOS Simulator, CPU engine): ISNet at 1024x1024 needs about 1.5 to
 2 GB of wasm heap, mostly activations; it can't run smaller (a Concat inside is fixed to 1024). Asking
@@ -118,6 +118,10 @@ Quality on 1,073 public photos (2026-11-21, `docs/quality-1000.md`, harness in `
 cut-outs, gpu-birefnet 85 good / 14 usable / 5 bad, ISNet 57 / 32 / 15. Mean IoU on 923 photos with real masks 0.960
 vs 0.894. ISNet loses or fades parts of the subject; BiRefNet's flaw is which thing it keeps. Hair is a solid shape
 on both; see-through objects fail on both. The harness copies the page's mask handling: change both together.
+ISNet haze hardening (2026-11-22, `hardenHaze` in app.js, ISNet only): wide half see-through areas become solid at 0.3
+or more, else clear. 102 photos better, 27 worse of 1,073; real-mask IoU 0.894 to 0.901. Rejected after measuring: an
+automatic zoomed second pass (the 👎 retry done unasked), whole or edge band only: worse on both models at these photo
+sizes (about 1.7 MP; untested on 12 MP). Both BiRefNet exports are fixed at 1024, so a smaller one for phones needs a new export.
 
 Rejected:
 - ISNet **small** (quint8): garbage (61% of pixels unsure).

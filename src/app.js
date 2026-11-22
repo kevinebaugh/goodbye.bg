@@ -384,6 +384,7 @@ async function segment(bitmap) {
     id.data[k + 3] = Math.max(0, Math.min(255, m[i] * 255));
   }
   despeck(id);
+  if (engineModel !== "birefnet" && params.get("haze") !== "0") hardenHaze(id); // ISNet only; ?haze=0 shows it without
   const box = subjectBox(id);
   for (let i = 3; i < id.data.length; i += 4) id.data[i] = LUT[id.data[i]]; // soften the edge once, here
   const mask = new OffscreenCanvas(RES, RES);
@@ -477,6 +478,54 @@ function frame(it) {
   const x0 = Math.max(0, Math.floor(b.x0 * it.w - pad)), y0 = Math.max(0, Math.floor(b.y0 * it.h - pad));
   const x1 = Math.min(it.w, Math.ceil(b.x1 * it.w + pad)), y1 = Math.min(it.h, Math.ceil(b.y1 * it.h + pad));
   return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+
+// ISNet leaves wide areas half see-through where it is unsure (a dark body, white on white, a tail): a ghost in the
+// cut-out. An edge is a thin unsure line; an area still unsure 6 px in from its rim is haze. Haze at 0.3 or more becomes
+// solid, the rest clear, decided on a blurred copy so the new outline follows the haze's shape and not its noise.
+// On 1,073 test photos: 102 better, 27 worse (docs/quality-1000.md). It can turn a ghost of background solid too.
+function hardenHaze(img) {
+  const n = RES * RES, d = img.data, a = new Uint8Array(n), unsure = new Uint8Array(n);
+  for (let i = 0; i < n; i++) { a[i] = d[i * 4 + 3]; unsure[i] = a[i] > 51 && a[i] < 204 ? 1 : 0; } // the range the edge curve leaves soft
+  // Square erosion or growth by r: a pixel takes `hit` if any pixel within r has it. Outside the frame counts as 0.
+  const morph = (src, r, grow) => {
+    const t = new Uint8Array(n), out = new Uint8Array(n), hit = grow ? 1 : 0;
+    for (let y = 0; y < RES; y++) {
+      const o = y * RES; let last = grow ? -1e9 : -1;
+      for (let x = 0; x < RES; x++) { if (src[o + x] === hit) last = x; t[o + x] = x - last <= r ? hit : 1 - hit; }
+      last = grow ? 1e9 : RES;
+      for (let x = RES - 1; x >= 0; x--) { if (src[o + x] === hit) last = x; if (last - x <= r) t[o + x] = hit; }
+    }
+    for (let x = 0; x < RES; x++) {
+      let last = grow ? -1e9 : -1;
+      for (let y = 0; y < RES; y++) { if (t[y * RES + x] === hit) last = y; out[y * RES + x] = y - last <= r ? hit : 1 - hit; }
+      last = grow ? 1e9 : RES;
+      for (let y = RES - 1; y >= 0; y--) { if (t[y * RES + x] === hit) last = y; if (last - y <= r) out[y * RES + x] = hit; }
+    }
+    return out;
+  };
+  const wide = morph(morph(unsure, 6, false), 6, true);
+  let any = false;
+  for (let i = 0; i < n; i++) if ((wide[i] &= unsure[i])) any = true;
+  if (!any) return;
+  const blur = (src, r) => { // box blur, edges clamped
+    const t = new Float32Array(n), out = new Float32Array(n), k = 1 / (2 * r + 1), c = (v) => Math.min(RES - 1, Math.max(0, v));
+    for (let y = 0; y < RES; y++) {
+      const o = y * RES; let s = 0;
+      for (let x = -r; x <= r; x++) s += src[o + c(x)];
+      for (let x = 0; x < RES; x++) { t[o + x] = s * k; s += src[o + c(x + r + 1)] - src[o + c(x - r)]; }
+    }
+    for (let x = 0; x < RES; x++) {
+      let s = 0;
+      for (let y = -r; y <= r; y++) s += t[c(y) * RES + x];
+      for (let y = 0; y < RES; y++) { out[y * RES + x] = s * k; s += t[c(y + r + 1) * RES + x] - t[c(y - r) * RES + x]; }
+    }
+    return out;
+  };
+  const sm = blur(a, 8);
+  for (let i = 0; i < n; i++) if (wide[i]) a[i] = sm[i] >= 0.3 * 255 ? 255 : 0;
+  const soft = blur(a, 2); // soften the new outline a little
+  for (let i = 0; i < n; i++) d[i * 4 + 3] = wide[i] ? soft[i] : a[i];
 }
 
 // Remove small islands that are not part of the main subject.

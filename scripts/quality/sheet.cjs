@@ -21,11 +21,11 @@ async function cutout(file, maskFile, w, h) {
   const rgb1024 = await sharp(file).removeAlpha().resize(RES, RES, { fit: "fill", kernel: "linear" }).raw().toBuffer();
   const px = new Uint8ClampedArray(RES * RES * 4);
   for (let i = 0; i < RES * RES; i++) { px[i * 4] = rgb1024[i * 3]; px[i * 4 + 1] = rgb1024[i * 3 + 1]; px[i * 4 + 2] = rgb1024[i * 3 + 2]; px[i * 4 + 3] = 255; }
-  const a = await sharp(maskFile).extractChannel(0).raw().toBuffer();
+  const a = await sharp(maskFile).resize(RES, RES, { fit: "fill" }).extractChannel(0).raw().toBuffer(); // edge colours work at 1024
   const fix = P.edgeColors(px, a);
   const photo = await sharp(file).removeAlpha().resize(w, h, { fit: "fill" }).raw().toBuffer();
   const f = await sharp(Buffer.from(fix.buffer), { raw: { width: RES, height: RES, channels: 4 } }).resize(w, h, { fit: "fill" }).raw().toBuffer();
-  const m = await sharp(a, { raw: { width: RES, height: RES, channels: 1 } }).resize(w, h, { fit: "fill" }).extractChannel(0).raw().toBuffer();
+  const m = await sharp(maskFile).resize(w, h, { fit: "fill" }).extractChannel(0).raw().toBuffer();
   const out = checker(w, h);
   for (let i = 0; i < w * h; i++) {
     const fa = f[i * 4 + 3] / 255, al = m[i] / 255;

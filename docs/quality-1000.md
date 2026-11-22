@@ -78,11 +78,32 @@ Run it again (about 3 GB of downloads, 10 minutes):
   1024 mask four times. No set of kids, few products, few cars shot on purpose, no low light.
 - One grader (Claude), once. Not tested: the 👎 zoomed retry, GIFs, see-through inputs, a real iPhone.
 
+## Follow-up experiments (2026-11-22)
+
+Kevin said go on 1 and 2 below (3 needs thought). Each was measured on the same 1,073 photos before anything shipped.
+
+| Change | Result | Decision |
+|---|---|---|
+| ISNet: harden the haze (wide half see-through areas at 0.3 or more become solid, the rest clear) | 102 photos better, 27 worse (IoU moved more than 0.02). Mean IoU on real masks 0.894 to 0.901, MAE 0.035 to 0.032, 0.95-or-better 571 to 587 of 923. Same on the CPU provider: 104 better, 29 worse. | Shipped (`hardenHaze` in app.js, ISNet only, `?haze=0` turns it off) |
+| Second pass zoomed on the subject, merged like the 👎 retry, whenever the retry would zoom | Worse on both. BiRefNet: 15 better, 45 worse, edge error 0.060 to 0.062. ISNet: 77 better, 114 worse, 0.111 to 0.115. Zoomed in, the model changes its mind about what the subject is. | Rejected |
+| The same, but the second pass only counts within 2% of the first mask's outline | Still worse. BiRefNet: 16 better, 38 worse, edge 0.062. ISNet: 61 better, 92 worse, edge 0.117. | Rejected |
+| BiRefNet lite at a smaller input for phones | Not possible with the files we have: both exports are fixed at 1024 x 1024. Needs a new export from PyTorch. | Open |
+
+What the haze fix looks like: a cow's dark body, a cat's back half, a hand, legs on a black background come back solid
+instead of a ghost, with a rougher outline than a true edge. When the haze was background (a white blanket behind a
+dog, a plate under a cake), that turns solid too; those are most of the 27. The eyeball grades above were made before
+this change.
+
+Why the second pass did not help here: the photos are about 1.7 MP, so the 1024 mask is already close to the photo's
+own pixels. It may still help on 12 MP phone photos; these sets cannot show that.
+
+The page's CPU engine and the harness agree less on hazy photos than on clean ones (masks overlap 0.91 to 0.96 against
+0.997 and up), with or without the fix: ISNet's unsure areas shift with small differences in how the photo is resized.
+
 ## What would help most
 
 1. Close the gap on phones: ISNet is three times as likely to give a bad cut-out. A BiRefNet-class model that fits an
-   iPhone; until then, harden ISNet's large half-transparent areas instead of showing a ghost.
-2. A second pass zoomed on the subject for the edge (what the 👎 retry does), automatically when the subject fills
-   less than about 60% of the frame. Not measured yet; test it on the P3M and AM-2k edge scores first.
+   iPhone (needs a new export at a smaller input). The stopgap, hardening ISNet's haze, shipped 2026-11-22.
+2. ~~A second pass zoomed on the subject for the edge.~~ Measured on 2026-11-22: worse. See above.
 3. Tap a piece of the cut-out to drop it or bring it back: fixes BiRefNet's most common flaw (blanket, hands, the
    second car) without touching the model.
