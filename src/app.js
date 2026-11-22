@@ -1037,8 +1037,7 @@ function skipped(bad) {
   if (!bad.length) return;
   const msg = bad.length === 1 ? (bad[0].msg ? `${bad[0].name}: ${bad[0].msg}` : `${bad[0].name} isn’t an image goodbye.bg can open.`)
     : `Skipped ${bad.length} files goodbye.bg can’t open: ${bad.map((b) => b.name).join(", ")}.`;
-  tell(msg, $("pick").parentElement, 8000);
-  announce(msg);
+  tell(msg, $("pick").parentElement, 8000); // #tell is a status region: read out once
 }
 function unopened(it) {
   const at = items.indexOf(it);
@@ -1076,7 +1075,7 @@ async function addSources(list, origin = "") {
   // All cards appear at once, so the layout settles once instead of jumping with every photo.
   const cards = document.createDocumentFragment(); // the batch goes on top, in the order it was picked
   const batch = list.map((src, i) => {
-    const it = { id: ++uid, key: top + i, name: "image", bmp: null, blob: null, w: 0, h: 0, mask: null, crop: bgKind(outAll?.bg) !== "blur", bg: outAll?.bg || null, out: outAll?.out ? { ...outAll.out } : null };
+    const it = { id: ++uid, key: top + i, name: "image", bmp: null, blob: null, w: 0, h: 0, mask: null, crop: bgKind(outAll?.bg) !== "blur", cropBack: bgKind(outAll?.bg) === "blur", bg: outAll?.bg || null, out: outAll?.out ? { ...outAll.out } : null };
     items.push(it);
     cards.append(makeCard(it));
     named(it, baseName(src instanceof Blob ? src.name : String(src).startsWith("data:") ? "pasted" : String(src)));
@@ -1437,12 +1436,19 @@ function openPick(it) {
 const PAGES_MAX = 2;
 function seat(it, row, at = 0) {
   const dock = $("dock");
-  // With a mouse the row always stays in the card's bar, however many pages (a dock at the bottom of a big window
-  // was far from the card); the dock is for touch screens.
-  if (!dock.contains(row)) { it.el.bar.classList.add("picking"); pageRow(row, at); if (row.pages.length <= PAGES_MAX || !COARSE.matches) return; }
+  // With a mouse the row stays in the card's bar, however many pages (a dock at the bottom of a big window was far
+  // from the card), unless a page can't hold even one control next to the sliders and › (cards under ~130 px, dozens
+  // of photos): then it docks like on touch screens.
+  if (!dock.contains(row)) { it.el.bar.classList.add("picking"); pageRow(row, at); if (row.pages.length <= PAGES_MAX || (!COARSE.matches && pagesFit(row))) return; }
   it.el.bar.classList.remove("picking"); it.el.card.classList.add("editing"); document.body.classList.add("docked");
   dock.append(it.el.pick, it.el.opts); dock.hidden = false;
   placeDock(); pageRow(row, at);
+}
+// Every page fits on its own (a page holds at least one control even when that control doesn't fit).
+function pagesFit(row) {
+  const ok = row.pages.every((pg, k) => { row.pages.forEach((q, j) => { for (const e of q) e.classList.toggle("off", j !== k); }); return !overflows(row); });
+  showPage(row, row.page);
+  return ok;
 }
 function placeDock() {
   const dock = $("dock"), f = document.querySelector(".foot").getBoundingClientRect();
@@ -1921,7 +1927,10 @@ function layout() {
   const g = $("grid"), n = g.querySelectorAll(".card").length, all = $("tools");
   if (!n) { placeAds(0, 0); hugFooter(0); return; } // the last photo was removed: the ads go with it
   try { if (adsOn()) load3d(); } catch {} // fetch the 3D code while the first photo is still being worked on, so ads draw at once
-  const W = g.clientWidth, H = g.clientHeight - (parseFloat(getComputedStyle(g).paddingTop) || 0) - (all.hidden ? 0 : all.offsetHeight + GAP); // "Download all" sits under the cards
+  // "Download all" sits under the cards. Its padding (only while the grid scrolls, where it sticks to the bottom) is left
+  // out: counted, a grid that had scrolled stayed scrolling once a card went (13 to 12 photos on a phone).
+  const allH = all.hidden ? 0 : all.offsetHeight - (parseFloat(getComputedStyle(all).paddingTop) || 0) + GAP;
+  const W = g.clientWidth, H = g.clientHeight - (parseFloat(getComputedStyle(g).paddingTop) || 0) - allH;
   // The bar's height depends on the card's width, so it is worked out for each candidate, not measured from the cards.
   const fit = (k) => {
     let b = { p: 0, c: 1 };

@@ -362,6 +362,8 @@ Tested: headless Chrome (reload in a restarted browser, Back still from bfcache)
     **The grid uses the window's width** (`body.app.has-work main` up to 1800 px; it was capped at 1100 px, which made
     a laptop width-bound): cards are sized from both axes. 1440x900: 1 photo 339 px (was 277), 12 photos 6 x 2 at
     222 px with one-row bars (was 165 px with two rows; still slightly width-bound, 5 columns would be smaller).
+    Download all's padding (only while the grid scrolls) is left out of the fit, so a grid that scrolled goes back to
+    fitting when a card goes (it stayed scrolling at 12 on a phone after a 13th was removed).
     Cards without a picker (waiting, failed, animated GIFs) keep remove in the bar, in the background button's place, so
     Download doesn't move when a card finishes. A background or crop change on a phone builds the PNG ahead only when no
     batch or retry is running.
@@ -416,8 +418,9 @@ Tested: headless Chrome (reload in a restarted browser, Back still from bfcache)
     pages): the colours (see-through, white, black, aqua, sage, any colour), then blur soft + strong (`data-u`, never
     split) and your photo, then crop and remove when the bar has no room for them; a group is split only when it can't
     fit on a page of its own. Size, margin, shadow (sliders) is pinned next to › on every page, so it is two taps from
-    the bar (it was background, ›, sliders). With a mouse the rows always open in the card's bar, however many pages
-    (the dock at the bottom of a big window was far from the card): 1440x900 with 1 photo shows every swatch on one page;
+    the bar (it was background, ›, sliders). With a mouse the rows open in the card's bar, however many pages (the
+    dock at the bottom of a big window was far from the card), unless a page can't hold one control next to the
+    sliders and › (cards under ~130 px, 40+ photos on a laptop: `pagesFit`), which docks: 1440x900 with 1 photo shows every swatch on one page;
     12 photos (222 px) page the colours 4 + 2, then blur, photo and crop. On touch a row that fits on two pages opens in
     the bar's place (two rows of swatches on a roomy bar); a narrower card (12 on a phone) opens it in the **dock**
     (`seat()`): a pill in the footer's place (the footer fades out), the card ringed in teal, nothing over any photo,
