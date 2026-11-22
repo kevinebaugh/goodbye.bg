@@ -37,8 +37,13 @@ Name (we use `image1`) and fit or fill. Then Done → Sell It, and set "Make pro
 - Formats: PNG with alpha works (partial transparency is not supported on dark apparel). An extension isn't needed;
   the guide's own example is an extensionless URL. Print sizing: 150 ppi for apparel and bags, 200 ppi for mugs and
   stickers. The prototype sends at most 2400 px on the long side.
-- Unconfirmed: maximum size, whether Zazzle copies the image once ("failed to upload" suggests a copy) or fetches it
-  again later, how long it must stay up, and the fetcher's user agent or IP.
+- **Zazzle copies the image once** (tested 2026-11-21): the link redirects to the product page with Zazzle's own
+  image ID (`t_image1_iid=<uuid>`) in place of our URL, and the previews render from that copy. It also caches by
+  URL: the same image URL on a second template came back with the same ID, without a new fetch. So our copy only
+  has to live until that first fetch, and every send needs a new URL (our keys are used once).
+- The domains page also says the image goes into an Image Album. With "content belongs to the users who link from my
+  site" (the option chosen), it goes into the visitor's own album if they sign up for Zazzle.
+- Unconfirmed: maximum size, and the fetcher's user agent or IP.
 - No data URI, POST or upload API exists in any doc.
 
 **Commission: this is the big open question. Ask Zazzle before building templates.**
@@ -48,7 +53,8 @@ Name (we use `image1`) and fit or fill. Then Done → Sell It, and set "Make pro
   referral).
 - §2.1.3: **no commission on content "uploaded … or created with Zazzle's design tools by anyone else."** A
   visitor's own cut-out on Kevin's template may be exactly that, which would make these sales pay nothing.
-- The 2019 CAP guide still shows `rf=` in its examples, which conflicts with the agreement.
+- The 2019 CAP guide still shows `rf=` in its examples, which conflicts with the agreement. Zazzle's current link
+  builder (zazzle.com/my/ambassador/create) makes links without `rf=`, so the prototype leaves it out.
 - The cookie lasts 45 days, with the first 14 protected.
 - Ask api.help@zazzle.com (see section 4) before making eight templates.
 
@@ -86,9 +92,9 @@ exist but aren't published. Content guidelines apply, and products can be reject
 Why R2 and not KV: KV can take up to 60 s to show a new key in other locations, and Zazzle's fetcher is somewhere
 else. R2 is strongly consistent, and it holds large files. D1 caps rows at 2 MB.
 
-**Deleting on first fetch** would be ideal, but it's not safe until we know whether Zazzle keeps a copy (see the
-test in section 4). If it does, change the GET to delete after serving, and the copy can say "deleted once Zazzle
-has it".
+**Deleting after the first fetch.** Zazzle keeps its own copy, so the GET deletes ours 20 s after the first full
+fetch (a little slack in case Zazzle retries). `/go` only uses HEAD while it waits, so its checks don't count as a
+fetch.
 
 **Abuse risk.** `Sec-Fetch-Site`/`Origin` stop browsers, but curl can fake them. Anyone could use goodbye.bg to host
 a PNG for an hour. Mitigations:
@@ -103,7 +109,9 @@ a PNG for an hour. Mitigations:
   `/go` falls back after 10 s to the usual page. Not tested on a device.
 - The buttons are `role=button` spans inside the card's `<a>`, with Enter/Space wired up: fine for a prototype,
   not great for accessibility. If this ships, the card should become a `<div>` with a real link and real buttons.
-- None of the Zazzle side is tested: no template exists yet.
+- Tested on zazzle.com with an image from goodbye-bg-git.pages.dev, not yet through the R2 upload (no bucket yet).
+- The mug's slot is centred on the wrap, so the cut-out faces away from the handle: half visible in the "Left" view,
+  whole in the Center view. Moving it to the front for right-handed drinkers is a Zazzle-side tweak.
 
 ## 3. Copy that would change if this ships
 
@@ -114,11 +122,11 @@ when they press Send. The proposed wording:
 
 | Where | Today | Proposed |
 |---|---|---|
-| `src/index.html` footer | "Photos from your device are processed in this tab and never uploaded. If you paste a link, our server fetches that public image for you and keeps nothing." | "Photos from your device are processed in this tab. A cut-out leaves it only if you press Send to Zazzle: we hold it for an hour so Zazzle can fetch it. If you paste a link, our server fetches that public image for you and keeps nothing." |
+| `src/index.html` footer | "Photos from your device are processed in this tab and never uploaded. If you paste a link, our server fetches that public image for you and keeps nothing." | "Photos from your device are processed in this tab. A cut-out leaves it only if you press Send to Zazzle: we hold it until Zazzle has fetched it, an hour at most. If you paste a link, our server fetches that public image for you and keeps nothing." |
 | `src/index.html` hero `.sub` | "Your photos stay on your device." | unchanged (still true by default); or "Your photos stay on your device unless you send one." |
 | `src/index.html` meta description, JSON-LD description, og:description | "Your photos stay on your device." | "Your photos stay on your device unless you choose to send one." |
 | `src/remove-bg-alternative/index.html` meta description | "Your photos stay on your device." | as above |
-| same page, FAQ JSON-LD and the visible "Are my photos uploaded?" answer | "No. … Photos from your device never leave it. …" | "No. The background removal runs in your browser. Photos from your device stay there, unless you press Send to Zazzle on a product: then that one cut-out goes to our server for an hour so Zazzle can put it on the product. If you paste a link, …" |
+| same page, FAQ JSON-LD and the visible "Are my photos uploaded?" answer | "No. … Photos from your device never leave it. …" | "No. The background removal runs in your browser. Photos from your device stay there, unless you press Send to Zazzle on a product: then that one cut-out goes to our server until Zazzle has fetched it (an hour at most), so Zazzle can put it on the product. If you paste a link, …" |
 | same page, lede | "your photos never leave your device." | "your photos stay on your device." |
 | same page, table "Where photos go" | "Stay on your device" | "Stay on your device (unless you send one to Zazzle)" |
 | `src/how-to-remove-background/index.html` meta description | "without uploading it" | unchanged (removing the background never uploads); the lede "the photo stays on your device" is still true |
@@ -128,30 +136,42 @@ when they press Send. The proposed wording:
 | `src/app.js` comments in `buildAd` | "nothing is uploaded", "nothing is sent to the partner" | describe both paths |
 | `CLAUDE.md` | first paragraph "Photos from the device never leave it", the Rules section, the Zazzle "Not built" paragraph, the ad-click paragraph | update to the opt-in and point here |
 
-Exact-duration claims ("for an hour") must match `TTL_MS`. Until objects are deleted on the first fetch, say
-"hold it for an hour", not "delete it once Zazzle has it".
+Exact-duration claims ("an hour at most") must match `TTL_MS`. Keep "until Zazzle has fetched it" true: the GET
+deletes our copy 20 s after the first fetch.
 
-## 4. Steps for Kevin
+## 4. Zazzle setup (done 2026-11-21, in Kevin's account, with his OK)
 
-1. **Ask Zazzle first** (api.help@zazzle.com). Two questions:
-   - Do CAP links to my own templates earn self-promotion commission when the image is a visitor's photo (§2.1.3)?
-   - Should they carry `rf=`?
+- Store **goodbyebg** created (Kevin solved its CAPTCHA). The CAP terms were already accepted on the account.
+- Declared image domains: `goodbye-bg-git.pages.dev`, `kevin-claude-zazzle-context.goodbye-bg-git.pages.dev`,
+  `goodbye.bg`. Ownership set to "the content belongs to the users who link from my site".
+- The member account ID for `at-` is 238003133086051540, the same as the Ambassador ID.
+- Eight templates. All are Direct-only (not listed or searchable, reachable by link) with Zazzle's minimum royalty
+  of 5% (Kevin asked for 1%; Zazzle refuses under 5%, and it can be changed within 24 hours of posting).
+  - Each has one image slot, `image1`, set to Fit.
+  - The placeholder is a plain teal figure drawn by Claude and uploaded to Kevin's Uploads. Zazzle won't let you
+    sell a design that uses its own clip art.
+  - The IDs are in `ZAZZLE_CAP.pd` in `lib/partners.mjs`:
 
-   If the answer is "no commission", stop here.
-2. Accept the CAP API terms: https://www.zazzle.com/my/associate/create_a_product_api_signup
-3. Declare image domains at https://www.zazzle.com/my/associate/domains:
-   - `goodbye-bg-git.pages.dev`
-   - `kevin-claude-zazzle-context.goodbye-bg-git.pages.dev` (this branch's preview)
-   - `goodbye.bg`, once it registers
-4. Make one template per product: mug, sticker, shirt, tote, ornament, phonecase, pillow, keychain. Start with the mug.
-   1. Zazzle → Create → pick the product.
-   2. Upload any placeholder PNG.
-   3. Turn on "Make this a template object", set URL Parameter Name `image1`, and choose fill or fit.
-   4. Done → Sell It → put it in your store, and set "Make product a template" to Yes.
-   5. Copy the 18-digit product ID from its URL into `ZAZZLE_CAP.pd.<product>` in `lib/partners.mjs`.
-5. Copy your member account ID into `ZAZZLE_CAP.member`. It's the number after `at-` in a link from
-   https://www.zazzle.com/my/associate/create (Template Link).
-6. Create the R2 bucket and its cleanup rule (Claude wasn't allowed to change the Cloudflare account):
+  | Product | Zazzle type | Template ID |
+  |---|---|---|
+  | mug | Classic Mug 11 oz | 256109521733566200 |
+  | sticker | 4x4 custom-cut vinyl sticker | 256879772313558885 |
+  | shirt | white Hanes men's crew tee, front | 256111263575769583 |
+  | tote | natural budget tote, front | 256390505328741347 |
+  | ornament | round porcelain ornament, front | 256350244847406024 |
+  | phonecase | iPhone 17 slim case | 256140659304551868 |
+  | pillow | 16x16 throw pillow, front | 256722353463187898 |
+  | keychain | square single-sided acrylic keychain | 256661193721206477 |
+
+- Checked by opening the CAP links with `https://goodbye-bg-git.pages.dev/icon-512.png`. The mug and the keychain
+  both opened with the image on them.
+
+## 5. Still for Kevin
+
+1. **Commission question** (api.help@zazzle.com): do sales through these links earn the self-promotion rate when
+   the image is a visitor's photo (agreement §2.1.3)? The templates exist either way; if the answer is no, the
+   feature still lands visitors on a ready product, but it pays like the plain link or not at all.
+2. Create the R2 bucket and its cleanup rule (Claude wasn't allowed to change the Cloudflare account):
 
         npx wrangler r2 bucket create goodbye-bg-cap
         npx wrangler r2 bucket lifecycle add goodbye-bg-cap cap-1-day cap/ --expire-days 1
@@ -162,12 +182,10 @@ Exact-duration claims ("for an hour") must match `TTL_MS`. Until objects are del
         binding = "CAP"
         bucket_name = "goodbye-bg-cap"
 
-7. Optional: a rate-limiting rule on `/api/cap/*` (Cloudflare dashboard → Security → WAF → Rate limiting rules).
-8. Test on the preview with `?zazzlecap=1&adv=mug`:
-   1. Add a photo, click the mug card, then Send to Zazzle. The mug should open with the cut-out on it.
-   2. Then the copy test: wait an hour (or delete the object), reload the Zazzle tab, and check whether the image
-      is still there. If it is, Zazzle copies it, and we can delete on first fetch.
-9. If it works and the commission answer is good: update the copy in section 3, then decide whether "Send to Zazzle"
+3. Optional: a rate-limiting rule on `/api/cap/*` (Cloudflare dashboard → Security → WAF → Rate limiting rules).
+4. Test on the preview with `?zazzlecap=1&adv=mug`: add a photo, click the mug card, then Send to Zazzle. The mug
+   should open with the cut-out on it.
+5. If it works and the commission answer is good: update the copy in section 3, then decide whether "Send to Zazzle"
    becomes the default card behaviour or stays an opt-in button.
 
 ## Local testing
