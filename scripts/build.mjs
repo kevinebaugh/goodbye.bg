@@ -1,6 +1,6 @@
 // Builds dist/: copies src/, then adds the model and runtime.
 // No bundler. Output is plain static files for Cloudflare Pages or any static host.
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 
@@ -116,4 +116,23 @@ if (birefnetManifest) {
   console.log(`  ${birefnetDir}: ${(birefnetManifest.size / 1e6).toFixed(1)} MB in ${birefnetManifest.parts.length} parts`);
 }
 else console.log("  birefnet: not built (run scripts/birefnet.sh); the GPU engine uses ISNet");
+
+// The service worker's version list (src/sw.js). Shell: the app page's files with a hash each, so an update keeps
+// what didn't change; eager ones are kept at install (the page loads them anyway), the rest when first used.
+// Big: the runtime and model folders with their files, one cache each, named after the version; old versions are deleted.
+const fileHash = (f) => createHash("sha256").update(readFileSync(join(dist, f))).digest("hex").slice(0, 12);
+const shellFiles = { "/": "index.html" };
+for (const f of ["app.js", "style.css", "early.js", "engine.js", "favicon.svg", "manifest.webmanifest", "icon-192.png", "icon-512.png",
+  "icon-maskable-512.png", "apple-touch-icon.png", `fonts/${fontFile}`, "vendor/fflate.mjs", "vendor/confetti.mjs", "partners.json",
+  "gif.mjs", "formats.mjs", "libheif.wasm", "render3d.mjs"]) shellFiles["/" + f] = f;
+const shell = Object.fromEntries(Object.entries(shellFiles).map(([p, f]) => [p, fileHash(f)]));
+const eager = ["/", "/app.js", "/style.css", "/early.js", `/fonts/${fontFile}`, "/favicon.svg", "/manifest.webmanifest"];
+const big = {};
+const bigDir = (prefix, cache) => (big[prefix] = { cache, files: readdirSync(join(dist, prefix), { recursive: true }).filter((f) => statSync(join(dist, prefix, f)).isFile()).sort() });
+bigDir(`/rt/${ORT}/`, `gb-rt-${ORT}`);
+bigDir("/m/isnet/", `gb-m-isnet-${createHash("sha256").update(isnet).digest("hex").slice(0, 8)}`); // the URL has no version: the cache name does
+if (birefnetDir) bigDir(`/m/${birefnetDir}/`, `gb-m-${birefnetDir}`);
+const sw = readFileSync(join(dist, "sw.js"), "utf8");
+if (!sw.includes('"%SW%"')) throw new Error("sw.js must hold the \"%SW%\" placeholder");
+writeFileSync(join(dist, "sw.js"), sw.replace('"%SW%"', () => JSON.stringify({ build: BUILD, shell, eager, big })));
 console.log("Built dist/.");
