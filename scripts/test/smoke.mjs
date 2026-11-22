@@ -129,9 +129,10 @@ async function page(ctx, { w = 1280, h = 800, dark = false, mobile = false } = {
   const { targetId } = await browser.send("Target.createTarget", { url: "about:blank", browserContextId: ctx.id });
   const { sessionId } = await browser.send("Target.attachToTarget", { targetId, flatten: true });
   const s = (m, p) => browser.send(m, p, sessionId);
-  const errors = [];
+  const errors = [], votes = [];
   browser.on((d) => {
     if (d.sessionId !== sessionId) return;
+    if (d.method === "Network.requestWillBeSent" && /\/api\/rate$/.test(d.params.request.url)) try { votes.push(JSON.parse(d.params.request.postData)); } catch {}
     if (d.method === "Network.requestWillBeSent" && /\/api\/crash$/.test(d.params.request.url)) errors.push("crash report: " + (d.params.request.postData || "").slice(0, 200));
     if (d.method === "Runtime.exceptionThrown") errors.push("exception: " + (d.params.exceptionDetails.exception?.description || d.params.exceptionDetails.text).split("\n")[0]);
     if (d.method === "Runtime.consoleAPICalled" && d.params.type === "error") errors.push("console.error: " + d.params.args.map((a) => a.value ?? a.description ?? "").join(" ").slice(0, 200));
@@ -142,7 +143,7 @@ async function page(ctx, { w = 1280, h = 800, dark = false, mobile = false } = {
   await s("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceScaleFactor: mobile ? 3 : 1, mobile });
   await s("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: dark ? "dark" : "light" }] });
   const p = {
-    s, errors, targetId,
+    s, errors, votes, targetId,
     async go(url) { await s("Page.navigate", { url }); await p.until("document.readyState === 'complete'", 20000); },
     async reload() { await s("Page.reload", {}); await sleep(200); await p.until("document.readyState === 'complete'", 20000); },
     async ev(expr) {
@@ -200,6 +201,14 @@ const addPhotos = (p, names) => p.ev(`(async () => {
   return true;
 })()`);
 const CARDS = `[...document.querySelectorAll("#grid > .card")]`;
+// Which engine made a card's cut-out: 👍 sends it to /api/rate (local; serve.mjs doesn't pass it on).
+async function engineOf(p, sel = "#grid > .card") {
+  const n = p.votes.length;
+  await click(p, `${sel} .rate`);
+  for (let i = 0; i < 50 && p.votes.length === n; i++) await sleep(50);
+  assert(p.votes.length > n, "👍 sent no vote");
+  return p.votes.at(-1).engine;
+}
 // All n cards finished (Download on); a failed card ends the wait at once.
 const allDone = (p, n, ms = 60000) => p.until(`(() => { const c = ${CARDS};
   if (c.some((x) => x.classList.contains("failed"))) throw new Error("failed card");
@@ -278,7 +287,9 @@ try {
     assert(f.kind === "png", `got ${f.kind}`); assert(f.name === "one-goodbye-bg.png", "file name " + f.name);
     // The cut-out has see-through pixels: PNG colour type 6 (RGBA).
     assert(f.bytes[25] === 6, "PNG has no alpha channel");
-    return `${f.name}, ${(f.bytes.length / 1024).toFixed(0)} KB`;
+    const e = await engineOf(p), want = engine === "gpu" ? /^gpu/ : /^cpu$/;
+    assert(want.test(e), `ran on ${e}`);
+    return `${f.name}, ${(f.bytes.length / 1024).toFixed(0)} KB, engine ${e}`;
   });
 
   await check("ads: cards fill the free cells (?adtest=1)", async () => {
@@ -413,9 +424,10 @@ try {
     await allDone(r, 1, 60000);
     const f = await download(c3, () => click(r, "#grid > .card .dl"));
     assert(f.kind === "png" && f.name === "cpu-goodbye-bg.png", `${f.kind} ${f.name}`);
+    const e = await engineOf(r); assert(e === "cpu", `ran on ${e}`);
     noErrors(r);
     await r.close();
-    return f.name;
+    return `${f.name}, engine ${e}`;
   });
 
   // Text pages.
