@@ -252,7 +252,7 @@ try {
 
   await check("build: placeholders filled in", () => {
     const app = readFileSync(join(root, "dist/app.js"), "utf8"), eng = readFileSync(join(root, "dist/engine.js"), "utf8");
-    for (const [f, s, ph] of [["app.js", app, '"%PARTNERS%"'], ["app.js", app, "%BUILD%"], ["app.js", app, "%ENGINE%"], ["engine.js", eng, "%ORT%"], ["engine.js", eng, "%BIREFNET%"]]) assert(!s.includes(ph), `${ph} left in dist/${f}`);
+    for (const [f, s, ph] of [["app.js", app, '"%PARTNERS%"'], ["app.js", app, "%BUILD%"], ["app.js", app, "%ENGINE%"], ["engine.js", eng, "%ORT%"], ["engine.js", eng, "%BIREFNET%"], ["engine.js", eng, "%BIREFNET640%"]]) assert(!s.includes(ph), `${ph} left in dist/${f}`);
     assert(!readFileSync(join(root, "dist/early.js"), "utf8").includes("%I18N%"), "/*%I18N%*/ left in dist/early.js");
     for (const f of readdirSync(join(root, "dist"), { recursive: true }).filter((f) => /\.(html|xml|txt)$/.test(f) && !f.startsWith("m/") && !f.startsWith("rt/"))) {
       const t = readFileSync(join(root, "dist", f), "utf8");
@@ -328,7 +328,7 @@ try {
     assert(f.kind === "png", `got ${f.kind}`); assert(f.name === "one-goodbye-bg.png", "file name " + f.name);
     // The cut-out has see-through pixels: PNG colour type 6 (RGBA).
     assert(f.bytes[25] === 6, "PNG has no alpha channel");
-    const e = await engineOf(p), want = engine === "gpu" ? /^gpu/ : /^cpu$/;
+    const e = await engineOf(p), want = engine === "gpu" ? /^gpu/ : /^cpu(-birefnet640)?$/;
     assert(want.test(e), `ran on ${e}`);
     return `${f.name}, ${(f.bytes.length / 1024).toFixed(0)} KB, engine ${e}`;
   });
@@ -717,7 +717,7 @@ try {
     await allDone(r, 1, 60000);
     const f = await download(c3, () => click(r, "#grid > .card .dl"));
     assert(f.kind === "png" && f.name === "cpu-goodbye-bg.png", `${f.kind} ${f.name}`);
-    const e = await engineOf(r); assert(e === "cpu", `ran on ${e}`);
+    const e = await engineOf(r); assert(/^cpu(-birefnet640)?$/.test(e), `ran on ${e}`);
     noErrors(r);
     await r.close();
     return `${f.name}, engine ${e}`;
