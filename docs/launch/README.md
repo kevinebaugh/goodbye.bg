@@ -1,9 +1,10 @@
 # Launch kit
 
 Everything to post goodbye.bg on Product Hunt, Hacker News, Reddit and forums. Nothing here has been posted.
-Pictures and demo re-taken 2026-11-22 (about 05:15) on `main` at 4bea605: blur and own-photo backgrounds, size presets,
-margin, shadow and WebP, 100 per drop on computers, the reworked card bar and picker. Re-shoot if the page looks
-different on launch day. Older drafts: `docs/launch-drafts.md` (this file replaces them).
+Pictures and demo taken 2026-11-22 (about 05:15) on `main` at 4bea605, before the app was simplified later that day
+(backgrounds, sizes, margin, shadow, WebP, the crop toggle and the mask editor were taken out on purpose: "It's not a
+full image editor"). **`ph-2`, `ph-3`, `ph-4`, `demo.*` and `social-square-*` show those removed features: re-shoot
+them before posting, or leave them out.** Re-shoot anything else if the page looks different on launch day. Older drafts: `docs/launch-drafts.md` (this file replaces them).
 
 **Link to use:** `https://goodbye.bg` if it resolves on the day, else `https://goodbye-bg-git.pages.dev`. Never both
 in one post. The links below use pages.dev; swap the host if the domain is live. Keep `?ref=` on the app page (`/`)
@@ -17,12 +18,12 @@ Kevin's photos. Light and dark versions of each.
 | File | Size | Use |
 |---|---|---|
 | `ph-1-before-after-*.png` | 1270x760 | PH gallery 1: one photo before and after (transparent PNG) |
-| `ph-2-seller-*.png` | 1270x760 | PH gallery 2: a teapot on white, Square, 10% margin, shadow, with the options row open |
-| `ph-3-blur-*.png` | 1270x760 | PH gallery 3: the corgi and the car with the background blurred (strong), blur picked in the open row |
-| `ph-4-batch-*.png` | 1270x760 | PH gallery 4: four photos, four looks (blur, see-through, aqua, white + Square + shadow), Download all |
+| `ph-2-seller-*.png` | 1270x760 | **Outdated (removed features).** A teapot on white, Square, 10% margin, shadow |
+| `ph-3-blur-*.png` | 1270x760 | **Outdated (removed features).** The corgi and the car with the background blurred |
+| `ph-4-batch-*.png` | 1270x760 | **Outdated (removed features).** Four photos, four looks (blur, see-through, aqua, white + Square + shadow) |
 | `ph-5-empty-*.png` | 1270x760 | PH gallery 5: the page before any photo |
-| `demo.mp4` / `demo.gif` | 1270x760 / 800 px, 25 s | PH gallery, X, Reddit: drop 4 photos, cut out, teapot to white + Square + shadow, corgi to blur, Download all |
-| `social-square-*.png` | 1080x1080 | Instagram, Mastodon, LinkedIn, PH thumbnail source: before/after plus white + shadow, blur, a colour |
+| `demo.mp4` / `demo.gif` | 1270x760 / 800 px, 25 s | **Outdated (removed features).** Drop 4 photos, cut out, teapot to white + Square + shadow, corgi to blur, Download all |
+| `social-square-*.png` | 1080x1080 | **Outdated (removed features).** Before/after plus white + shadow, blur, a colour |
 | `before-after-strip-*.png` | 1600x900 | Reddit, blog posts, directory listings (also in the repo README) |
 | `../../src/og.png` | 1200x630 | Link previews: corgi half photo, half cut-out. Unchanged; still true |
 
@@ -34,11 +35,10 @@ Honest notes about the captures:
   cards fill the empty ones once the batch is done, so `ph-2` (1 photo) and `ph-3` (2 photos) would show ads there.
   With 4 photos there is no empty cell.
 - The footer count is the live number at capture time (the captures added about 40 cut-outs to it).
-- The composed images (`ph-1`, the square, the strip) use the PNGs and JPGs the site itself downloaded. The blurred car
-  in the square is the site's strong blur, the teapot its Square + 10% + shadow JPG (3096x3096).
-- No human portrait: none of the CC0 photos in `CREDITS.md` has a person. The blur shots use the corgi and the car. A
-  CC0 portrait would make a stronger blur shot; add it to `CREDITS.md` if you use one.
-- PH thumbnail (240x240): use `src/icon-512.png`, or crop the card out of `social-square-light.png`.
+- The composed images (`ph-1`, the strip) use the PNGs the site itself downloaded.
+- No human portrait: none of the CC0 photos in `CREDITS.md` has a person. A CC0 portrait would make a stronger
+  before/after; add it to `CREDITS.md` if you use one.
+- PH thumbnail (240x240): use `src/icon-512.png`.
 
 ## Facts to stay inside (checked against the code on 2026-11-22)
 
@@ -51,16 +51,15 @@ Honest notes about the captures:
   has it; if Zazzle never fetches it, no one can open it after an hour and it is deleted within a day). A pasted link is fetched by our server. Anonymous counts (views, votes, crashes, cut-outs),
   no cookies, no IP addresses, no third-party scripts. So say "cut out on your device", never "nothing is ever
   uploaded" or "no analytics".
-- Out: a PNG at the photo's own resolution (output capped at 16 MP on iPhone, 64 MP elsewhere), cropped to the subject
-  by default (crop toggle for the whole frame). Or a JPG on white, black, two palette colours, any colour, the photo's
-  own background blurred (soft or strong), or a picture of your own (never uploaded). Size: Original, Square, 4:5,
-  16:9 or a custom size; margin 0, 4, 10 or 20%; a ground shadow; WebP where the browser can make it (not in WebKit; real Safari untested).
-  "Apply to all" copies a photo's background and options to the rest of the visit's photos.
+- Out: a transparent PNG at the photo's own resolution (output capped at 16 MP on iPhone, 64 MP elsewhere), always
+  cropped to the subject. Each photo offers Download, 👍 👎 and remove, nothing more. Removed 2026-11-22 on purpose
+  ("It's not a full image editor"), so never promise them: new backgrounds (colour, blur, your own photo), JPG or WebP
+  out, size presets, margin, shadow, "Apply to all", the crop toggle, the mask editor.
 - In: JPG, PNG, WebP, AVIF, SVG, HEIC, TIFF, camera RAW (the embedded preview), ZIPs, folders, animated GIFs (come back
-  animated, hard edges, no backgrounds). Up to 100 per drop on computers that report 8 GB or more (or don't say), 50 on
+  animated, hard edges). Up to 100 per drop on computers that report 8 GB or more (or don't say), 50 on
   phones and smaller machines. Download all gives a zip. The newest 50 photos are kept in the browser (IndexedDB), so a
   reload doesn't lose them.
-- Not there: API, edge brush. Hair is OK, not great. Close-ups over a blurred background can keep some blur on phones
+- Not there: API, edge brush, new backgrounds, sizes. Hair is OK, not great. Close-ups over a blurred background can keep some blur on phones
   (ISNet).
 - **Offline: not claimed.** It works offline in Chrome after the first cut-out (service worker, tested headless), but
   Safari is untested. Don't say "works offline" until Kevin has checked Safari (steps in `offline-pwa` notes:
@@ -77,21 +76,19 @@ Honest notes about the captures:
 - **Link:** `https://goodbye-bg-git.pages.dev/?ref=ph` (PH may add its own `ref=producthunt`; the page reads the first `ref`)
 - **Tagline** (49/60): `Free background remover that runs in your browser`
 - **Topics:** Photography, Design Tools, Privacy, Open Source
-- **Description** (251/260):
+- **Description** (228/260):
 
-  > Remove the background from any photo, free. It's cut out in your browser, not on a server. Transparent PNG, or white, any colour, a blur or your own photo. Square and shadow for product shots. Batches with a zip. No account, no watermark. Open source.
+  > Remove the background from any photo, free. It's cut out in your browser, not on a server. Transparent PNG at full resolution, cropped to the subject. Animated GIFs too. Batches with a zip. No account, no watermark. Open source.
 
-- **Gallery order:** ph-1, ph-2, ph-3, ph-4, demo.mp4, ph-5 (light versions; dark if the page looks better in PH's
-  dark mode).
+- **Gallery order:** ph-1, then new shots of a batch and a demo (ph-2 to ph-4 and demo.mp4 show removed features),
+  then ph-5 (light versions; dark if the page looks better in PH's dark mode).
 - **Maker's first comment** (written for 1 December; on another day change "closes today" to "closes on 1 December"):
 
   > Hi PH, I'm Kevin. I used remove.bg all the time, and it closes today, so I built a replacement that runs on
   > your device instead of a server.
   >
   > Drop one photo or a whole folder (up to 100 at a time on a computer with 8 GB or more). Each comes back as a transparent PNG at its
-  > own resolution, or on white, a colour, a blurred copy of its own background, or a picture of yours. For product
-  > shots there's Square, 4:5, 16:9 or your own size, a margin and a soft shadow, and Apply to all does the whole batch.
-  > Download all gives you a zip. It reads HEIC from iPhones, camera RAW and animated GIFs too.
+  > own resolution, cropped to the subject. Download all gives you a zip. It reads HEIC from iPhones, camera RAW and animated GIFs too.
   >
   > In Chrome on a recent Mac a photo takes well under a second. iPhones run it on the CPU, a few seconds a photo.
   > The first visit downloads the model (about 120 MB), then the browser keeps it.
@@ -129,9 +126,7 @@ Honest notes about the captures:
   >   and a CPU Worker redoes the photo if it fails, hangs or returns NaN.
   >
   > It takes JPG/PNG/WebP/HEIC/TIFF/RAW/ZIP/animated GIF, up to 100 at once on computers with 8 GB or more (50 on phones), and gives
-  > back PNGs at the original size, or JPGs on a colour, a blurred copy of the photo's background or a picture of
-  > yours. Square/4:5/16:9/custom sizes, a margin and a ground shadow are there for product photos. Download all
-  > streams a zip. Photos are kept in IndexedDB so a reload doesn't lose them.
+  > back transparent PNGs at the original size, cropped to the subject. Download all streams a zip. Photos are kept in IndexedDB so a reload doesn't lose them.
   >
   > Money: optional product cards fill empty grid cells after a batch. Clicking a Zazzle card sends that one cut-out
   > to Zazzle so it's on the product; nothing else is uploaded. Anonymous counters, no cookies.
@@ -160,7 +155,7 @@ Answer the question first, say it's yours, one reply per thread, no follow-ups p
 1. **Short, general (Reddit):**
 
    > I built goodbye.bg for this (disclosure: it's mine). Free, no account, no watermark, and the cut-out happens in
-   > your browser instead of on a server. Transparent PNG or a new background (colour, blur, your own photo). Up to
+   > your browser instead of on a server. Transparent PNG at full resolution. Up to
    > 100 at a time on a computer with 8 GB or more, with a zip. No API.
    > https://goodbye-bg-git.pages.dev/?ref=reddit
 
@@ -179,15 +174,14 @@ Answer the question first, say it's yours, one reply per thread, no follow-ups p
 
 4. **Online sellers, product photos (r/Etsy, r/ecommerce, r/smallbusiness):**
 
-   > For product shots, try goodbye.bg (I made it). Drop a folder (up to 100 on a computer with 8 GB or more), put one photo on white
-   > with Square, a margin and a soft shadow, press Apply to all, and Download all gives you one zip at full
-   > resolution. Free, no account. Check the edges on shiny or see-through items before you list them.
+   > For product shots, try goodbye.bg (I made it). Drop a folder (up to 100 on a computer with 8 GB or more) and
+   > Download all gives you one zip of transparent PNGs at full resolution, cropped to each product. It doesn't add a
+   > white background or a shadow. Free, no account. Check the edges on shiny or see-through items before you list them.
    > https://goodbye-bg-git.pages.dev/?ref=reddit
 
 5. **iPhone users (r/iphone, r/photography, forums):**
 
-   > iOS can lift a subject itself: press and hold it in Photos. If you need a batch, a white or blurred background,
-   > or a file you can share, I built goodbye.bg: it works in Safari, takes HEIC straight from the camera roll, about
+   > iOS can lift a subject itself: press and hold it in Photos. If you need a batch or a file you can share, I built goodbye.bg: it works in Safari, takes HEIC straight from the camera roll, about
    > 5 seconds a photo, and press-and-hold saves the result to Photos. Disclosure: it's mine.
    > https://goodbye-bg-git.pages.dev/?ref=forum
 

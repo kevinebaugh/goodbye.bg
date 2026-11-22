@@ -169,7 +169,7 @@ Anything the browser opens goes straight in. HEIC and TIFF on Chrome/Edge/Firefo
 - Animated GIFs: gifuct-js in, gifenc out (MIT, `dist/gif.mjs`, loaded when one is added). Every frame goes through the
   model, at most 100, or 16 when the CPU engine runs them (longer GIFs keep every n-th frame and add up the delays).
   On/off transparency (soft edges become hard). The card plays it; Download and long-press save the GIF. No crop, no
-  background or options, no zoomed retry (👎 is a vote only). 10 frames at 360x540 in 5.7 s on the GPU.
+  zoomed retry (👎 is a vote only). 10 frames at 360x540 in 5.7 s on the GPU.
 - See-through inputs reach the model on white, or on black when the subject is light. SVGs are drawn at 2048 px+.
 - A file that can't be opened never gets a card; one bubble at Choose photos names them. A photo the model fails on
   keeps its card.
@@ -180,12 +180,11 @@ unknown), 50 otherwise (about 10 MB of page memory per finished photo). Download
 ## Kept photos
 
 Kevin: leaving and coming back lost every photo. Every photo is kept in IndexedDB (`goodbye-bg` version 2, stores
-`files`, `state`, `backs`, keyed in grid order as `-time x 1024 + n`) until removed: the original file, a preview (JPEG,
-PNG for see-through types), mask(s) as PNG, crop, vote, retry (and the first result), background, options, the
-finished GIF. On load the cards come back in place without the model; unfinished photos run. FIFO (Kevin: "into
+`files`, `state`, and `backs`, emptied since backgrounds went, keyed in grid order as `-time x 1024 + n`) until removed: the original file, a preview (JPEG,
+PNG for see-through types), mask(s) as PNG, vote, retry (and the first result), the finished GIF. On load the cards come back in place without the model; unfinished photos run. FIFO (Kevin: "into
 perpetuity, sane limit"): newest 50 photos (`KEEP_MAX`; photos past it aren't written) within 1 GB on computers, 400 MB
 on phones; oldest out first; a photo bigger than the whole limit isn't kept; quota errors drop the oldest and retry,
-then give up quietly. Background photos are stored once (`backs`); unused ones are deleted on load.
+then give up quietly.
 `navigator.storage.persist()` is asked except in Firefox (it prompts there). Safari clears site storage after 7 days
 without a visit; private windows refuse Blobs, so nothing is kept there.
 - Reload without jitter: early.js reads `gb-kept` and starts in the photos layout, hidden ("restoring") until the
@@ -205,7 +204,7 @@ without a visit; private windows refuse Blobs, so nothing is kept there.
   Download appears when done), never on the photo: the subject is what stays (Kevin, 2026-11-21). Phone cards hide
   remove while working so the quip fits two lines; the smallest cards show only the wave. A failed card says which
   file it was, on an opaque panel, and hides Download.
-- Results are cropped to the subject by default (crop icon switches to the whole frame). 👎 retries zoomed in on the
+- Results are always cropped to the subject (no crop toggle; GIFs keep the whole frame). 👎 retries zoomed in on the
   subject (merged into the first result outside the zoomed part, feathered where they meet; `mergeRetry`), only when
   the subject's padded box is under 80% of the photo; otherwise it is a vote only, labelled "Bad result" instead of
   "Bad result, try again". A 640 result's 👎 always runs ISNet on the whole photo instead. A second 👎 restores the first result. One vote per result: the chosen emoji stays lit and
@@ -239,44 +238,19 @@ without a visit; private windows refuse Blobs, so nothing is kept there.
 - Accessibility (audit 2026-11-22, `docs/history.md`): `announce()` reads out finished and failed photos; every
   icon-only control has a `title`; ad motion stops after about 24 s; on computers the page may scroll at 300-400% browser zoom (touch screens never scroll the page).
 
-## Card bar
+## Card bar (just the cut-out)
 
-Bar order: crop, background, Download, 👍 👎, remove. Every bar control is 32 px (`--h-sm`); icons rest at full
-strength on a faint ink chip; crop when on has a teal ring on an aqua tint. The bar drops controls so Download stays
-at least ~40 px wide (card widths, style.css): 242+ px everything; 206 to 241 no crop; 162 to 205 no crop and no remove,
-👍 👎 stay (Kevin, 2026-11-21: voting beats crop); 130 to 161 background, Download, remove; under 130 background and
-Download. What the bar hides rides along in the background picker (`wantcrop`/`wantx`/`wantrate`), so crop, remove and
-👍 👎 are never lost (unvoted 👍 👎 open the picker's first page, Kevin 2026-11-22: a phone in portrait with 3+ photos had
-no way to vote). Cards without a picker (waiting, failed, GIFs) keep remove in the background button's place.
-- **Roomy bars**: on touch screens only, when cards fill the width first with height to spare (a phone in portrait
-  with 1 to 4 photos), `.grid.roomy` gives the bar a second row: background + Download, then crop, 👍 👎, remove. With
-  a mouse the bar is always one row. Ad cards keep a one-row bar.
+Kevin, 2026-11-22: "Wildly simplify/reduce the image editing controls. We lost the plot of goodbye.bg. It's not a full
+image editor." A finished card has Download, 👍 👎 and remove, in one row, always all four. The output is always the
+see-through PNG of the crop (or the GIF). Removed that day, on purpose: backgrounds (colours, blur, your own photo),
+size/margin/shadow/WebP/Apply to all, the crop toggle, and the mask editor (#2, "Tap a piece? To do what?"); the
+history is in git (before f4612b5) and `docs/history.md`. Don't bring them back without Kevin asking.
+- Narrow cards shrink the buttons instead of dropping them (style.css container queries): 32 px down to 160 px cards,
+  26 px to 130, 24 px to 116, 22 px below (a phone with 12 photos has 110 px cards); under 100 px 👍 steps out (👎 stays:
+  it retries). Download is an icon under 240 px. Every bar control is a faint ink chip; Download is the loud button.
+- Kept photos from before keep their masks; their old background and options are ignored, the `backs` store is
+  emptied on load.
 - A last row with empty cells sits in the middle (`centreLastRow`, a `translate`, no layout shift).
-
-## Backgrounds and options
-
-remove.bg parity (`docs/removebg-parity.md`). A round button in the bar shows the cut-out's background (see-through,
-the default, is half checkerboard and half aqua; on a device's first cut-out it rings twice until opened,
-`gb-bg-seen`). Tapping it swaps the bar for a row of swatches at the same height (never over the photo, cards never
-resize). A tap on a swatch, outside the bar or Escape closes it.
-- Swatches: see-through, white, black, light aqua, sage, any colour (`<input type=color>`, live); blur soft and strong
-  (the photo's own background blurred at 480 px with the subject taken out first, box blur, no canvas filter); your
-  own photo (picker, or drop on the row or button; 2048 px on iPhones, 4096 elsewhere; shared by every photo that
-  uses it; never uploaded). `it.bg` holds a colour, `"blur:1"`, `"blur:2"` or `"img:<id>"`; everything that paints a
-  background goes through `backdrop()`.
-- Picking blur switches the card to the whole frame (the portrait-mode look; Kevin may want this off); leaving blur
-  puts the crop back (`cropBack`).
-- Rows never scroll and never cut a control: `pageRow` pages them (›), breaking between groups; the sliders button
-  sits next to › on every page. Narrow cards open the rows in the **dock** (`seat()`): a pill in the footer's place,
-  the card ringed in teal, nothing over any photo.
-- Output options (sliders): Size (Original, Square, 4:5, 16:9, Custom up to 5000 px, 4096 on iPhones), Margin (0, 4%,
-  10%, 20% of the subject's longer side; 4% is the crop), ground shadow, Apply to all (this visit, not GIFs), WebP
-  (where the browser encodes it). All off by default, and then the output is byte-for-byte the old one. A side where
-  the subject runs off the photo gets no margin and no shadow. Output capped at 16 MP on iPhones, 64 elsewhere.
-- The card, Download, long press and Download all follow the background and options; a solid, blur or photo
-  background downloads as JPG (0.92), see-through as PNG (or WebP). Ad art, ad-click saves and the Zazzle upload are
-  always the plain see-through crop (`plainBlob`). Kept in IndexedDB (`bg`, `out`). No marketplace names in the UI.
-- Phones build the PNG ahead when a row closes, only when no batch or retry is running.
 
 ## Offline
 
@@ -298,10 +272,11 @@ pages). Today only Zazzle has a link. One partner per visit. Each card is a diff
 partner with one variant (Printful, Printify) leaves the other reserved cells empty. Marked "Ad" or "Sponsored"
 (random per visit), not in Download all, no rating. Links go through `/go/<id>`, which counts the click ('adclick')
 and redirects; a POST there counts the card being shown ('adseen').
-- Ads fill the grid (Kevin, 2026-11-20: "always fill the grid"): up to 3 photos are laid out as 4 cells (1 photo + 3
-  ads, 2 + 2, 3 + 1); more photos fill out their last row. Exception (Kevin's iPhone, 402 x 654, 2026-11-22): on touch
-  screens where 4 cells make cards too small for 👍 👎 and remove (under 204 px), 1 or 2 photos keep 2 cells (1 + 1 ad, or 2 + 0). The cells are reserved from the start so photos don't
-  resize. Ads appear once the first cut-out is done, 1.1 s after it (`ADS_PAUSE`), one after another with a shimmering
+- Ads among the photos (Kevin, 2026-11-22, replacing 2026-11-20's "always fill the grid"): one beside 1 to 3 photos;
+  from 4 photos one after every 6th photo (after the last when there are fewer), at most 3, never in the first row of a
+  grid with more than one (it moves to the second row's start) (`adCount`, `adCells`). Ads never make the photos
+  scroll: fewer of them when the photos alone would fit. Their cells are reserved from the start as empty `.adslot`s,
+  so no photo moves when an ad arrives (smoke test "ads: one after the 6th photo of 8"). Ads appear once the first cut-out is done, 1.1 s after it (`ADS_PAUSE`), one after another with a shimmering
   placeholder; the 3D code is fetched while the first photo is worked on.
 - Zazzle's 8 variants draw the visitor's cut-out on a product (mug, sticker, shirt, tote, ornament, phone case, pillow,
   keychain), a different cut-out per card when there are several; with 2+ one card at a time swaps cut-out every 4 s. Tapping a
@@ -388,7 +363,7 @@ a difference.
    real iPhone (engine restart after idle, the 16 MP PNG, the share sheet after Download all), Android (share target,
    install), desktop "Open with", folder drops, live link fetching; BiRefNet on Windows and Linux GPUs and 8 GB Macs.
 2. Offline claim: check offline in Safari, then add "Works offline after your first cut-out" to the site and launch kit.
-3. Open draft PRs for Kevin to decide: #2 mask editing (tap pieces, erase/restore brush, undo), #5 the bulk tool.
+3. Open draft PR for Kevin to decide: #5 the bulk tool.
    Time `refineEdge` with BiRefNet 640 on a real iPhone (0.3 to 0.7 s a photo at 6x throttling in Chrome).
 4. A smaller GPU footprint might make WebGPU safe on iPhones again (try once ORT or the model changes).
 

@@ -276,8 +276,7 @@ try {
       ...[...idx.matchAll(/title="([^"]+)" data-t-title/g)].map((m) => m[1]),
       idx.match(/<title>([^<]+)<\/title>/)[1],
       ...PARTNERS.flatMap((p) => [p, ...(p.variants || [])]).flatMap((x) => [x.line, x.cta, ...(x.ctas || [])]).filter(Boolean),
-      "Ad", "Sponsored", "See-through", "White", "Black", "Light aqua", "Sage", "Soft blur", "Strong blur", "Original", "Square", "Custom",
-      "Size", "Margin around the subject", "Width in pixels", "Height in pixels", "Shadow", "Shadow under the subject", "Save as WebP (smaller files)",
+      "Ad", "Sponsored",
       ...said("functions/api/fetch.js").filter((m) => !/endpoint|too large/.test(m)), ...said("src/formats.js").filter((m) => m !== "RAW"),
       "The other site answered {status}.",
     ]);
@@ -334,8 +333,8 @@ try {
     return `${f.name}, ${(f.bytes.length / 1024).toFixed(0)} KB, engine ${e}`;
   });
 
-  await check("ads: cards fill the free cells (?adtest=1)", async () => {
-    await p.until(`document.querySelectorAll("#grid > .adcard").length === 3`, 15000, "3 ad cards next to 1 photo");
+  await check("ads: one card beside one photo (?adtest=1)", async () => {
+    await p.until(`document.querySelectorAll("#grid > .adcard").length === 1`, 15000, "1 ad card next to 1 photo");
     await p.until(`[...document.querySelectorAll("#grid > .adcard")].every((a) => !a.classList.contains("loading") && a.getBoundingClientRect().width > 50)`, 15000, "ad cards drawn");
     const labels = await p.ev(`[...document.querySelectorAll("#grid > .adcard")].map((a) => a.getAttribute("aria-label").split(":")[0])`);
     assert(labels.every((l) => /^(Ad|Sponsored)$/.test(l)), "ad label: " + labels.join(", "));
@@ -343,26 +342,13 @@ try {
     noErrors(p);
   }, [`one photo (${engine}): result and PNG download`]);
 
-  await check("background picker: White gives a JPG", async () => {
-    await click(p, "#grid > .card .bgb");
-    await p.until(`!document.querySelector("#grid > .card .bgs").hidden`, 3000, "the picker open");
-    await click(p, `#grid > .card .bgs [data-bg="#ffffff"]`);
-    await p.until(`document.querySelector("#grid > .card").classList.contains("solid")`, 3000, "the card on white");
-    const f = await download(ctx, () => click(p, "#grid > .card .dl"));
-    assert(f.kind === "jpg", `got ${f.kind}`); assert(f.name === "one-goodbye-bg.jpg", "file name " + f.name);
-    return f.name;
-  }, [`one photo (${engine}): result and PNG download`]);
-
-  // Ad cards that don't send the cut-out (?zazzlecap=0, Printful, Printify) save it see-through, never on the card's white.
-  await check("ads: a click saves the see-through PNG, not the white JPG", async () => {
+  // Ad cards that don't send the cut-out (?zazzlecap=0, Printful, Printify) save it as the see-through PNG.
+  await check("ads: a click saves the see-through PNG", async () => {
     const c7 = await context(), a = await page(c7);
     try {
       await a.go(app("&zazzlecap=0"));
       await addPhotos(a, ["adsave"]);
       await allDone(a, 1, 90000);
-      await click(a, "#grid > .card .bgb");
-      await a.until(`!document.querySelector("#grid > .card .bgs").hidden`, 3000, "the picker open");
-      await click(a, `#grid > .card .bgs [data-bg="#ffffff"]`);
       await a.until(`document.querySelectorAll("#grid > .adcard.artcard:not(.loading)").length > 0`, 20000, "an ad card with the cut-out");
       await a.ev(`(document.addEventListener("click", (e) => { if (e.target.closest(".adcard")) e.preventDefault(); }), true)`); // the partner's tab stays shut
       const f = await download(c7, () => click(a, "#grid > .adcard.artcard"));
@@ -370,7 +356,32 @@ try {
       assert(f.bytes[25] === 6, "PNG has no alpha channel");
       return f.name;
     } finally { await a.close(); }
-  }, ["background picker: White gives a JPG"]);
+  }, [`one photo (${engine}): result and PNG download`]);
+
+  // Ads among a batch (Kevin, 2026-11-22): one after every 6th photo, never in the first row, its cell kept from the
+  // start so no photo moves when it arrives.
+  await check("ads: one after the 6th photo of 8, never in the first row", async () => {
+    const c8 = await context(), b = await page(c8);
+    try {
+      await b.go(app());
+      await addPhotos(b, ["a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8"]);
+      const at = () => b.ev(`[...document.getElementById("grid").children].filter((e) => e.matches(".card, .adcard, .adslot")).map((e) => e.matches(".card") ? "P" : "A").join("")`);
+      const pos = () => b.ev(`${CARDS}.map((c) => { const r = c.getBoundingClientRect(); return Math.round(r.x) + "," + Math.round(r.y); }).join(" ")`);
+      await sleep(700); // after the cards' pop-in (0.35 s), before the first cut-out
+      const before = await pos(), slots = await at();
+      await allDone(b, 8, 240000);
+      await b.until(`document.querySelectorAll("#grid > .adcard:not(.loading)").length === 1`, 15000, "1 ad card");
+      const after = await pos(), cells = await at();
+      const cols = +(await b.ev(`getComputedStyle(document.getElementById("main")).getPropertyValue("--cols")`));
+      const i = cells.indexOf("A");
+      assert(cells.replace("A", "").length === 8 && cells.split("A").length === 2, "cells " + cells);
+      assert(i >= Math.min(6, 8) && (cells.length <= cols || i >= cols), `ad at ${i} of ${cells} with ${cols} columns`);
+      assert(slots === cells, `kept cells ${slots}, then ${cells}`);
+      assert(before === after, `photos moved when the ad came in: ${before} -> ${after}`);
+      noErrors(b);
+      return `${cells}, ${cols} columns`;
+    } finally { await b.close(); }
+  });
 
   await check("batch: 3 photos and Download all (zip names)", async () => {
     await addPhotos(p, ["two", "three"]);
@@ -381,12 +392,12 @@ try {
     const f = await download(ctx, () => click(p, "#all"), 60000);
     assert(f.kind === "zip", `got ${f.kind}`);
     const entries = Object.keys(unzipSync(new Uint8Array(f.bytes))).sort();
-    const want = ["one-goodbye-bg.jpg", "three-goodbye-bg.png", "two-goodbye-bg.png"];
+    const want = ["one-goodbye-bg.png", "three-goodbye-bg.png", "two-goodbye-bg.png"];
     assert(JSON.stringify(entries) === JSON.stringify(want), "zip holds " + entries.join(", "));
     assert(f.name === "goodbye-bg-3-images.zip", "zip name " + f.name);
     await p.until(`document.querySelectorAll("#grid > .adcard").length === 1`, 10000, "1 ad card next to 3 photos");
     return `${f.name}: ${entries.join(", ")}`;
-  }, ["background picker: White gives a JPG"]);
+  }, [`one photo (${engine}): result and PNG download`]);
 
   await check("reload: kept photos come back, CLS 0", async () => {
     await p.until(`(${KEPT}).then((k) => k.length === 3 && k.every((s) => s.mask))`, 15000, "3 photos kept in IndexedDB").catch(async (e) => {
@@ -399,8 +410,6 @@ try {
     await sleep(1500); // the ads and the footer settle
     const after = await names(p);
     assert(JSON.stringify(after) === JSON.stringify(before), `order ${before} -> ${after}`);
-    const white = await p.ev(`${CARDS}.find((c) => c.getAttribute("aria-label") === "one").querySelector(".bgb").getAttribute("aria-label")`);
-    assert(white === "Background: White", "background of 'one' after reload: " + white);
     const ls = await p.ev("window.__ls"), cls = ls.reduce((a, b) => a + b, 0);
     assert(cls < 0.001, `CLS ${cls.toFixed(4)} (${ls.join(", ")})`);
     noErrors(p); await cspClean(p);
@@ -429,7 +438,7 @@ try {
     await p.reload(); await allDone(p, 2, 15000);
     const after = await names(p);
     assert(JSON.stringify(after) === JSON.stringify(before.slice(1)), `${before} -> ${after}`);
-    await p.until(`document.querySelectorAll("#grid > .adcard").length === 2`, 10000, "2 ad cards next to 2 photos");
+    await p.until(`document.querySelectorAll("#grid > .adcard").length === 1`, 10000, "1 ad card next to 2 photos");
   }, ["reload: kept photos come back, CLS 0"]);
   await p.close();
 
@@ -444,7 +453,6 @@ try {
     const f = await download(ctx2, () => click(q, "#grid > .card .dl"));
     assert(f.kind === "gif", `got ${f.kind}`); assert(f.name === "wave-goodbye-bg.gif", "file name " + f.name);
     const n = gifFrames(f.bytes); assert(n >= 3, `${n} frame(s)`);
-    assert(await q.ev(`getComputedStyle(document.querySelector("#grid > .card .bgb")).visibility === "hidden"`), "GIF card shows a background picker");
     return `${n} frames`;
   });
   await check("formats: a ZIP opens into its photos", async () => {
@@ -498,57 +506,6 @@ try {
     return out.join("; ");
   });
 
-  // Output options (sellers): Square with a margin, a shadow, WebP, "All" for the other photo, kept over a reload.
-  await check(`output: Square with a margin, All, WebP, reload (${engine})`, async () => {
-    const c6 = await context(), o = await page(c6);
-    await o.go(app());
-    await addPhotos(o, ["sq1", "sq2"]);
-    await allDone(o, 2, 120000);
-    const card = (n) => `#grid > .card:nth-child(${n})`, row = (n) => `:is(${card(n)}, #dock)`; // a narrow card opens its rows in the dock
-    const pickSel = (sel, v) => o.ev(`(() => { const s = document.querySelector(${JSON.stringify(sel)}); s.value = ${JSON.stringify(v)}; s.dispatchEvent(new Event("change", { bubbles: true })); return true; })()`);
-    await click(o, `${card(1)} .bgb`);
-    await click(o, `${row(1)} .bgs .more`);
-    await o.until(`!document.querySelector("${row(1)} .opts").hidden`, 3000, "the options row open");
-    await pickSel(`${row(1)} .osize select`, "1:1");
-    await pickSel(`${row(1)} .omargin select`, "0.2");
-    const f = await download(c6, () => click(o, `${card(1)} .dl`));
-    assert(f.kind === "png" && f.name === "sq1-goodbye-bg.png", `${f.kind} ${f.name}`);
-    const w = f.bytes.readUInt32BE(16), h = f.bytes.readUInt32BE(20);
-    assert(w === h && w > 100, `not square: ${w} x ${h}`);
-    // The margin is see-through all round (20% of the subject's longer side is 14% of the square), the middle is not.
-    const a = await o.ev(`(async () => {
-      const b = await createImageBitmap(new Blob([Uint8Array.from(atob(${JSON.stringify(f.bytes.toString("base64"))}), (c) => c.charCodeAt(0))]));
-      const c = new OffscreenCanvas(b.width, b.height), x = c.getContext("2d"); x.drawImage(b, 0, 0);
-      const d = x.getImageData(0, 0, b.width, b.height).data, W = b.width, H = b.height, e = Math.floor(W * 0.1);
-      let ring = 0;
-      for (let i = 0; i < W; i += 3) for (const [px, py] of [[i, 0], [i, H - 1], [0, i], [W - 1, i], [i, e], [i, H - 1 - e], [e, i], [W - 1 - e, i]]) ring = Math.max(ring, d[(py * W + px) * 4 + 3]);
-      return { ring, mid: d[((H >> 1) * W + (W >> 1)) * 4 + 3] };
-    })()`);
-    assert(a.ring === 0 && a.mid > 200, `margin alpha ${a.ring}, middle alpha ${a.mid}`);
-    await click(o, `${row(1)} .oshadow`);
-    await click(o, `${row(1)} .oall`);
-    await o.until(`(${KEPT}).then((k) => k.length === 2 && k.every((s) => s.out && s.out.size === "1:1" && s.out.margin === 0.2 && s.out.shadow))`, 10000, "both kept as Square, 20%, shadow").catch(async (e) => {
-      throw new Error(e.message + ": " + JSON.stringify(await kept(o)));
-    });
-    const g = await download(c6, () => click(o, `${card(2)} .dl`));
-    assert(g.kind === "png" && g.bytes.readUInt32BE(16) === g.bytes.readUInt32BE(20), `second photo after All: ${g.kind} ${g.bytes.readUInt32BE(16)} x ${g.bytes.readUInt32BE(20)}`);
-    let webp = "WebP not offered";
-    if (await o.ev(`!document.querySelector("${row(1)} .owebp").hidden`)) {
-      await click(o, `${row(1)} .owebp`);
-      const v = await download(c6, () => click(o, `${card(1)} .dl`));
-      assert(v.kind === "webp" && v.name === "sq1-goodbye-bg.webp", `${v.kind} ${v.name}`);
-      webp = `${v.name} ${(v.bytes.length / 1024).toFixed(0)} KB vs PNG ${(g.bytes.length / 1024).toFixed(0)} KB`;
-    }
-    await o.until(`(${KEPT}).then((k) => k[0]?.out?.fmt === "webp" || ${JSON.stringify(webp)} === "WebP not offered")`, 10000, "WebP kept");
-    o.errors.length = 0;
-    await o.reload();
-    await allDone(o, 2, 20000);
-    await o.until(`[...document.querySelectorAll("#grid > .card img")].every((i) => i.naturalWidth > 0 && i.naturalWidth === i.naturalHeight)`, 10000, "both cards square after the reload");
-    noErrors(o); await cspClean(o);
-    await o.close();
-    return `${w} x ${h}; ${webp}`;
-  });
-
   // A subject on hard stripes: blur has to smooth them out behind a sharp subject (a smooth gradient would pass even
   // with no blur at all).
   const addStriped = (p, names) => p.ev(`(async () => {
@@ -571,81 +528,6 @@ try {
     return { w: b.width, h: b.height, at: ${JSON.stringify(at)}.map(([u, v]) => px(u, v)) };
   })()`);
 
-  await check(`backgrounds: blur gives a JPG, stripes smoothed, subject sharp (${engine})`, async () => {
-    const c7 = await context(), o = await page(c7);
-    await o.go(app());
-    await addStriped(o, ["blurry"]);
-    await allDone(o, 1, 90000);
-    await click(o, "#grid > .card .bgb");
-    await click(o, "#grid > .card .bgs .blur.b1"); // soft: closes the row like every swatch
-    await o.until(`document.querySelector("#grid > .card .bgb").getAttribute("aria-label") === "Background: Soft blur" && document.querySelector("#grid > .card .bgs").hidden`, 3000, "soft blur chosen, row closed");
-    await click(o, "#grid > .card .bgb");
-    await click(o, "#grid > .card .bgs .blur.b2"); // strong
-    await o.until(`document.querySelector("#grid > .card .bgb").getAttribute("aria-label") === "Background: Strong blur"`, 3000, "strong blur chosen");
-    assert(await o.ev(`document.querySelector("#grid > .card .crop").getAttribute("aria-pressed") === "false"`), "blur did not switch to the whole frame");
-    const f = await download(c7, () => click(o, "#grid > .card .dl"));
-    assert(f.kind === "jpg" && f.name === "blurry-goodbye-bg.jpg", `${f.kind} ${f.name}`);
-    // A row across the background, left of the subject, 10 px apart: the 40 px stripes went from 50 to 230 in red.
-    const row = Array.from({ length: 12 }, (_, i) => [0.06 + i * 0.0111, 0.5]);
-    const r = await pixels(o, f, [...row, [0.5, 0.62], [0.01, 0.01], [0.99, 0.99]]);
-    assert(r.w === 900 && r.h === 1200, `whole frame expected, got ${r.w} x ${r.h}`);
-    const reds = r.at.slice(0, 12).map((v) => v[0]), spread = Math.max(...reds) - Math.min(...reds);
-    assert(spread < 60, `stripes not smoothed: red runs ${reds.join(",")}`);
-    const [mr, mg, mb] = r.at[12];
-    assert(mr > 150 && mg < 90 && mb < 90, `subject not sharp red: ${r.at[12]}`);
-    for (const c of r.at.slice(13)) assert(c[0] + c[1] + c[2] > 120, `a corner is black: ${c}`);
-    await o.until(`(${KEPT}).then((k) => k[0]?.bg === "blur:2")`, 10000, "blur kept");
-    o.errors.length = 0;
-    await o.reload();
-    await allDone(o, 1, 20000);
-    await o.until(`document.querySelector("#grid > .card").classList.contains("solid") && document.querySelector("#grid > .card .bgb").getAttribute("aria-label") === "Background: Strong blur"`, 10000, "blur back after the reload");
-    // Leaving blur puts back the crop blur took away (kept over the reload too).
-    await click(o, "#grid > .card .bgb");
-    await click(o, `#grid > .card .bgs [data-bg="#ffffff"]`);
-    await o.until(`document.querySelector("#grid > .card .crop").getAttribute("aria-pressed") === "true"`, 3000, "the crop back after leaving blur");
-    noErrors(o); await cspClean(o);
-    await o.close();
-    return `background red ${Math.min(...reds)}-${Math.max(...reds)} (stripes 32-232), subject ${r.at[12].slice(0, 3)}`;
-  });
-
-  await check("backgrounds: your photo, All, stored once, reload", async () => {
-    const c8 = await context(), o = await page(c8);
-    await o.go(app());
-    await addPhotos(o, ["ph1", "ph2"]);
-    await allDone(o, 2, 120000);
-    const card = (n) => `#grid > .card:nth-child(${n})`, row = (n) => `:is(${card(n)}, #dock)`; // a narrow card opens its rows in the dock
-    await click(o, `${card(1)} .bgb`);
-    await o.ev(`(async () => { const c = document.createElement("canvas"); c.width = 1600; c.height = 1000; const x = c.getContext("2d");
-      x.fillStyle = "#1a7f5a"; x.fillRect(0, 0, 1600, 1000);
-      const b = await new Promise((r) => c.toBlob(r, "image/jpeg", 0.9)), dt = new DataTransfer(); dt.items.add(new File([b], "green.jpg", { type: "image/jpeg" }));
-      const i = document.querySelector("${row(1)} .bgs .photo input"); i.files = dt.files; i.dispatchEvent(new Event("change", { bubbles: true })); return true; })()`);
-    await o.until(`document.querySelector("${card(1)} .bgb").getAttribute("aria-label") === "Background: Your photo"`, 10000, "the photo as background");
-    const f = await download(c8, () => click(o, `${card(1)} .dl`));
-    assert(f.kind === "jpg" && f.name === "ph1-goodbye-bg.jpg", `${f.kind} ${f.name}`);
-    const r = await pixels(o, f, [[0.01, 0.01], [0.5, 0.6]]);
-    const [g0, g1, g2] = r.at[0];
-    assert(Math.abs(g0 - 0x1a) < 25 && Math.abs(g1 - 0x7f) < 25 && Math.abs(g2 - 0x5a) < 25, `corner is not the photo: ${r.at[0]}`);
-    assert(r.at[1][0] > 150 && r.at[1][1] < 90, `subject missing: ${r.at[1]}`);
-    await click(o, `${card(1)} .bgb`);
-    await click(o, `${row(1)} .bgs .more`);
-    await click(o, `${row(1)} .oall`);
-    const backs = `indexedDB.databases().then(() => new Promise((ok) => { const r = indexedDB.open("goodbye-bg"); r.onsuccess = () => { const db = r.result; if (!db.objectStoreNames.contains("backs")) { db.close(); return ok(-1); } const q = db.transaction("backs").objectStore("backs").count(); q.onsuccess = () => { db.close(); ok(q.result); }; }; }))`;
-    await o.until(`(${KEPT}).then((k) => k.length === 2 && k.every((s) => s.bg && s.bg === k[0].bg && s.bg.startsWith("img:")))`, 10000, "both kept with the same photo").catch(async (e) => {
-      throw new Error(e.message + ": " + JSON.stringify(await kept(o)));
-    });
-    await o.until(`(${backs}).then((n) => n === 1)`, 10000, "the photo stored once");
-    o.errors.length = 0;
-    await o.reload();
-    await allDone(o, 2, 20000);
-    await o.until(`[...document.querySelectorAll("#grid > .card .bgb")].every((b) => b.getAttribute("aria-label") === "Background: Your photo")`, 10000, "both back on the photo");
-    const g = await download(c8, () => click(o, `${card(2)} .dl`));
-    const r2 = await pixels(o, g, [[0.01, 0.01]]);
-    assert(g.kind === "jpg" && Math.abs(r2.at[0][1] - 0x7f) < 25, `after the reload: ${g.kind} ${r2.at[0]}`);
-    noErrors(o); await cspClean(o);
-    await o.close();
-    return `${f.name} ${r.w} x ${r.h}, 1 stored photo for 2 cut-outs`;
-  });
-
   // Phone width, a slow connection: the case that jittered before (jitter-design: CLS 0.24 with 2 photos at 300 ms).
   await check("reload at phone width, 300 ms latency: CLS 0", async () => {
     const c5 = await context(), m = await page(c5, { w: 390, h: 844 }); // no touch: Download stays a download
@@ -656,7 +538,7 @@ try {
     await m.s("Network.emulateNetworkConditions", { offline: false, latency: 300, downloadThroughput: -1, uploadThroughput: -1 });
     await m.reload();
     await allDone(m, 2, 20000);
-    await m.until(`document.querySelectorAll("#grid > .adcard").length === 2`, 10000, "2 ad cards");
+    await m.until(`document.querySelectorAll("#grid > .adcard").length === 1`, 10000, "1 ad card");
     await sleep(2000);
     const ls = await m.ev("window.__ls"), cls = ls.reduce((a, b) => a + b, 0);
     assert(cls < 0.001, `CLS ${cls.toFixed(4)} (${ls.join(", ")})`);
@@ -810,9 +692,9 @@ try {
     assert(cls < 0.001, `layout shift on load: ${cls.toFixed(4)}`);
     await addPhotos(d, ["eins"]);
     await allDone(d, 1, 120000);
-    const card = await d.ev(`({ dl: document.querySelector("#grid > .card .dl").getAttribute("aria-label"), crop: document.querySelector("#grid > .card .crop").title,
+    const card = await d.ev(`({ dl: document.querySelector("#grid > .card .dl").getAttribute("aria-label"), crop: document.querySelector("#grid > .card .x").title,
       w: document.querySelector("#grid > .card .dl").getBoundingClientRect().width, wide: document.documentElement.scrollWidth > innerWidth + 1 })`);
-    assert(card.dl === "Speichern" && card.crop === "Auf das Motiv zuschneiden", `card not German: ${card.dl} / ${card.crop}`);
+    assert(card.dl === "Speichern" && card.crop === "Entfernen", `card not German: ${card.dl} / ${card.crop}`);
     assert(card.w >= 40 && !card.wide, `Download ${card.w} px wide, page wider than the screen: ${card.wide}`);
     noErrors(d); await cspClean(d);
     await d.close();

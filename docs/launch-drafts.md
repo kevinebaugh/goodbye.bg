@@ -10,7 +10,7 @@ Before posting:
   watermark; cut out in the browser (WebGPU on computers, WebAssembly on phones); PNG at the photo's own resolution
   (16 MP cap in Safari/iPhone, 64 MP elsewhere); batches up to 50 per drop with a zip; HEIC, TIFF, camera RAW, ZIP
   and animated GIF in; AGPL source on GitHub; supported by optional product ads (Zazzle etc.). No API, no
-  background color/photo replacement (unless the color picker has shipped by then), no brush.
+  background replacement, sizes or shadows (removed 2026-11-22: just the cut-out), no brush.
 - Timing (docs/seo.md §5): HN on a weekday morning US time, Product Hunt the same week, both before 1 December.
 
 ## Show HN

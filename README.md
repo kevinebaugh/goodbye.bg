@@ -7,8 +7,6 @@ A free background remover that cuts photos out in your browser, on your device.
   <img src="docs/launch/before-after-strip-light.png" alt="A photo before and after goodbye.bg removed its background" width="800">
 </picture>
 
-<img src="docs/launch/demo.gif" alt="Dropping four photos on goodbye.bg, the cut-outs appearing, then Download all" width="640">
-
 Live: https://goodbye-bg-git.pages.dev (the page and the model are cached after the first cut-out).
 Demo photos are CC0 (credits in [`docs/launch/CREDITS.md`](docs/launch/CREDITS.md)). The demo was recorded on an
 M-series Mac with the model already cached.
@@ -16,8 +14,7 @@ M-series Mac with the model already cached.
 I built it because remove.bg stops removing backgrounds on 1 December 2026.
 
 - Free. No account, no watermark.
-- PNG at the photo's own resolution, cropped to the subject (a toggle gives the whole frame), or a JPG on a colour, a
-  blurred copy of the photo, or a photo of your own. Optional size presets, margin, ground shadow and WebP.
+- PNG at the photo's own resolution, cropped to the subject.
 - Up to 100 photos per drop on computers (50 on phones, tablets and computers that report less than 8 GB of memory),
   or a ZIP or folder. Download all gives a zip.
 - Reads JPG, PNG, WebP, AVIF, SVG, HEIC, TIFF, camera RAW (its embedded JPEG preview), ZIPs and animated GIFs.

@@ -1,5 +1,11 @@
 # remove.bg parity gaps, ranked (2026-11-22)
 
+**Removed 2026-11-22, a deliberate simplification** (Kevin: "It's not a full image editor"). Every finished photo now
+offers only Download, 👍 👎 and remove: a transparent PNG at the photo's own resolution, always cropped to the subject
+(animated GIFs stay animated). Built from this list and then taken out: new backgrounds (colour, blur, your own
+photo) and JPG out, WebP out, size presets, margin, ground shadow, "Apply to all", the crop toggle, and the mask
+editor. The tables and sketches below are the plan as it stood before; the rows marked *Removed* are no longer true.
+
 ## What we know about the shutdown, and how sure we are
 
 remove.bg's own pages (remove.bg/, /pricing, /help, /api) returned little to our fetch tool, so most of the shutdown
@@ -35,14 +41,14 @@ and what the vendors' posts say users depend on. Nothing here is user research.
 | One photo, free | Preview 0.25 MP free, HD costs a credit | Full resolution free, on device, no account | We win |
 | Privacy | Uploads to server | Never uploaded (Zazzle click excepted) | We win |
 | Cut quality, people and pets | Good, hair strong | Good; hair edges blocky on phones (ISNet), better on GPU computers (BiRefNet) | Phone and hair quality (branch exists) |
-| Fix a bad cut by hand (erase/restore) | Editor (unverified) | Only 👎 zoomed retry | Big; mask editor on a branch |
-| Solid background colour | Yes | Yes (new tonight), JPG download | None |
-| Background image / blur | Yes (API `bg_image`, editor) | Yes (2026-11-22): blur (soft, strong) and your own photo | None |
-| Drop shadow | Yes (`shadow_type`) | No | Medium, products |
-| Output size, padding, position, marketplace presets | Yes (`scale`, `position`, `crop_margin`) | Crop to subject or whole frame only | Medium, sellers |
-| Batch | Desktop app, API | Up to 100 per drop on computers (50 on phones), All for settings, ZIPs in, streamed zip out; 50 kept | Small: cap 100 per drop |
+| Fix a bad cut by hand (erase/restore) | Editor (unverified) | Only 👎 retry | *Removed* 2026-11-22: the mask editor was built, then cut |
+| Solid background colour | Yes | No (*Removed* 2026-11-22) | Deliberate |
+| Background image / blur | Yes (API `bg_image`, editor) | No (*Removed* 2026-11-22) | Deliberate |
+| Drop shadow | Yes (`shadow_type`) | No (*Removed* 2026-11-22) | Deliberate |
+| Output size, padding, position, marketplace presets | Yes (`scale`, `position`, `crop_margin`) | Cropped to the subject, nothing else (*Removed* 2026-11-22: sizes, margin, crop toggle) | Deliberate |
+| Batch | Desktop app, API | Up to 100 per drop on computers (50 on phones), ZIPs in, streamed zip out; 50 kept | Small: cap 100 per drop |
 | Formats in | JPG, PNG, WebP, 22 MB | Plus HEIC, TIFF, RAW preview, GIF, SVG, ZIP, links | We win |
-| Formats out | PNG, JPG, WebP, ZIP | PNG, JPG (with colour), GIF | WebP missing, small |
+| Formats out | PNG, JPG, WebP, ZIP | PNG, GIF, ZIP (*Removed* 2026-11-22: JPG, WebP) | Deliberate |
 | Animated GIF | No (video product instead) | Yes | We win |
 | Video | Yes | No | Skip |
 | Photoshop plugin | Yes, ends 1 Dec | No | Large, high pain, small crowd |
@@ -62,13 +68,13 @@ Score = (people affected x how much they care) / effort. Effort in focused days.
 
 | # | Gap | People | Care | Effort | Verdict |
 |---|---|---|---|---|---|
-| 1 | Mask editor (erase/restore) | High | High | 1-2 d to merge and test | Do first |
+| 1 | Mask editor (erase/restore) | High | High | 1-2 d to merge and test | Built, *removed* 2026-11-22 |
 | 2 | Better phone model, hair edges | High | High | 1-2 d to merge and test | Do first |
-| 3 | Output canvas: size, padding, position, presets | Medium (sellers) | High | 2-3 d | Do |
-| 4 | Backgrounds: image, blur; ground shadow | High | Medium | 2-3 d | Do |
-| 5 | Batch settings for all photos; cap beyond 50 | Medium | High | 2 d | Do |
+| 3 | Output canvas: size, padding, position, presets | Medium (sellers) | High | 2-3 d | Built, *removed* 2026-11-22 |
+| 4 | Backgrounds: image, blur; ground shadow | High | Medium | 2-3 d | Built, *removed* 2026-11-22 |
+| 5 | Batch settings for all photos; cap beyond 50 | Medium | High | 2 d | Cap raised to 100; Apply to all *removed* 2026-11-22 |
 | 6 | Installable, works offline once cached | Medium | Medium | 1-2 d | Do |
-| 7 | WebP out, PNG/JPG quality, trim toggle | Low | Low | 0.5 d | Fill-in |
+| 7 | WebP out, PNG/JPG quality, trim toggle | Low | Low | 0.5 d | Built, *removed* 2026-11-22 |
 | 8 | Desktop/CLI bulk tool (also the money gap) | Low-medium | High | 10+ d | Later |
 | 9 | Figma plugin | Low | Medium | 5-8 d | Maybe |
 | -  | Photoshop plugin | Low | High | 10+ d | Skip for now |

@@ -195,42 +195,6 @@ async function target(name, t, base) {
     return gl ? "WebGL2" : "no WebGL2 (2D fallback)";
   });
 
-  await check(pre + "background picker: White gives a JPG; colour input", async () => {
-    await p.click("#grid > .card .bgb");
-    await p.waitForSelector(":is(#grid > .card, #dock) .bgs:not([hidden])");
-    await onPage(p, `:is(#grid > .card, #dock) .bgs [data-bg="#ffffff"]`);
-    await p.click(`:is(#grid > .card, #dock) .bgs [data-bg="#ffffff"]`);
-    await p.waitForFunction(() => document.querySelector("#grid > .card").classList.contains("solid"));
-    const [f] = await save(t, p, () => p.click("#grid > .card .dl"));
-    assert(f.kind === "jpg" && f.name === "one-goodbye-bg.jpg", `${f.name} ${f.kind}`);
-    await p.click("#grid > .card .bgb");
-    await onPage(p, ":is(#grid > .card, #dock) .bgs .custom");
-    await p.locator(":is(#grid > .card, #dock) .bgs input[type=color]").fill("#ff0000"); // input + change, as the system picker does
-    await p.waitForFunction(() => document.querySelector("#grid > .card .bgb").getAttribute("aria-label") === "Background: #ff0000", null, { timeout: 3000 });
-  });
-
-  await check(pre + "options row: Square, WebP only where it encodes, 16 px on touch", async () => {
-    await p.click("#grid > .card .bgb");
-    await onPage(p, ":is(#grid > .card, #dock) .bgs .more");
-    await p.click(":is(#grid > .card, #dock) .bgs .more");
-    await p.waitForSelector(":is(#grid > .card, #dock) .opts:not([hidden])");
-    const st = await p.evaluate(() => {
-      const o = document.querySelector(":is(#grid > .card, #dock) .opts"), w = o.querySelector(".owebp");
-      return { webpShown: !w.hidden, fs: [...o.querySelectorAll("select, input")].map((e) => parseFloat(getComputedStyle(e).fontSize)),
-        h: o.getBoundingClientRect().height, bar: o.parentElement.getBoundingClientRect().height, sel: getComputedStyle(o.querySelector("select")).width };
-    });
-    const canWebp = !isWebKit;
-    assert(st.webpShown === canWebp, `WebP button ${st.webpShown ? "shown" : "hidden"}; this browser ${canWebp ? "encodes" : "cannot encode"} WebP`);
-    if (t.phone) assert(st.fs.every((x) => x >= 16), "under 16 px on a phone (iOS zooms on focus): " + st.fs.join(", "));
-    await p.selectOption(":is(#grid > .card, #dock) .osize select", "1:1");
-    if (canWebp) { await onPage(p, ":is(#grid > .card, #dock) .owebp"); await p.click(":is(#grid > .card, #dock) .owebp"); }
-    await p.mouse.click(5, 5); // close the row (phones build the file then)
-    const [f] = await save(t, p, () => p.click("#grid > .card .dl"));
-    const want = canWebp ? "webp" : "jpg";
-    assert(f.kind === want && f.name === "one-goodbye-bg." + want, `${f.name} ${f.kind}`);
-    return `fonts ${[...new Set(st.fs)].join("/")} px, select ${st.sel}, ${f.name}${f.opened ? " (saved, then opened in a new tab)" : ""}`;
-  });
-
   await check(pre + "batch of 3 and Download all", async () => {
     await addPhotos(p, ["two", "three"]);
     await allDone(p, 3, 240000);
@@ -239,8 +203,7 @@ async function target(name, t, base) {
     let names;
     if (t.phone) names = files.map((f) => f.name).sort();
     else { assert(files[0].kind === "zip", "got " + files[0].kind); names = Object.keys(unzipSync(new Uint8Array(files[0].bytes))).sort(); }
-    const ext1 = isWebKit ? "jpg" : "webp";
-    const want = [`one-goodbye-bg.${ext1}`, "three-goodbye-bg.png", "two-goodbye-bg.png"];
+    const want = ["one-goodbye-bg.png", "three-goodbye-bg.png", "two-goodbye-bg.png"];
     assert(JSON.stringify(names) === JSON.stringify(want), "got " + names.join(", "));
     await clean("in the batch");
     return names.join(", ");
@@ -258,10 +221,10 @@ async function target(name, t, base) {
     await sleep(1500); // the last writes
     await p.reload();
     await allDone(p, 3, 30000);
-    const st = await p.evaluate(() => ({ names: [...document.querySelectorAll("#grid > .card")].map((c) => c.getAttribute("aria-label")), bg: document.querySelector("#grid > .card .bgb")?.getAttribute("aria-label") }));
+    const st = await p.evaluate(() => ({ names: [...document.querySelectorAll("#grid > .card")].map((c) => c.getAttribute("aria-label")) }));
     assert(st.names.length === 3, "cards: " + st.names.join(", "));
     await clean("after the reload");
-    return st.names.join(", ") + "; " + st.bg;
+    return st.names.join(", ");
   });
 
   await check(pre + "remove, undo pill, reload", async () => {
