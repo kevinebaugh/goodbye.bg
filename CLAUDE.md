@@ -162,7 +162,7 @@ Tested: headless Chrome (reload in a restarted browser, Back still from bfcache)
   so the quip fits two lines; the smallest cards show only the wave. Footer: "Goodbye to N backgrounds since 2026."
 - Kept photos load without jitter: `src/early.js` (first thing in <body>) reads the count `gb-kept` that app.js keeps in
   localStorage and starts the page in its photos layout, grid and footer hidden ("restoring") until layout() has sized the
-  cards and the first row of kept photos is drawn (1.5 s failsafe). Restored cards don't pop. A stale count falls back to the landing.
+  cards and the first kept photo is drawn (1.5 s failsafe; waiting for the whole first row hit it on a 6x-throttled phone). Restored cards don't pop. A stale count falls back to the landing.
   Jitter on reload, round 2 (2026-11-22, measured with a CDP script: layout-shift observer, per-frame rects, screencast):
   the partner list is written into app.js by the build (`%PARTNERS%`; partners.json stays as the fallback), because a
   fetched list arrived after the kept photos were laid out and the photo shrank from 1 cell to 4 (production, 300 ms
@@ -170,17 +170,18 @@ Tested: headless Chrome (reload in a restarted browser, Back still from bfcache)
   1.1 s reveal pause: now `adsStraight` puts them in the first visible frame, without their entrance (`.adcard.back`);
   the placeholder crossfades into the product. early.js modulepreloads render3d.mjs. The footer has a fixed width (the
   count text arriving moved its box). While photos are added, the footer used to land 34 px off and then move: hugFooter
-  measured a card mid pop-in (scaled .92); it reads offsetHeight now. After: CLS 0 to 0.0002 in every case (1 to 4 photos, desktop and phone, light and dark).
+  measured a card mid pop-in (scaled .92); it reads offsetHeight now. After: CLS 0 in every case (1 to 4 photos, desktop and phone, light and dark).
 - Remove can be undone for 5 s (Kevin, 2026-11-21): a pill at the bottom, "Removed." + Undo, with a ring on the button that
   runs down (hover or focus pauses it; Cmd/Ctrl+Z works). The stored copy is deleted at once and rewritten on Undo; memory
   is freed when the time is up. One at a time: a second removal settles the first.
 - Messages sit next to what they're about (Kevin, 2026-11-21), one look everywhere: `tell(msg, button)` in app.js shows one
   bubble pointing at the button (adding photos: Choose photos/Paste; a failed save: that Download; a failed zip: Download all),
   below it or above when there's no room. Trouble with one photo stays on its card. No bottom toast; zip progress is on the
-  Download all button. Undo is the only thing at the bottom. Quips are the one place
+  Download all button. Undo is the only thing at the bottom. With photos on screen, a message about adding photos sits
+  above Choose photos/Paste (below, it covered the photos; 2026-11-22). Quips are the one place
   for playful text; everything else is plain and only what people need.
 - Results are cropped to the subject by default (crop icon switches to the whole frame). 👎 retries zoomed in (merged into the first result outside the zoomed part, feathered where they meet; mergeRetry)
-  on the subject, a second 👎 restores the first result. One vote per result (on phones, which never hover, 👍 👎 rest in soft colour rather than grey, which read as disabled): the chosen emoji stays lit and the
+  on the subject, a second 👎 restores the first result. One vote per result (on phones, which never hover, 👍 👎 rest at full strength on a soft chip instead of grey at 70%, which read as disabled; still grey, for the palette): the chosen emoji stays lit and the
   other steps aside; a retry that finds a new result brings both back for it.
 - Nothing ever overlaps the image. Every card control (crop, Download, 👍 👎, remove) lives in the bar below it.
 - A finished cut-out is an `<img>`, so long-press on iPhone offers Save to Photos (a press swaps in the

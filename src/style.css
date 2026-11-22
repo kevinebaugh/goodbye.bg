@@ -143,8 +143,9 @@ body.has-work .hero h1, body.has-work .sub { display: none; }
 .ico:focus-visible { opacity: 1; }
 @media (hover: hover) { .ico:hover:not(:disabled) { opacity: 1; filter: none; background: color-mix(in srgb, var(--ink) 8%, transparent); } }
 .rate:disabled { cursor: default; }
-/* Phones never hover, so 👍 👎 would rest grey and faded and read as disabled: there they rest in soft colour. */
-@media (hover: none) { .rate:not(:disabled) { opacity: .95; filter: grayscale(.35); } }
+/* Phones never hover, so 👍 👎 rested grey at 70% and read as disabled: there they rest at full strength on the hover
+   chip. Still grey: yellow thumbs on every card would break the cool palette (the chosen one lights up). */
+@media (hover: none) { .rate:not(:disabled) { opacity: 1; background: color-mix(in srgb, var(--ink) 8%, transparent); } }
 /* Background: the trigger shows the current one (a checkerboard for see-through). The picker takes the bar's place,
    at the bar's height, so nothing covers the photo and the cards never resize. */
 .sw { width: 18px; height: 18px; border-radius: 50%; display: block; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 30%, transparent); }

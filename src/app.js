@@ -79,7 +79,9 @@ function tell(msg, at = $("pick").parentElement, ms = 4500) {
   const t = $("tell"), r = at.getBoundingClientRect(), gap = 10;
   t.textContent = msg; t.hidden = false; t.classList.remove("above");
   const w = t.offsetWidth, h = t.offsetHeight, mid = r.left + r.width / 2;
-  const above = r.bottom + gap + h > innerHeight && r.top - gap - h > 0;
+  // With photos on screen, a message about adding photos goes above the buttons: below it would cover the photos.
+  const overCards = document.body.classList.contains("has-work") && (at === $("pick").parentElement || at === $("paste"));
+  const above = (overCards || r.bottom + gap + h > innerHeight) && r.top - gap - h > 0;
   const x = Math.min(Math.max(8, mid - w / 2), innerWidth - w - 8);
   t.style.left = `${x + scrollX}px`;
   t.style.top = `${(above ? r.top - gap - h : r.bottom + gap) + scrollY}px`;
@@ -722,6 +724,7 @@ async function addSources(list, origin = "") {
   if (!list.length) { if (!zipFailed) tell("No image found there. Try a photo file, a copied image, or an image link."); return; } // a broken ZIP already said so
   await restoring; // kept photos go in first, so this batch lands on top of them
   show();
+  adsStraight = adsQuiet = false; // a new batch's ads wait for its reveal, as usual
   const top = keyBase();
   // All cards appear at once, so the layout settles once instead of jumping with every photo.
   const cards = document.createDocumentFragment(); // the batch goes on top, in the order it was picked
@@ -1874,12 +1877,12 @@ function unrestore() {
   if (!items.length) document.body.classList.remove("has-work");
   try { localStorage.setItem("gb-kept", "0"); } catch {}
 }
-// The page stays hidden ("restoring", early.js) until the first row of kept photos is drawn: up to then a card would
-// show an empty frame and its ads no cells' worth of anything. About 20 ms a photo; early.js gives up after 1.5 s.
+// The page stays hidden ("restoring", early.js) until the first kept photo is drawn: up to then its card would show an
+// empty frame and the ad cells nothing. Not the whole first row: a slow phone (6x CPU) hit early.js's 1.5 s failsafe.
 function restoredShown() { if (!restoredDrawn) { restoredDrawn = true; requestAnimationFrame(layout); } }
 async function fillRestored(list) {
   for (const [k, it] of list.entries()) {
-    if (k === (+$("main").style.getPropertyValue("--cols") || 4)) restoredShown(); // the first row is drawn
+    if (k === 1) restoredShown(); // the first one is drawn (its ads can come); the rest follow a frame or two apart
     const st = it.st; delete it.st;
     if (!items.includes(it)) continue;
     try {
