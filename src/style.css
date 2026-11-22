@@ -157,7 +157,8 @@ body.has-work .hero h1, body.has-work .sub { display: none; }
   background: transparent; border-color: color-mix(in srgb, var(--accent) 55%, transparent); font-weight: 600; }
 @media (hover: hover) { .adcard:hover .adcta { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); } }
 @container (max-width: 240px) { .adline { font-size: 12px; } .adcard .adcta { --h: var(--h-sm); --px: 14px; --fs: 13px; } .adpic { gap: 6px; padding: 8px; } }
-@container (max-width: 150px) { .adcard .adcta { --px: 10px; --fs: 12px; } }
+@container (max-width: 180px) { .adcard .adcta { --px: 8px; --fs: 12px; } }
+@container (max-width: 140px) { .adcard .adcta { --px: 6px; --fs: 11px; letter-spacing: -.02em; } .adcard .bar { padding-inline: 4px; } } /* "Put it on an ornament" fits a narrow card */
 
 /* Full-window drop target with corner brackets. */
 .dropzone { position: fixed; inset: 0; z-index: 20; display: none; place-items: center; pointer-events: none;
@@ -186,6 +187,8 @@ body.hot .c { animation: squeeze .8s ease-in-out infinite alternate; }
 body:not(.has-work) main { flex: none; margin-top: auto; }
 body:not(.has-work) .hero { margin-top: 0; }
 body:not(.has-work) .foot { margin: 56px auto auto; padding-bottom: max(24px, 8vh); }
+/* The hero already says it on the empty page; the footer says it once the hero is gone. */
+body.app:not(.has-work) .foot .privacy { display: none; }
 
 /* The count's line is always there (empty until shown), so it never pushes the cards; digits are equal width. */
 .countline { min-height: 1.45em; }
@@ -250,8 +253,6 @@ body.app:not(.has-work) main { flex: none; margin-top: auto; }
 @container (max-width: 151px) { .rates { display: none; } }
 @container (max-width: 130px) { .crop { display: none; } } /* the smallest cards (a dozen photos on a phone): Download keeps room for its icon */
 /* Phones with photos on screen: the grid gets the room; the privacy note is on the empty page and in the headline. */
-/* Phones with photos on screen: only what a product click does stays (the ads sit right above it). */
-@media (max-width: 600px) { body.app.has-work .foot .pv-long { display: none; } }
 /* Short screens (a phone on its side): the wordmark moves beside the buttons, the privacy note goes (it is on the
    empty page), and the spacing tightens, so the cards get the height. */
 @media (max-height: 520px) {
@@ -259,7 +260,6 @@ body.app:not(.has-work) main { flex: none; margin-top: auto; }
   body.app:not(.has-work) .hero { gap: 12px; }
   body.app:not(.has-work) .hero h1 { font-size: 36px; }
   body.app:not(.has-work) .foot { margin-top: 12px; padding-block: 8px; }
-  body.app.has-work .foot .pv-long { display: none; }
   body.app.has-work .foot { padding: 6px 16px; }
   body.app.has-work .grid { padding-top: 12px; }
 }

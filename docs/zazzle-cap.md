@@ -1,7 +1,7 @@
 # Sending the cut-out to Zazzle (Create-a-Product) — findings, design, prototype
 
 Status 2026-11-21: on by default on branch `kevin-claude/zazzle-context-bf01ce` (`?zazzlecap=0` turns it off).
-Kevin dropped the "Send to Zazzle / Don't send" question: clicking a Zazzle card implies it, and the footer says so.
+Kevin dropped the "Send to Zazzle / Don't send" question: clicking a Zazzle card implies it, and the button says "Put it on a mug".
 The site copy is updated to match (section 3).
 
 ## 1. Findings
@@ -118,15 +118,14 @@ a PNG for an hour. Mitigations:
 
 ## 3. Copy (changed 2026-11-21)
 
-The promise is now "photos are cut out on your device" (always true), and the footer says what a product click does:
-"Photos are cut out in this tab and never uploaded. Clicking a product takes that cut-out to Zazzle: our server holds
-it until Zazzle has it, an hour at most. If you paste a link, …". Changed: `src/index.html` (meta, og, JSON-LD, hero,
-footer), `src/remove-bg-alternative/index.html` (meta, lede, table, FAQ in JSON-LD and on the page), `README.md`,
-`package.json`, `src/_headers` and `src/app.js` comments, `CLAUDE.md`. The how-to page is unchanged ("without
-uploading it" and "the photo stays on your device" describe removing the background, which stays true).
-On phones with photos on screen the footer keeps only "Clicking a product takes that cut-out to Zazzle." (the rest
-is hidden for space). "An hour at most" must match `TTL_MS`; "until Zazzle has it" holds because the GET deletes our copy 20 s after the
-first fetch.
+The promise is now "Photos are cut out on your device." (always true), and that is the whole footer line (Kevin:
+concise, no vendor name). The button says what the click does ("Put it on a mug"). The remove.bg page's FAQ "Are my
+photos uploaded?" gives the details: clicking a product ad takes that cut-out to Zazzle, and our server holds it
+until Zazzle has it, an hour at most. Also changed: `src/index.html` meta, og, JSON-LD and hero;
+`src/remove-bg-alternative/index.html` meta, lede and table; `README.md`, `package.json`, the `src/_headers` and
+`src/app.js` comments, and `CLAUDE.md`. The how-to page is unchanged: "without uploading it" and "the photo stays on
+your device" describe removing the background, which stays true. "An hour at most" must match `TTL_MS`. "Until Zazzle
+has it" holds because the GET deletes our copy 20 s after the first fetch.
 
 ## 4. Zazzle setup (done 2026-11-21, in Kevin's account, with his OK)
 

@@ -1156,7 +1156,7 @@ function buildAd(i) {
   });
   a.addEventListener("pointerleave", () => { a.tilt.t = 0; });
   // Zazzle: the click takes the cut-out shown on the card along and opens that product with it on (capSend; the
-  // footer says so). Other partners, an animated GIF, or ?zazzlecap=0: the partner opens in a new tab and this tab
+  // button says "Put it on a mug"). Other partners, an animated GIF, or ?zazzlecap=0: the partner opens in a new tab and this tab
   // saves the cut-out, ready to upload there (Kevin, 2026-11-21). Phones: Safari won't save from a tab that went to
   // the background, so the share sheet comes first (Save Image), then the partner opens.
   a.addEventListener("click", async (e) => {
@@ -1190,8 +1190,8 @@ function buildAd(i) {
 }
 
 /* ---------- the cut-out goes along to Zazzle ----------
-   Clicking a Zazzle card takes the cut-out it shows to Zazzle (Kevin, 2026-11-21: the click implies it; the footer
-   says so). Only that one cut-out: the page PUTs it to /api/cap/<random key> and opens /go/zazzle?...&k=<key>, which
+   Clicking a Zazzle card takes the cut-out it shows to Zazzle (Kevin, 2026-11-21: the click implies it; the button
+   says "Put it on a mug", the remove.bg page's FAQ has the details). Only that one cut-out: the page PUTs it to /api/cap/<random key> and opens /go/zazzle?...&k=<key>, which
    waits for it and sends the visitor to the Zazzle product with the cut-out on it. Zazzle copies it; our copy is
    deleted 20 s after Zazzle fetches it, or after an hour if it never does. ?zazzlecap=0 turns it off (the card then
    saves the cut-out here and opens Zazzle, as before). See docs/zazzle-cap.md. */
