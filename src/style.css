@@ -87,7 +87,8 @@ main { flex: 1; width: 100%; max-width: 1100px; margin: 0 auto; padding: 0 max(2
 
 /* Once photos arrive, the hero steps aside. */
 body.has-work .hero { margin-top: 0; gap: 12px; }
-body.has-work .hero h1, body.has-work .sub { display: none; }
+body.has-work .sub { display: none; }
+body.has-work .hero h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; } /* out of sight, still the page heading */
 /* The step from the empty page to photos (landing() in app.js, a View Transition): the headline fades out first, the
    buttons glide up to their place, then the page with the cards fades in, so the headline never sits over a card.
    About 0.3 s; skipped with reduced motion. */

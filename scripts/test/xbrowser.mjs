@@ -171,7 +171,7 @@ async function target(name, t, base) {
 
   await check(pre + "first photo: View Transition to the grid, cut-out, Download", async () => {
     await addPhotos(p, ["one"]);
-    await p.waitForFunction(() => document.body.classList.contains("has-work") && getComputedStyle(document.querySelector("#hero h1")).display === "none", null, { timeout: 5000 });
+    await p.waitForFunction(() => document.body.classList.contains("has-work") && document.querySelector("#hero h1").getBoundingClientRect().height <= 1, null, { timeout: 5000 });
     await allDone(p, 1, 180000);
     const [f] = await save(t, p, () => p.click("#grid > .card .dl"));
     assert(f.kind === "png", "got " + f.kind); assert(f.name === "one-goodbye-bg.png", "name " + f.name);

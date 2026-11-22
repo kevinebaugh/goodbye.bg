@@ -1299,7 +1299,12 @@ function bgPicker(it, crop, x) {
   pick.append(px, pager(pick));
   [...pick.children].forEach((c, i) => c.style.setProperty("--i", i));
   pick.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); closePick(true); } });
+  leaveCloses(it, pick);
   return pick;
+}
+// Tabbing out of an open row closes it (it used to stay open and keep that card's controls hidden).
+function leaveCloses(it, row) {
+  row.addEventListener("focusout", (e) => { const to = e.relatedTarget; if (picking === it && to && !it.el.bar.contains(to) && !$("dock").contains(to)) closePick(); });
 }
 /* Pages: a row in the bar's place (swatches, options) never scrolls and never cuts a control off. What doesn't fit
    goes on the next page; › at the end turns the page, and on the last page it points back to the first. */
@@ -1433,8 +1438,10 @@ function paintBg(it) {
   c.classList.toggle("set", !!own); c.setAttribute("aria-pressed", String(!!own));
   c.firstChild.style.background = own ? v : "";
   if (own) c.querySelector("input").value = v;
+  c.querySelector("input").setAttribute("aria-label", own ? "Any colour, chosen" : "Any colour"); // the label's aria-pressed isn't announced
   const ph = pick.querySelector(".photo"), psw = ph.firstChild;
   ph.setAttribute("aria-pressed", String(kind === "img")); ph.classList.toggle("set", !!back?.thumb);
+  ph.querySelector("input").setAttribute("aria-label", kind === "img" ? "Your photo as the background, chosen" : "Your photo as the background");
   psw.style.backgroundImage = back?.thumb ? `url("${back.thumb}")` : "";
   const label = `Background: ${bgName(v)}`;
   bgb.setAttribute("aria-label", label); bgb.title = label;
@@ -1491,6 +1498,7 @@ function optsRow(it) {
   o.append(done, size, dim, margin, shadow, all, webp, pager(o)); // most used first
   [...o.children].forEach((c, i) => c.style.setProperty("--i", i));
   o.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); closePick(true); } });
+  leaveCloses(it, o);
   return o;
 }
 function openOpts(it) {
@@ -1978,7 +1986,9 @@ function buildAd(i) {
   a.querySelector(".adline").textContent = x.line;
   a.querySelector(".adcta").textContent = cta;
   a.querySelector(".adtag").textContent = adLabel;
-  a.setAttribute("aria-label", `${adLabel}: ${x.line} ${cta}${CAP && p.id === "zazzle" ? `. Takes this cut-out to ${p.name}.` : ""}`);
+  // The name starts with the words on screen (voice control); the rest is the description.
+  a.setAttribute("aria-label", `${adLabel}: ${cta}`);
+  a.setAttribute("aria-description", `${x.line}${CAP && p.id === "zazzle" ? ` Takes this cut-out to ${p.name}.` : ""}`);
   $("grid").insertBefore(a, $("tools"));
   adWatch.observe(a); // the cut-out beat starts once ads are on screen
   a.tilt = { phase: i * 2.1, mix: 0, x: 0, y: 0, t: 0 }; // each card sways out of step with the others
