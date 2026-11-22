@@ -1197,6 +1197,7 @@ function makeCard(it) {
   x.addEventListener("click", () => { dbg("removed"); clearInterval(it.quip);
     const at = items.indexOf(it); if (at < 0) return;
     items.splice(at, 1);
+    if (picking === it) closePick(); // removed from inside its own picker (narrow cards): no full-size PNG for it later
     // Focus goes to the next card's Remove (or the one before), not back to the top of the page.
     const next = card.nextElementSibling, near = next?.querySelector?.(".x") || card.previousElementSibling?.querySelector?.(".x");
     card.remove(); swapAds(it); forget(it); sync();
@@ -1283,7 +1284,7 @@ function closePick(refocus = false) {
   const { bar, bgb, pick } = it.el;
   const { opts } = it.el, inside = pick.contains(document.activeElement) || opts.contains(document.activeElement);
   bar.classList.remove("picking"); pick.hidden = true; opts.hidden = true; bgb.setAttribute("aria-expanded", "false");
-  if (PHONE && it.mask && !it.png && !it.anim && !running && !retrying) png(it); // the share sheet needs it ready at the tap
+  if (PHONE && items.includes(it) && it.mask && !it.png && !it.anim && !running && !retrying) png(it); // the share sheet needs it ready at the tap
   if (refocus || inside) bgb.focus({ preventScroll: true });
 }
 // A tap anywhere else puts the bar back.
