@@ -109,9 +109,14 @@ async function preview(b, orientation) {
     try {
       const jpg = b.subarray(j.start, j.end);
       const bmp = await createImageBitmap(new Blob([jpg], { type: "image/jpeg" }));
-      // A JPEG with its own EXIF orientation (iPhone ProRAW DNGs, portrait shots on some cameras) is turned by the
-      // browser already; turning it again by the RAW's orientation would put it sideways.
-      if (orientation === 1 || exifOrientation(jpg) > 1) return bmp;
+      // A JPEG with its own EXIF orientation (iPhone ProRAW DNGs, portrait shots on some cameras) follows that one, not
+      // the RAW's. Chrome turns it while decoding, other browsers may not: sides swapped from the stored size means
+      // it was turned already (2 to 4 can't be told apart that way; those are left as decoded).
+      const own = exifOrientation(jpg);
+      if (own > 1) {
+        if (own < 5 || bmp.width !== j.w) return bmp;
+        orientation = own;
+      } else if (orientation === 1) return bmp;
       const c = new OffscreenCanvas(bmp.width, bmp.height); c.getContext("2d").drawImage(bmp, 0, 0); bmp.close();
       return orient(c.getContext("2d").getImageData(0, 0, c.width, c.height), orientation);
     } catch {}
