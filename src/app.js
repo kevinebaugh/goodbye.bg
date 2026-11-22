@@ -146,7 +146,7 @@ const TEST = !!navigator.webdriver || TEST_SWITCHES.some((k) => params.has(k));
 // ?debug=1: report each step to /api/diag (server log only) to find where a phone crashes.
 // Step names and numbers only, never photo data. Off for everyone else.
 const DEBUG = params.has("debug"), dbgId = Math.random().toString(36).slice(2, 7);
-const PP = params.get("pp") === "1"; // experiment: refineEdge (the guided filter on hair and fur) after BiRefNet
+const PP = params.get("pp") !== "0"; // refineEdge (the guided filter on hair and fur) after BiRefNet; ?pp=0 turns it off
 let dbgN = 0;
 // Every page keeps its last 20 steps (names and numbers only, never photo data). They leave the device only
 // inside a crash or error report (see working() and report()); with ?debug=1 each step is also sent live.
@@ -455,7 +455,7 @@ function infer(input) {
   });
 }
 
-async function segment(bitmap) {
+async function segment(bitmap, edge = true) { // edge: false skips refineEdge (GIF frames)
   await loadModel();
   dbg("segment", { w: bitmap.width, h: bitmap.height, coi: self.crossOriginIsolated, threads: THREADS });
   const c = new OffscreenCanvas(RES, RES), x = c.getContext("2d");
@@ -490,8 +490,9 @@ async function segment(bitmap) {
   if (!birefnet && params.get("haze") !== "0") hardenHaze(id); // ISNet only; ?haze=0 shows it without
   let box = subjectBox(id);
   for (let i = 3; i < id.data.length; i += 4) id.data[i] = LUT[id.data[i]]; // soften the edge once, here
-  // ?pp=1, BiRefNet only (on ISNet it changed next to nothing): the guided filter on hair and fur.
-  if (PP && birefnet) { const t = performance.now(), px1 = refineEdge(px, id); dbg("edge", { ms: Math.round(performance.now() - t), px: px1 }); if (px1) box = subjectBox(id); } // the crop follows the new mask
+  // BiRefNet only (on ISNet it changed next to nothing): the guided filter on hair and fur. Not on GIF frames: their
+  // transparency is on/off, so the soft edge it redraws is thrown away, and a GIF has up to 100 frames.
+  if (PP && edge && birefnet) { const t = performance.now(), px1 = refineEdge(px, id); dbg("edge", { ms: Math.round(performance.now() - t), px: px1 }); if (px1) box = subjectBox(id); } // the crop follows the new mask
   const mask = new OffscreenCanvas(RES, RES);
   mask.getContext("2d").putImageData(id, 0, 0);
   mask.box = box;
@@ -602,22 +603,20 @@ function hardenHaze(img) {
   for (let i = 0; i < n; i++) d[i * 4 + 3] = wide[i] ? soft[i] : a[i];
 }
 
-// Square erosion or growth by r of a 0/1 map at RES x RES: a pixel takes `hit` if any pixel within r has it. Outside the
-// frame counts as 0.
-function morph(src, r, grow) {
-  const n = RES * RES, t = new Uint8Array(n), out = new Uint8Array(n), hit = grow ? 1 : 0;
-  for (let y = 0; y < RES; y++) {
-    const o = y * RES; let last = grow ? -1e9 : -1;
-    for (let x = 0; x < RES; x++) { if (src[o + x] === hit) last = x; t[o + x] = x - last <= r ? hit : 1 - hit; }
-    last = grow ? 1e9 : RES;
-    for (let x = RES - 1; x >= 0; x--) { if (src[o + x] === hit) last = x; if (last - x <= r) t[o + x] = hit; }
+// Square erosion or growth by r of a 0/1 map (RES x RES unless given): a pixel takes `hit` if any pixel within r has it.
+// Outside the map counts as 0. Columns go a row at a time (one `last` per column), which keeps memory access in order.
+function morph(src, r, grow, w = RES, h = RES) {
+  const t = new Uint8Array(w * h), out = new Uint8Array(w * h), hit = grow ? 1 : 0, last = new Int32Array(w);
+  for (let y = 0; y < h; y++) {
+    const o = y * w; let l = grow ? -1e9 : -1;
+    for (let x = 0; x < w; x++) { if (src[o + x] === hit) l = x; t[o + x] = x - l <= r ? hit : 1 - hit; }
+    l = grow ? 1e9 : w;
+    for (let x = w - 1; x >= 0; x--) { if (src[o + x] === hit) l = x; if (l - x <= r) t[o + x] = hit; }
   }
-  for (let x = 0; x < RES; x++) {
-    let last = grow ? -1e9 : -1;
-    for (let y = 0; y < RES; y++) { if (t[y * RES + x] === hit) last = y; out[y * RES + x] = y - last <= r ? hit : 1 - hit; }
-    last = grow ? 1e9 : RES;
-    for (let y = RES - 1; y >= 0; y--) { if (t[y * RES + x] === hit) last = y; if (last - y <= r) out[y * RES + x] = hit; }
-  }
+  last.fill(grow ? -1e9 : -1);
+  for (let y = 0; y < h; y++) { const o = y * w; for (let x = 0; x < w; x++) { if (t[o + x] === hit) last[x] = y; out[o + x] = y - last[x] <= r ? hit : 1 - hit; } }
+  last.fill(grow ? 1e9 : h);
+  for (let y = h - 1; y >= 0; y--) { const o = y * w; for (let x = 0; x < w; x++) { if (t[o + x] === hit) last[x] = y; if (last[x] - y <= r) out[o + x] = hit; } }
   return out;
 }
 
@@ -641,45 +640,118 @@ function boxBlur(src, r, w = RES, h = RES) {
 // Hair, fur and fluff: the model draws them as a soft blur; the photo knows where each strand is. A guided filter
 // (He et al. 2010, the photo's colour as the guide, radius 4, eps 0.001) redraws the mask there from the photo. Only
 // where the soft zone is wider than 3 px, so a crisp edge (a white headboard on a pale sky, a wire) stays as the model drew
-// it. Measured on the 923 test photos with real masks (docs/mask-postprocess.md). Experiment: ?pp=1.
+// it. Measured on the 923 test photos with real masks (docs/mask-postprocess.md). On by default for BiRefNet; ?pp=0 is off.
 // px: the photo at RES x RES (RGBA), img: the mask after the edge curve. Returns how many pixels it changed.
+// Phone-sized cost: it streams a row at a time (about 11 MB at most, against 217 MB for whole-box planes), and the window
+// statistics are worked out only near the wide soft zones. Bit for bit the same mask as the plain filter: those sums are
+// of colours and products of colours, which a double holds exactly in any order; the a/b blur keeps the plain filter's order.
 function refineEdge(px, img) {
-  const n = RES * RES, d = img.data, r = 4, eps = 1e-3;
-  let soft = new Uint8Array(n);
-  for (let i = 0; i < n; i++) soft[i] = d[i * 4 + 3] > 0 && d[i * 4 + 3] < 255 ? 1 : 0;
-  soft = morph(morph(soft, 1, false), 1, true); // only wide soft zones
+  const d = img.data, r = 4, eps = 1e-3, k = 1 / (2 * r + 1);
+  // The opening runs on the soft pixels' box alone: nothing outside it is soft, so it equals the whole-frame opening.
   let x0 = RES, y0 = RES, x1 = -1, y1 = -1;
-  for (let i = 0; i < n; i++) if (soft[i]) { const x = i % RES, y = (i / RES) | 0; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  for (let y = 0, i = 3; y < RES; y++) for (let x = 0; x < RES; x++, i += 4) if (d[i] > 0 && d[i] < 255) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; y1 = y; }
   if (x1 < 0) return 0;
-  const band = morph(soft, r, true), wide = morph(soft, 2 * r, true);
-  // Work on the soft zones' box plus 3r: every window the result needs lies inside it, so it equals the whole-frame filter.
-  x0 = Math.max(0, x0 - 3 * r); y0 = Math.max(0, y0 - 3 * r); x1 = Math.min(RES - 1, x1 + 3 * r); y1 = Math.min(RES - 1, y1 + 3 * r);
-  const w = x1 - x0 + 1, h = y1 - y0 + 1, cn = w * h, bl = (a) => boxBlur(a, r, w, h), idx = new Int32Array(cn);
-  for (let y = 0, j = 0; y < h; y++) for (let x = 0; x < w; x++) idx[j++] = (y0 + y) * RES + x0 + x;
-  const at = (j) => idx[j];
-  const prod = (a, b) => { const o = new Float32Array(cn); for (let j = 0; j < cn; j++) o[j] = a[j] * b[j]; return o; };
-  const ch = [0, 1, 2].map((c) => { const a = new Float32Array(cn); for (let j = 0; j < cn; j++) a[j] = px[at(j) * 4 + c] / 255; return a; });
-  const p = new Float32Array(cn); for (let j = 0; j < cn; j++) p[j] = d[at(j) * 4 + 3] / 255;
-  const m = ch.map(bl), mp = bl(p), mIp = ch.map((a) => bl(prod(a, p)));
-  const [rr, rg, rb, gg, gb, bb] = [[0, 0], [0, 1], [0, 2], [1, 1], [1, 2], [2, 2]].map(([a, b]) => bl(prod(ch[a], ch[b])));
-  const A = [new Float32Array(cn), new Float32Array(cn), new Float32Array(cn)], B = new Float32Array(cn);
-  for (let j = 0; j < cn; j++) {
-    if (!wide[at(j)]) { B[j] = p[j]; continue; } // far from the edge: a = 0, b = the mask
-    // Per window: a = (cov(I) + eps)^-1 cov(I, p), b = mean(p) - a . mean(I); the 3x3 inverse by cofactors.
-    const m0 = m[0][j], m1 = m[1][j], m2 = m[2][j];
-    const a = rr[j] - m0 * m0 + eps, b = rg[j] - m0 * m1, c = rb[j] - m0 * m2, e = gg[j] - m1 * m1 + eps, f = gb[j] - m1 * m2, g = bb[j] - m2 * m2 + eps;
-    const c0 = mIp[0][j] - m0 * mp[j], c1 = mIp[1][j] - m1 * mp[j], c2 = mIp[2][j] - m2 * mp[j];
-    const i00 = e * g - f * f, i01 = c * f - b * g, i02 = b * f - c * e, i11 = a * g - c * c, i12 = b * c - a * f, i22 = a * e - b * b, det = a * i00 + b * i01 + c * i02;
-    const a0 = (i00 * c0 + i01 * c1 + i02 * c2) / det, a1 = (i01 * c0 + i11 * c1 + i12 * c2) / det, a2 = (i02 * c0 + i12 * c1 + i22 * c2) / det;
-    A[0][j] = a0; A[1][j] = a1; A[2][j] = a2; B[j] = mp[j] - a0 * m0 - a1 * m1 - a2 * m2;
-  }
-  const mA = A.map(bl), mB = bl(B);
+  const w = x1 - x0 + 1, h = y1 - y0 + 1;
+  let soft = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const a = d[((y0 + y) * RES + x0 + x) * 4 + 3]; soft[y * w + x] = a > 0 && a < 255 ? 1 : 0; }
+  soft = morph(morph(soft, 1, false, w, h), 1, true, w, h); // only wide soft zones
+  let a0 = w, b0 = h, a1 = -1, b1 = -1;
+  for (let y = 0, j = 0; y < h; y++) for (let x = 0; x < w; x++, j++) if (soft[j]) { if (x < a0) a0 = x; if (x > a1) a1 = x; if (y < b0) b0 = y; b1 = y; }
+  if (a1 < 0) return 0;
+  // Work on the wide soft zones' box plus 3r: every window the result needs lies inside it, so it equals the whole-frame filter.
+  const bx = Math.max(0, x0 + a0 - 3 * r), by = Math.max(0, y0 + b0 - 3 * r);
+  const bw = Math.min(RES - 1, x0 + a1 + 3 * r) - bx + 1, bh = Math.min(RES - 1, y0 + b1 + 3 * r) - by + 1;
+  const sb = new Uint8Array(bw * bh);
+  for (let y = b0; y <= b1; y++) for (let x = a0; x <= a1; x++) if (soft[y * w + x]) sb[(y0 + y - by) * bw + x0 + x - bx] = 1;
+  const band = morph(sb, r, true, bw, bh), wide = morph(sb, 2 * r, true, bw, bh);
+  // Window statistics are needed at wide pixels; their row blurs, within r rows of one (`near`). Both as runs per row.
+  const near = new Uint8Array(bw * bh), lastY = new Int32Array(bw).fill(-1e9);
+  for (let y = 0, j = 0; y < bh; y++) for (let x = 0; x < bw; x++, j++) { if (wide[j]) lastY[x] = y; near[j] = y - lastY[x] <= r ? 1 : 0; }
+  lastY.fill(1e9);
+  for (let y = bh - 1; y >= 0; y--) for (let x = 0, j = y * bw; x < bw; x++, j++) { if (wide[j]) lastY[x] = y; if (lastY[x] - y <= r) near[j] = 1; }
+  const runs = (map) => { // row y's runs: seg[at[y]] .. seg[at[y + 1]], pairs of first and last column
+    const at = new Int32Array(bh + 1), seg = [];
+    for (let y = 0, j = 0; y < bh; y++) { at[y] = seg.length; for (let x = 0; x < bw; x++, j++) if (map[j] && (x === 0 || !map[j - 1])) { let e = x; while (e + 1 < bw && map[j + e + 1 - x]) e++; seg.push(x, e); } }
+    at[bh] = seg.length; return { at, seg: Int32Array.from(seg) };
+  };
+  const W = runs(wide), NR = runs(near);
+  const cx = (v) => Math.min(bw - 1, Math.max(0, v)), cy = (v) => Math.min(bh - 1, Math.max(0, v)), R = 2 * r + 2; // rings of R rows
+  // boxBlur's row pass from column u to v: t[o + x] = the mean of src over x - r .. x + r (clamped), the same sums in the same order.
+  const rowBlur = (src, t, o, u, v) => {
+    let s = 0, x = u;
+    for (let i = -r; i <= r; i++) s += src[cx(u + i)];
+    for (; x < v && x < r; x++) { t[o + x] = s * k; s += src[cx(x + r + 1)] - src[cx(x - r)]; }
+    for (; x < v && x + r + 1 < bw; x++) { t[o + x] = s * k; s += src[x + r + 1] - src[x - r]; }
+    for (; x < v; x++) { t[o + x] = s * k; s += src[cx(x + r + 1)] - src[cx(x - r)]; }
+    t[o + v] = s * k;
+  };
+
   let changed = 0;
-  for (let j = 0; j < cn; j++) {
-    const i = at(j);
-    if (!band[i]) continue;
-    const v = Math.round(Math.max(0, Math.min(1, mA[0][j] * ch[0][j] + mA[1][j] * ch[1][j] + mA[2][j] * ch[2][j] + mB[j])) * 255);
-    if (v !== d[i * 4 + 3]) { d[i * 4 + 3] = v; changed++; }
+  // Last: the mask = mean(a) . I + mean(b), within r of the wide soft zones. The a/b blur runs over the whole box in
+  // boxBlur's order (these sums are not exact, so their order matters).
+  const ring = [0, 1, 2, 3].map(() => new Float32Array(R * bw)), outAB = [0, 1, 2, 3].map(() => new Float32Array(bw)), SAB = new Float64Array(4 * bw);
+  let nextAB = 0;
+  const feedAB = (y, rows) => {
+    for (let c = 0; c < 4; c++) rowBlur(rows[c], ring[c], (y % R) * bw, 0, bw - 1);
+    for (; nextAB < bh && (nextAB + r + 1 <= y || y === bh - 1); nextAB++) {
+      const yy = nextAB, lo = (cy(yy - r) % R) * bw, hi = (cy(yy + r + 1) % R) * bw;
+      for (let c = 0; c < 4; c++) {
+        const t = ring[c], o = outAB[c], so = c * bw;
+        if (!yy) for (let x = 0; x < bw; x++) { let s = 0; for (let v = -r; v <= r; v++) s += t[(cy(v) % R) * bw + x]; SAB[so + x] = s; }
+        for (let x = 0; x < bw; x++) { o[x] = SAB[so + x] * k; SAB[so + x] += t[hi + x] - t[lo + x]; }
+      }
+      const [mA0, mA1, mA2, mB] = outAB;
+      for (let x = 0, o = yy * bw, g = ((by + yy) * RES + bx) * 4; x < bw; x++, g += 4) {
+        if (!band[o + x]) continue;
+        const v = Math.round(Math.max(0, Math.min(1, mA0[x] * Math.fround(px[g] / 255) + mA1[x] * Math.fround(px[g + 1] / 255) + mA2[x] * Math.fround(px[g + 2] / 255) + mB[x])) * 255);
+        if (v !== d[g + 3]) { d[g + 3] = v; changed++; }
+      }
+    }
+  };
+
+  // Per window: a = (cov(I) + eps)^-1 cov(I, p), b = mean(p) - a . mean(I); the 3x3 inverse by cofactors. Away from the
+  // wide soft zones a = 0 and b = the mask, and no statistics are needed.
+  const C = 13, st = [], S = [], M = [], last = new Int32Array(bw).fill(-2), ab = [0, 1, 2, 3].map(() => new Float32Array(bw));
+  for (let c = 0; c < C; c++) { st.push(new Float32Array(R * bw)); S.push(new Float64Array(bw)); M.push(new Float32Array(bw)); }
+  const [M0, M1, M2, MP, Q0, Q1, Q2, RR, RG, RB, GG, GB, BB] = M, [A0, A1, A2, B] = ab;
+  const emitStats = (y) => {
+    for (let x = 0, g = ((by + y) * RES + bx) * 4 + 3; x < bw; x++, g += 4) { A0[x] = A1[x] = A2[x] = 0; B[x] = d[g] / 255; }
+    const add = (cy(y + r) % R) * bw, sub = (cy(y - r - 1) % R) * bw;
+    for (let q = W.at[y]; q < W.at[y + 1]; q += 2) {
+      const u = W.seg[q], v = W.seg[q + 1];
+      for (let c = 0; c < C; c++) { // window means down each column: a running sum, or a fresh one where the column restarts
+        const t = st[c], s = S[c], m = M[c];
+        for (let x = u; x <= v; x++) {
+          if (last[x] === y - 1) s[x] += t[add + x] - t[sub + x];
+          else { let z = 0; for (let dy = -r; dy <= r; dy++) z += t[(cy(y + dy) % R) * bw + x]; s[x] = z; }
+          m[x] = s[x] * k;
+        }
+      }
+      for (let x = u; x <= v; x++) {
+        last[x] = y;
+        const m0 = M0[x], m1 = M1[x], m2 = M2[x], mp = MP[x];
+        const a = RR[x] - m0 * m0 + eps, b = RG[x] - m0 * m1, c = RB[x] - m0 * m2, e = GG[x] - m1 * m1 + eps, f = GB[x] - m1 * m2, gg = BB[x] - m2 * m2 + eps;
+        const c0 = Q0[x] - m0 * mp, c1 = Q1[x] - m1 * mp, c2 = Q2[x] - m2 * mp;
+        const i00 = e * gg - f * f, i01 = c * f - b * gg, i02 = b * f - c * e, i11 = a * gg - c * c, i12 = b * c - a * f, i22 = a * e - b * b, det = a * i00 + b * i01 + c * i02;
+        const p0 = (i00 * c0 + i01 * c1 + i02 * c2) / det, p1 = (i01 * c0 + i11 * c1 + i12 * c2) / det, p2 = (i02 * c0 + i12 * c1 + i22 * c2) / det;
+        A0[x] = p0; A1[x] = p1; A2[x] = p2; B[x] = mp - p0 * m0 - p1 * m1 - p2 * m2;
+      }
+    }
+    feedAB(y, ab);
+  };
+
+  // First: the photo's colour I, the mask p and their products, a row at a time, blurred along the row where `near`.
+  const rows = Array.from({ length: C }, () => new Float32Array(bw)), [I0, I1, I2, P] = rows, pairs = [[0, 0], [0, 1], [0, 2], [1, 1], [1, 2], [2, 2]];
+  let next = 0;
+  for (let f = 0; f < bh; f++) {
+    for (let q = NR.at[f]; q < NR.at[f + 1]; q += 2) {
+      const u = NR.seg[q], v = NR.seg[q + 1], il = Math.max(0, u - r), ir = Math.min(bw - 1, v + r);
+      for (let x = il, g = ((by + f) * RES + bx + il) * 4; x <= ir; x++, g += 4) { I0[x] = px[g] / 255; I1[x] = px[g + 1] / 255; I2[x] = px[g + 2] / 255; P[x] = d[g + 3] / 255; }
+      for (let c = 0; c < 3; c++) { const I = rows[c], o = rows[4 + c]; for (let x = il; x <= ir; x++) o[x] = I[x] * P[x]; }
+      for (let p = 0; p < 6; p++) { const I = rows[pairs[p][0]], J = rows[pairs[p][1]], o = rows[7 + p]; for (let x = il; x <= ir; x++) o[x] = I[x] * J[x]; }
+      for (let c = 0; c < C; c++) rowBlur(rows[c], st[c], (f % R) * bw, u, v);
+    }
+    for (; next < bh && (next + r <= f || f === bh - 1); next++) emitStats(next);
   }
   return changed;
 }
@@ -1075,7 +1147,7 @@ async function animate(it) {
     if (!items.includes(it)) return;
     say(it, t("Frame {i} of {n}", { i: i + 1, n: frames.length }));
     working("gif", it);
-    const m = await segment(frames[i].canvas);
+    const m = await segment(frames[i].canvas, false);
     out.push({ rgba: cut(m, frames[i].canvas), delay: frames[i].delay });
     frames[i].canvas = null; // done with it (memory)
   }
@@ -1841,7 +1913,7 @@ async function run() {
       startQuips(it);
       await nextFrame();
       working(engineReady ? "model" : "load", it);
-      try { it.mask = await segment(it.bmp); finished++; }
+      try { it.mask = await segment(it.bmp, !it.anim); finished++; }
       catch (e) { if (!items.includes(it)) continue; console.error(e); report("run-failed", e, it); fail(it, t("Could not process this image.")); continue; } // removed meanwhile: not a failure
       if (!it.mask.box) { it.mask = null; fail(it, t("No clear subject in this photo.")); continue; }
       it.ms = lastMs; it.engine = lastEngine;
