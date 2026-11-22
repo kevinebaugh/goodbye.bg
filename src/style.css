@@ -394,11 +394,14 @@ body.app:not(.has-work) main { flex: none; margin-top: auto; }
 @container (max-width: 147px) { .rates { display: none; } .bgs .sw2 { display: none; } }
 @container (max-width: 119px) { .picky .bar > .x { display: none; } .bgs .px { display: grid; } .bgs .pcrop, .bgs .sw2, .bgs .custom { display: none; } .bgs { padding: 0 4px; } }
 /* Blur and your photo need room in the picker: the extra palette colours go first, then any colour (phones in
-   portrait, 165 px: crop, see-through, white, blur, your photo, size, remove), the crop toggle, then size. */
+   portrait, 165 px, keep it: crop, see-through, white, any colour, blur, your photo, size, remove), the crop toggle,
+   then size. */
 @container (max-width: 356px) { .bgs .sw4 { display: none; } }
 @container (max-width: 260px) { .bgs .sw3 { display: none; } }
 @container (max-width: 215px) { .bgs .sw2 { display: none; } }
-@container (max-width: 205px) { .bgs .custom { display: none; } }
+@container (max-width: 205px) { .bgs { gap: 0; } }
+@container (max-width: 183px) { .swb { --d: 19px; } }
+@container (max-width: 159px) { .bgs .custom { display: none; } }
 @container (max-width: 130px) { .bgs .pcrop { display: none; } }
 @container (max-width: 119px) { .bgs .photo, .bgs .more { display: none; } }
 /* The quip stays two lines at the bar's height: phone cards hide remove while their photo is worked on;
