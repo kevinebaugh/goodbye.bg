@@ -168,10 +168,13 @@ body.has-work .hero h1, body.has-work .sub { display: none; }
   text-decoration: none; color: inherit; container-type: inline-size; animation: fade .4s ease-out; }
 /* Until its product is drawn (app.js): a soft shimmering placeholder where the product goes. */
 .adcard { animation-fill-mode: both; }
+.adcard.back { animation: none; } /* kept photos coming back: the ads are simply there, like the photos */
 .adcard.loading .adart { opacity: 0; --s: .94; }
-.adcard.loading .adpic::after { content: ""; position: absolute; inset: 26% 24% 18%; border-radius: 22px; background: color-mix(in srgb, var(--ink) 8%, transparent);
+/* The placeholder fades out as the product fades in (no empty frame between them). */
+.adcard .adpic::after { content: ""; position: absolute; inset: 26% 24% 18%; border-radius: 22px; background: color-mix(in srgb, var(--ink) 8%, transparent);
   background-image: linear-gradient(100deg, transparent 35%, color-mix(in srgb, var(--ink) 10%, transparent) 50%, transparent 65%);
-  background-size: 250% 100%; animation: shimmer 1.3s ease-in-out infinite; opacity: .9; }
+  background-size: 250% 100%; opacity: 0; transition: opacity .38s ease; pointer-events: none; }
+.adcard.loading .adpic::after { animation: shimmer 1.3s ease-in-out infinite; opacity: .9; transition: none; }
 @keyframes shimmer { from { background-position: 120% 0; } to { background-position: -120% 0; } }
 @media (prefers-reduced-motion: reduce) { .adcard.loading .adpic::after { animation: none; } }
 .adpic { position: relative; height: var(--p, 300px); display: grid; place-content: center; justify-items: center; gap: 10px; padding: 16px; text-align: center;
@@ -218,7 +221,7 @@ body.hot .c { animation: squeeze .8s ease-in-out infinite alternate; }
 .ad iframe { width: 100%; height: 120px; border: 0; display: block; }
 .adlabel { position: absolute; top: -18px; left: 24px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 
-.foot { max-width: 520px; margin: 0 auto; padding: 24px 16px; font-size: 12px; line-height: 1.45; color: var(--muted); /* 4.7:1: no fading */ text-align: center; display: grid; gap: 4px; }
+.foot { width: 100%; max-width: 520px; margin: 0 auto; padding: 24px 16px; font-size: 12px; line-height: 1.45; color: var(--muted); /* 4.7:1: no fading */ text-align: center; display: grid; gap: 4px; }
 .foot a { color: inherit; }
 .foot p { margin: 0; }
 /* Empty page: the hero and footer sit together, a little above the middle, instead of the footer

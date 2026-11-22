@@ -160,7 +160,15 @@ Tested: headless Chrome (reload in a restarted browser, Back still from bfcache)
   so the quip fits two lines; the smallest cards show only the wave. Footer: "Goodbye to N backgrounds since 2026."
 - Kept photos load without jitter: `src/early.js` (first thing in <body>) reads the count `gb-kept` that app.js keeps in
   localStorage and starts the page in its photos layout, grid and footer hidden ("restoring") until layout() has sized the
-  cards (1.5 s failsafe). Restored cards don't pop. A stale count falls back to the landing.
+  cards and the first row of kept photos is drawn (1.5 s failsafe). Restored cards don't pop. A stale count falls back to the landing.
+  Jitter on reload, round 2 (2026-11-22, measured with a CDP script: layout-shift observer, per-frame rects, screencast):
+  the partner list is written into app.js by the build (`%PARTNERS%`; partners.json stays as the fallback), because a
+  fetched list arrived after the kept photos were laid out and the photo shrank from 1 cell to 4 (production, 300 ms
+  latency: CLS 0.08 desktop, 0.24 phone). A layout before the masks were back reset `adsAt`, so restored ads waited the
+  1.1 s reveal pause: now `adsStraight` puts them in the first visible frame, without their entrance (`.adcard.back`);
+  the placeholder crossfades into the product. early.js modulepreloads render3d.mjs. The footer has a fixed width (the
+  count text arriving moved its box). While photos are added, the footer used to land 34 px off and then move: hugFooter
+  measured a card mid pop-in (scaled .92); it reads offsetHeight now. After: CLS 0 to 0.0002 in every case (1 to 4 photos, desktop and phone, light and dark).
 - Remove can be undone for 5 s (Kevin, 2026-11-21): a pill at the bottom, "Removed." + Undo, with a ring on the button that
   runs down (hover or focus pauses it; Cmd/Ctrl+Z works). The stored copy is deleted at once and rewritten on Undo; memory
   is freed when the time is up. One at a time: a second removal settles the first.

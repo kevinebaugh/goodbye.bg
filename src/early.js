@@ -4,6 +4,8 @@
 try {
   if (+localStorage.getItem("gb-kept") > 0) {
     document.body.classList.add("has-work", "restoring");
+    // Kept photos bring their ad cards straight back: fetch the 3D code now, so the products are drawn sooner.
+    const l = document.createElement("link"); l.rel = "modulepreload"; l.href = "render3d.mjs"; document.head.append(l);
     setTimeout(() => document.body.classList.remove("restoring"), 1500); // never hide the page for long, whatever happens
   }
 } catch {}

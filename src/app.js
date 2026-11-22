@@ -55,6 +55,7 @@ const QUIPS = [
 
 const $ = (id) => document.getElementById(id);
 const items = [];
+let restoredDrawn = false; // kept photos: the first row is drawn (fillRestored), the page may show
 
 // A Safari tab left open can come back hours later showing an old build without asking the server.
 // When the page comes back into view with no photos on it, compare builds and reload if it is stale.
@@ -1259,8 +1260,9 @@ function layout() {
   placeAds(n, scroll ? 0 : Math.ceil(slots / c) * c - n);
   requestAnimationFrame(() => {
     hugFooter(scroll ? 0 : Math.ceil(slots / c)); // rows, the cells kept for ads included
-    // Kept photos measured: show them a frame later, once the footer sits in place (no slide in from the bottom).
-    if (document.body.classList.contains("restoring")) requestAnimationFrame(() => document.body.classList.remove("restoring"));
+    // Kept photos measured and the first row drawn: show them a frame later, once the footer sits in place (no slide
+    // in from the bottom) and the ads have their cards (no empty cells that fill a moment later).
+    if (restoredDrawn && document.body.classList.contains("restoring")) requestAnimationFrame(() => document.body.classList.remove("restoring"));
   });
 }
 // When the cards fill the width before the height (a phone in portrait), the grid has empty space under them. The
@@ -1271,7 +1273,7 @@ function hugFooter(rows) {
   if (!f) return;
   let slack = 0;
   if (rows && card) { // measured from the rows, so the footer doesn't jump when the ads fill their kept cells
-    const r = g.getBoundingClientRect(), h = card.getBoundingClientRect().height;
+    const r = g.getBoundingClientRect(), h = card.offsetHeight; // not its box on screen: a card popping in is scaled down
     const used = (parseFloat(getComputedStyle(g).paddingTop) || 0) + rows * h + (rows - 1) * GAP + (all.hidden ? 0 : GAP + all.offsetHeight);
     slack = Math.max(0, Math.floor(r.height - used));
   }
@@ -1290,7 +1292,10 @@ const adEls = [];
 const adLabel = Math.random() < 0.5 ? "Ad" : "Sponsored";
 let adCta = -1;
 const adSeen = new Set();
-fetch("/partners.json").then((r) => r.json()).then((list) => {
+// The list is written into this file by the build (%PARTNERS%), so the first layout already knows whether ads take
+// cells: fetched, it arrived after kept photos were laid out and the photo shrank from 1 cell to 4 (jitter on reload).
+const PARTNERS = "%PARTNERS%";
+(PARTNERS.startsWith("[") ? Promise.resolve(JSON.parse(PARTNERS)) : fetch("/partners.json").then((r) => r.json())).then((list) => {
   const ok = list.filter((p) => p.live || params.has("adtest")); // ?adtest=1 shows partners before their links exist
   adPartner = ok.length ? ok[Math.floor(Math.random() * ok.length)] : null;
   // The partner's live variants in random order, so each card gets a different one (?adv=<v> puts one first).
@@ -1309,10 +1314,17 @@ let adDrawnAt = "";
 // The first cut-out gets the stage: the ads wait a beat after it (its wipe takes about 0.9 s), then come in.
 const ADS_PAUSE = 1100;
 let adsAt = 0;
+// Kept photos coming back: no reveal plays, so the ads are there from the first frame, without the pause or the
+// entrance (adsQuiet). A flag of its own: a layout before the masks are back resets adsAt.
+let adsStraight = false, adsQuiet = false;
 function placeAds(n, free) {
   let want = adReady() && n >= 1 ? free : 0;
-  if (!want) adsAt = 0;
-  else if (!adsAt) { adsAt = performance.now() + ADS_PAUSE; setTimeout(() => requestAnimationFrame(layout), ADS_PAUSE); want = 0; }
+  if (!want) { adsAt = 0; adsQuiet = false; }
+  else if (!adsAt) {
+    adsQuiet = adsStraight; adsStraight = false;
+    adsAt = performance.now() + (adsQuiet ? 0 : ADS_PAUSE);
+    if (!adsQuiet) { setTimeout(() => requestAnimationFrame(layout), ADS_PAUSE); want = 0; }
+  }
   else if (performance.now() < adsAt) want = 0;
   // The cards changed size (rotation, a resized window): redraw the products, or they'd stretch.
   const size = $("main").style.getPropertyValue("--p");
@@ -1373,8 +1385,8 @@ function buildAd(i) {
   });
   // The card comes in with a shimmering placeholder where the product goes, and the product rises in once
   // drawn (never sooner than a moment after the card, one card after another).
-  const born = performance.now(), at = 450 + i * 160;
-  a.style.animationDelay = `${i * 120}ms`;
+  const born = performance.now(), at = adsQuiet ? 0 : 450 + i * 160;
+  if (adsQuiet) a.classList.add("back"); else a.style.animationDelay = `${i * 120}ms`;
   const show = () => setTimeout(unveil, Math.max(0, born + at - performance.now()));
   const unveil = () => {
     if (!a.classList.contains("loading")) return;
@@ -1860,8 +1872,12 @@ function unrestore() {
   if (!items.length) document.body.classList.remove("has-work");
   try { localStorage.setItem("gb-kept", "0"); } catch {}
 }
+// The page stays hidden ("restoring", early.js) until the first row of kept photos is drawn: up to then a card would
+// show an empty frame and its ads no cells' worth of anything. About 20 ms a photo; early.js gives up after 1.5 s.
+function restoredShown() { if (!restoredDrawn) { restoredDrawn = true; requestAnimationFrame(layout); } }
 async function fillRestored(list) {
-  for (const it of list) {
+  for (const [k, it] of list.entries()) {
+    if (k === (+$("main").style.getPropertyValue("--cols") || 4)) restoredShown(); // the first row is drawn
     const st = it.st; delete it.st;
     if (!items.includes(it)) continue;
     try {
@@ -1872,10 +1888,11 @@ async function fillRestored(list) {
       if (st.first) it.first = { rect: st.first.rect, mask: await maskFrom(st.first.mask) };
       if (!items.includes(it)) { bmp.close(); continue; }
       it.bmp = bmp; // only now: a running batch picks up photos that have a bitmap and no mask
-      if (it.mask) { ready(it); if (it.vote) showVote(it, it.vote); if (!adsAt) adsAt = performance.now(); } // no reveal to wait for: ads come straight in
+      if (it.mask) { ready(it); if (it.vote) showVote(it, it.vote); adsStraight = true; } // no reveal to wait for: ads come straight in
       drawCard(it);
     } catch (e) { console.warn("Could not bring back a kept photo", e); fail(it, "Could not open this image."); }
   }
+  restoredShown();
   sync();
   if (items.some((i) => i.bmp && !i.mask && !i.failed)) run(); // the tab went away mid-batch: carry on
   else if (!IOS) preparePngs(); // iPhone: not next to an engine that may be starting (a Download tap builds its PNG)

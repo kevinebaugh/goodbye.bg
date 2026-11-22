@@ -92,11 +92,14 @@ cpSync(join(nm, "libheif-js/LICENSE"), join(dist, "libheif-LICENSE.txt"));
 
 // Ad partners the page may show (public fields only; the affiliate links stay in the /go redirect).
 const { PARTNERS } = await import(join(root, "lib/partners.mjs"));
-writeFileSync(join(dist, "partners.json"), JSON.stringify(PARTNERS.map(({ id, name, emoji, v = "a", product, line, cta, ctas, url, variants = [] }) => ({
+const partnersJson = JSON.stringify(PARTNERS.map(({ id, name, emoji, v = "a", product, line, cta, ctas, url, variants = [] }) => ({
   id, name, emoji, live: !!url,
   variants: [{ v, product, line, cta, ctas, live: !!url },
     ...variants.map((x) => ({ v: x.v, product: x.product, line: x.line, cta: x.cta, ctas: x.ctas, live: !!(url && x.url) }))],
-}))));
+})));
+writeFileSync(join(dist, "partners.json"), partnersJson);
+// Also inside app.js, so the first layout knows which grid cells the ads take (no fetch to wait for).
+writeFileSync(join(dist, "app.js"), readFileSync(join(dist, "app.js"), "utf8").replace('"%PARTNERS%"', () => JSON.stringify(partnersJson)));
 
 console.log("Model:");
 writeParts(join(dist, "m", "isnet"), isnet, "isnet");
