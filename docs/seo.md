@@ -74,9 +74,8 @@ Status 2026-11-23:
   GitHub description, homepage and topics; `llms.txt` has a section for assistants (the `?url=` link); AI crawlers
   are all allowed (Cloudflare's AI-bot blocking is off).
 - **List pull requests opened 2026-11-23** (Kevin's GitHub, disclosed as his): diegoleme/awesome-open-source-alternatives#103,
-  atakanaltok/awesome-useful-websites#405, mikbry/awesome-webgpu#145.
-- **Ready, waiting for Kevin's OK:** hemanth/awesome-pwa (Tools and Utilities), mcuking/Awesome-WebAssembly-Applications
-  (Machine Learning); the edits sit in the session scratchpad, easy to redo.
+  atakanaltok/awesome-useful-websites#405, mikbry/awesome-webgpu#145, hemanth/awesome-pwa#655,
+  mcuking/Awesome-WebAssembly-Applications#102.
 - **After launch (they ask for user numbers):** ikaijua/Awesome-AITools (EN and CN READMEs, a row next to remove.bg).
 - **Skipped:** awesome-selfhosted (needs a first release over 4 months old), lissy93/pluja awesome-privacy (their image
   sections are full editors; product ads are a stretch for their rules), Awesome-Design-Tools (unmaintained since 2024).
