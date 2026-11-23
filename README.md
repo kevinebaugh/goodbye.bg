@@ -34,7 +34,7 @@ No IP addresses, no identifiers.
 Two exceptions:
 - **A pasted link** is fetched by our server and passed straight back. Nothing is kept.
 - **Clicking a Zazzle product card** uploads that one result so it appears on the product. Zazzle copies it, and ours
-  is deleted 20 seconds later (an hour at most). Details: [`docs/zazzle-cap.md`](docs/zazzle-cap.md).
+  is deleted 20 seconds later (if Zazzle never fetches it, it's unreachable after an hour and gone within a day). Details: [`docs/zazzle-cap.md`](docs/zazzle-cap.md).
 
 ## Ads
 
