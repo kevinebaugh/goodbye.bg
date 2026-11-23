@@ -414,10 +414,9 @@ a difference.
 
 ## Open items outside the code
 
-- Zazzle answered 2026-11-23 (`docs/zazzle-cap.md`): no `rf=` needed, Direct-only templates fine, and §2.1.3 is about
-  marketplace content someone else earns a royalty on, so it shouldn't apply to us; but the reply says "does include"
-  (likely a typo for "does not") and names no rate. Confirm both. Also test a returning visitor on a Zazzle link after
-  our copy is deleted.
+- Zazzle, settled 2026-11-23 (`docs/zazzle-cap.md`): sales through the product cards earn the **self-promotion rate**
+  (35–50% of net referral sales); §2.1.3 doesn't apply. No `rf=` needed, Direct-only templates fine, and returning
+  visitors keep their photo after our copy is deleted (tested).
 - Domain: goodbye.bg live since 2026-11-23 (Netim, trustee service; Cloudflare nameservers). Custom domain on
   `goodbye-bg-git`; zone settings: SSL Full, Always Use HTTPS on, Email Obfuscation off, Browser Cache TTL "respect
   existing headers" (it forced 4 h on sw.js), minimum TLS 1.2, HSTS 6 months (no preload); pages.dev redirects to it (Bulk Redirect, branch previews excluded); www 301s to it (placeholder A record + Single Redirect). Mail: receive only, Cloudflare Email Routing (bing@goodbye.bg forwards to Kevin's Gmail; Cloudflare's MX, SPF and DKIM records); DMARC reject, so nobody can send as goodbye.bg. DNSSEC: Cloudflare signs (key tag 2371, alg 13, digest 2); live once the DS record is at Netim. Google Search Console: domain property goodbye.bg, verified by a google-site-verification TXT record (keep it), sitemap submitted 2026-11-23 (15 pages), indexing requested for the five English pages. IndexNow key: `src/<32 hex>.txt` (see `docs/seo.md` §5). Bing Webmaster Tools: goodbye.bg added by hand (Kevin's Google sign-in; Microsoft blocked a new account for bing@goodbye.bg), verified by a CNAME record (keep it), sitemap submitted 2026-11-23.

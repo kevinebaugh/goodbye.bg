@@ -49,9 +49,9 @@ Name (we use `image1`) and fit or fill. Then Done → Sell It, and set "Make pro
 
 **Zazzle's answer (James Chapman, api.help@zazzle.com, 2026-11-23), to Kevin's four questions of 2026-11-21:**
 1. §2.1.3 "is specifically for Content that might have been published in our marketplace that someone else is earning a
-   royalty for. Your use case does include that exclusion." Read with the first sentence, "does include" is almost
-   surely a typo for "does not": nobody else earns a royalty on a visitor's photo on Kevin's template. **Not settled
-   until Zazzle confirms in writing**, and the rate was not named (self-promotion is 35–50% of net referral sales).
+   royalty for. Your use case does include that exclusion." **Confirmed in writing the same day, after Kevin asked:
+   "Your use case does not fall under that exclusion. The self-promotion rate applies."** (The self-promotion rate is
+   35–50% of net referral sales, royalty plus referral.)
 2. No `rf=` needed: the referral is tracked to the account automatically when the visitor lands on the page, unless
    they already had an attribution (for example, shopping on Zazzle a week earlier through someone else's link).
    The links as built are right.
@@ -176,8 +176,7 @@ one-day lifecycle rule); the FAQ now says "no one can open it after an hour and 
 
 ## 5. Still for Kevin
 
-1. **Commission question**: answered 2026-11-23 (see section 2), but the key sentence reads "does include that
-   exclusion". Ask Zazzle to confirm it means "does not", and which rate applies.
+1. ~~Commission question~~: settled 2026-11-23. Sales through these links earn the self-promotion rate.
 2. Done 2026-11-21 (Kevin): R2 bucket and its cleanup rule. The binding is in `wrangler.toml`.
 
         npx wrangler r2 bucket create goodbye-bg-cap
