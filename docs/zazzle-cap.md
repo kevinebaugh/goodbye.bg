@@ -47,7 +47,19 @@ Name (we use `image1`) and fit or fill. Then Done → Sell It, and set "Make pro
 - Unconfirmed: maximum size, and the fetcher's user agent or IP.
 - No data URI, POST or upload API exists in any doc.
 
-**Commission: this is the big open question. Ask Zazzle before building templates.**
+**Zazzle's answer (James Chapman, api.help@zazzle.com, 2026-11-23), to Kevin's four questions of 2026-11-21:**
+1. §2.1.3 "is specifically for Content that might have been published in our marketplace that someone else is earning a
+   royalty for. Your use case does include that exclusion." Read with the first sentence, "does include" is almost
+   surely a typo for "does not": nobody else earns a royalty on a visitor's photo on Kevin's template. **Not settled
+   until Zazzle confirms in writing**, and the rate was not named (self-promotion is 35–50% of net referral sales).
+2. No `rf=` needed: the referral is tracked to the account automatically when the visitor lands on the page, unless
+   they already had an attribution (for example, shopping on Zazzle a week earlier through someone else's link).
+   The links as built are right.
+3. Direct-only templates are fine (Public works too).
+4. Zazzle downloads the image on first fetch and it is stored in the visitor's account. Unknown: what happens when
+   someone returns through the same Zazzle link after our copy is deleted (20 s after the fetch). Test it.
+
+**Commission (before 2026-11-23): this was the big open question.**
 - The Associates program became the **Ambassador program on 2025-04-01**.
 - Links to your own store's products, including "Create-a-Product API pages", are "self-promotion" links. The
   agreement says they must carry **no parameters, no `rf=`**, and pay 35–50% of net referral sales (royalty plus
@@ -158,9 +170,8 @@ one-day lifecycle rule); the FAQ now says "no one can open it after an hour and 
 
 ## 5. Still for Kevin
 
-1. **Commission question** (api.help@zazzle.com): do sales through these links earn the self-promotion rate when
-   the image is a visitor's photo (agreement §2.1.3)? The templates exist either way; if the answer is no, the
-   feature still lands visitors on a ready product, but it pays like the plain link or not at all.
+1. **Commission question**: answered 2026-11-23 (see section 2), but the key sentence reads "does include that
+   exclusion". Ask Zazzle to confirm it means "does not", and which rate applies.
 2. Done 2026-11-21 (Kevin): R2 bucket and its cleanup rule. The binding is in `wrangler.toml`.
 
         npx wrangler r2 bucket create goodbye-bg-cap

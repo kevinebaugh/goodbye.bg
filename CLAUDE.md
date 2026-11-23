@@ -321,7 +321,7 @@ and redirects; a POST there counts the card being shown ('adseen').
   10 s for it and redirects to that product's template in Kevin's store goodbyebg. Zazzle copies the image on the
   first fetch; `/cap/<key>.png` deletes ours 20 s later (never fetched: gone after an hour; a lifecycle rule clears
   `cap/` after a day). Upload fails or times out: the usual link, and computers still get the cut-out saved. Clicks
-  that sent one count as 'adcap'. Templates, findings and the open commission question in `docs/zazzle-cap.md`.
+  that sent one count as 'adcap'. Templates, findings and Zazzle's answer on commission in `docs/zazzle-cap.md`.
 - Other partners, GIFs, or `?zazzlecap=0`: the partner opens in a new tab and this tab saves the cut-out on the card
   (`artIt`) as the see-through PNG Download saves (`png`): a download on computers; on phones the share sheet first
   (Safari won't save from a tab that went to the background), then the partner (tested in the iOS Simulator).
@@ -414,7 +414,10 @@ a difference.
 
 ## Open items outside the code
 
-- Zazzle: the commission question (Ambassador agreement §2.1.3, asked of api.help@zazzle.com 2026-11-21) is unanswered.
+- Zazzle answered 2026-11-23 (`docs/zazzle-cap.md`): no `rf=` needed, Direct-only templates fine, and §2.1.3 is about
+  marketplace content someone else earns a royalty on, so it shouldn't apply to us; but the reply says "does include"
+  (likely a typo for "does not") and names no rate. Confirm both. Also test a returning visitor on a Zazzle link after
+  our copy is deleted.
 - Domain: goodbye.bg live since 2026-11-23 (Netim, trustee service; Cloudflare nameservers). Custom domain on
   `goodbye-bg-git`; zone settings: SSL Full, Always Use HTTPS on, Email Obfuscation off, Browser Cache TTL "respect
   existing headers" (it forced 4 h on sw.js), minimum TLS 1.2, HSTS 6 months (no preload); pages.dev redirects to it (Bulk Redirect, branch previews excluded); www 301s to it (placeholder A record + Single Redirect). Mail: receive only, Cloudflare Email Routing (bing@goodbye.bg forwards to Kevin's Gmail; Cloudflare's MX, SPF and DKIM records); DMARC reject, so nobody can send as goodbye.bg. DNSSEC: Cloudflare signs (key tag 2371, alg 13, digest 2); live once the DS record is at Netim. Google Search Console: domain property goodbye.bg, verified by a google-site-verification TXT record (keep it), sitemap submitted 2026-11-23 (15 pages), indexing requested for the five English pages. IndexNow key: `src/<32 hex>.txt` (see `docs/seo.md` §5). Bing Webmaster Tools: goodbye.bg added by hand (Kevin's Google sign-in; Microsoft blocked a new account for bing@goodbye.bg), verified by a CNAME record (keep it), sitemap submitted 2026-11-23.
