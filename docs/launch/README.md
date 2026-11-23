@@ -1,10 +1,9 @@
 # Launch kit
 
 Everything to post goodbye.bg on Product Hunt, Hacker News, Reddit and forums. Nothing here has been posted.
-Pictures and demo taken 2026-11-22 (about 05:15) on `main` at 4bea605, before the app was simplified later that day
-(backgrounds, sizes, margin, shadow, WebP, the crop toggle and the mask editor were taken out on purpose: "It's not a
-full image editor"). **`ph-2`, `ph-3`, `ph-4`, `demo.*` and `social-square-*` show those removed features: re-shoot
-them before posting, or leave them out.** Re-shoot anything else if the page looks different on launch day. Older drafts: `docs/launch-drafts.md` (this file replaces them).
+`ph-2`, `ph-3`, `social-square-*` and `demo.*` re-shot 2026-11-23 with `node scripts/shoot.mjs` (local build, real
+model, product cards on); `ph-1`, `ph-5` and the strip are from 2026-11-22 and still match the page. Re-shoot
+(`npm run dev`, then the script) if the page looks different on launch day. Older drafts: `docs/launch-drafts.md` (this file replaces them).
 
 **Link to use:** `https://goodbye.bg` (live since 2026-11-23; pages.dev redirects to it). Keep `?ref=` on the app page (`/`)
 only: the text pages run no script, so `/remove-bg-alternative/?ref=reddit` is never counted.
@@ -23,8 +22,8 @@ getting that answer, and the traffic that the 1 December shutdown brings. Everyt
    direct sponsor; both are in `docs/ads.md`.
 2. **Friends this week (now to Sunday).** Kevin sends the link with `?ref=friends`; the hourly check watches crashes,
    failed photos, first-photo time and ad clicks. Fix what they hit.
-3. **Before launch (by Friday 27th).** Redirect pages.dev with a 301 (Kevin's OK). Re-shoot the outdated pictures:
-   a batch on the grid and a short demo, with ads shown (they're the business). Kevin checks the site on his iPhone.
+3. **Before launch (by Friday 27th).** Redirect pages.dev with a 301 (Kevin's OK). ~~Re-shoot the outdated pictures~~ (done 2026-11-23:
+   `npm run shoot`). Kevin checks the site on his iPhone.
 4. **Launch.** Show HN **Monday 30 November, 8:00 to 9:30 am ET** (Thanksgiving week is quiet). Product Hunt
    **Tuesday 1 December, 12:01 am PT**, the day remove.bg closes (schedule it by the 27th). Reddit and forum replies
    from now on, one per "what replaces remove.bg?" thread.
@@ -42,12 +41,11 @@ Kevin's photos. Light and dark versions of each.
 | File | Size | Use |
 |---|---|---|
 | `ph-1-before-after-*.png` | 1270x760 | PH gallery 1: one photo before and after (transparent PNG) |
-| `ph-2-seller-*.png` | 1270x760 | **Outdated (removed features).** A teapot on white, Square, 10% margin, shadow |
-| `ph-3-blur-*.png` | 1270x760 | **Outdated (removed features).** The corgi and the car with the background blurred |
-| `ph-4-batch-*.png` | 1270x760 | **Outdated (removed features).** Four photos, four looks (blur, see-through, aqua, white + Square + shadow) |
-| `ph-5-empty-*.png` | 1270x760 | PH gallery 5: the page before any photo |
-| `demo.mp4` / `demo.gif` | 1270x760 / 800 px, 25 s | **Outdated (removed features).** Drop 4 photos, cut out, teapot to white + Square + shadow, corgi to blur, Download all |
-| `social-square-*.png` | 1080x1080 | **Outdated (removed features).** Before/after plus white + shadow, blur, a colour |
+| `ph-2-batch-*.png` | 1270x760 | PH gallery 2: four photos done (corgi, cat, car, teapot) and the product card after them |
+| `ph-3-product-*.png` | 1270x760 | PH gallery 3: two photos and a product card with one of them on it (the business) |
+| `ph-5-empty-*.png` | 1270x760 | PH gallery 4: the page before any photo |
+| `demo.mp4` / `demo.gif` | 1270x760 / 800 px, 16 s | Empty page, four photos added, quips while they work, all four done, a product card that changes product, Download all |
+| `social-square-*.png` | 1080x1080 | Four photos done and a product card |
 | `before-after-strip-*.png` | 1600x900 | Reddit, blog posts, directory listings (also in the repo README) |
 | `../../src/og.png` | 1200x630 | Link previews: the corgi twice, photo then cut-out, an arrow between (2026-11-22; the old split ran through its head) |
 
@@ -55,10 +53,9 @@ Honest notes about the captures:
 - The demo runs in real time on an M-series Mac with WebGPU and **the model already cached** (the four cut-outs are done
   in under 5 s there). A first visit downloads about 120 MB first (model about 90 MB plus a 29 MB
   runtime). Don't say "instant".
-- Ad cards were switched off for the captures. On the live site, 1 to 3 photos are laid out as four cells and product
-  cards fill the empty ones once the batch is done, so `ph-2` (1 photo) and `ph-3` (2 photos) would show ads there.
-  With 4 photos there is no empty cell.
-- The footer count is the live number at capture time (the captures added about 40 cut-outs to it).
+- Product cards are on, as on the live site: one beside 1 to 3 photos, one after the 4th of 4. Which product shows is
+  random, and the label is "Ad" or "Sponsored" at random, as live.
+- The footer count is the live number at capture time (each capture adds to it).
 - The composed images (`ph-1`, the strip) use the PNGs the site itself downloaded.
 - No human portrait: none of the CC0 photos in `CREDITS.md` has a person. A CC0 portrait would make a stronger
   before/after; add it to `CREDITS.md` if you use one.
@@ -104,8 +101,7 @@ Honest notes about the captures:
 
   > Remove the background from any photo, free. It's cut out in your browser, not on a server. Transparent PNG at full resolution, cropped to the subject. Animated GIFs too. Batches with a zip. No account, no watermark. Open source.
 
-- **Gallery order:** ph-1, then new shots of a batch and a demo (ph-2 to ph-4 and demo.mp4 show removed features),
-  then ph-5 (light versions; dark if the page looks better in PH's dark mode).
+- **Gallery order:** ph-1, ph-2, ph-3, demo.mp4, ph-5 (light versions; dark if the page looks better in PH's dark mode).
 - **Maker's first comment** (written for 1 December; on another day change "closes today" to "closes on 1 December"):
 
   > Hi PH, I'm Kevin. I used remove.bg all the time, and it closes today, so I built a replacement that runs on
@@ -117,8 +113,8 @@ Honest notes about the captures:
   > In Chrome on a recent Mac a photo takes well under a second. iPhones run it on the CPU, 5 to 8 seconds a photo.
   > The first visit downloads the model (about 120 MB), then the browser keeps it.
   >
-  > It's free, with no account and no watermark. It pays for itself with product cards (put your cut-out on a mug)
-  > that show up in empty grid spots after a batch. The source is on GitHub under AGPL.
+  > It's free, with no account and no watermark. It pays for itself with product cards (put your photo on a mug)
+  > that sit among your photos once the first one is done. The source is on GitHub under AGPL.
   >
   > Not there yet: an API, an edge brush. Hair is decent, not perfect. Please tell me where it fails on your photos.
 
@@ -153,7 +149,7 @@ Honest notes about the captures:
   > It takes JPG/PNG/WebP/HEIC/TIFF/RAW/ZIP/animated GIF, up to 100 at once on computers with 8 GB or more (50 on phones), and gives
   > back transparent PNGs at the original size, cropped to the subject. Download all streams a zip. Photos are kept in IndexedDB so a reload doesn't lose them.
   >
-  > Money: optional product cards fill empty grid cells after a batch. Clicking a Zazzle card sends that one cut-out
+  > Money: optional product cards sit among the photos (one beside 1 to 3 photos, then one per 6, at most 3). Clicking a Zazzle card sends that one result
   > to Zazzle so it's on the product; nothing else is uploaded. Anonymous counters, no cookies.
   >
   > Missing: API, edge brush. Hair is OK, not great.

@@ -161,8 +161,9 @@ opens the usual link and your computer saves the cut-out instead. `?zazzlecap=0`
 
 ## Ads and affiliate links
 
-The site is free, and the product cards pay for it. They fill empty grid cells once a batch is done (up to three
-photos are laid out as four cells), are marked "Ad", are not in Download all and have no rating.
+The site is free, and the product cards pay for it. They sit among the photos once the first one is done (one beside 1
+to 3 photos, then one after every 6th, at most 3), are marked "Ad" or "Sponsored", are not in Download all and have no
+rating.
 
 - Zazzle is the active partner; the Zazzle links are affiliate links. A partner shows only when its affiliate
   link is set in `lib/partners.mjs` (Printful and Printify are listed there with no link yet, so they do not show).
