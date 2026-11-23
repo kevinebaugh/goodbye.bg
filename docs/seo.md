@@ -73,9 +73,13 @@ Status 2026-11-23:
   the pages whose sitemap `<lastmod>` is today; `-- --all` sends every page); sitemap `<lastmod>` dates from git;
   GitHub description, homepage and topics; `llms.txt` has a section for assistants (the `?url=` link); AI crawlers
   are all allowed (Cloudflare's AI-bot blocking is off).
-- **Lists, ready for pull requests (Kevin's GitHub, his OK first):** diegoleme/awesome-open-source-alternatives
-  (its Remove.bg section lists only rembg), atakanaltok/awesome-useful-websites (background removal entries),
-  mikbry/awesome-webgpu (projects).
+- **List pull requests opened 2026-11-23** (Kevin's GitHub, disclosed as his): diegoleme/awesome-open-source-alternatives#103,
+  atakanaltok/awesome-useful-websites#405, mikbry/awesome-webgpu#145.
+- **Ready, waiting for Kevin's OK:** hemanth/awesome-pwa (Tools and Utilities), mcuking/Awesome-WebAssembly-Applications
+  (Machine Learning); the edits sit in the session scratchpad, easy to redo.
+- **After launch (they ask for user numbers):** ikaijua/Awesome-AITools (EN and CN READMEs, a row next to remove.bg).
+- **Skipped:** awesome-selfhosted (needs a first release over 4 months old), lissy93/pluja awesome-privacy (their image
+  sections are full editors; product ads are a stretch for their rules), Awesome-Design-Tools (unmaintained since 2024).
 - **Need Kevin's accounts:** AlternativeTo (add goodbye.bg as an alternative to remove.bg: the page assistants and
   searchers land on), There's An AI For That, SaaSHub, Futurepedia, Toolify. Product Hunt is in the launch plan.
 
