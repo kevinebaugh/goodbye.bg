@@ -116,7 +116,7 @@ Honest notes about the captures:
   > It's free, with no account and no watermark. It pays for itself with product cards (put your photo on a mug)
   > that sit among your photos once the first one is done. The source is on GitHub under AGPL.
   >
-  > Not there yet: an API, an edge brush. Hair is decent, not perfect. Please tell me where it fails on your photos.
+  > Please tell me where it fails on your photos.
 
 ## Show HN
 
@@ -151,8 +151,6 @@ Honest notes about the captures:
   >
   > Money: optional product cards sit among the photos (one beside 1 to 3 photos, then one per 6, at most 3). Clicking a Zazzle card sends that one result
   > to Zazzle so it's on the product; nothing else is uploaded. Anonymous counters, no cookies.
-  >
-  > Missing: API, edge brush. Hair is OK, not great.
   >
   > Source (AGPL, because ISNet is): https://github.com/kevinebaugh/goodbye.bg
   >
