@@ -15,7 +15,8 @@ Goal (Kevin, 2026-11-23): **$1,000+ a year.** Today the only money is Zazzle, an
 (`docs/zazzle-cap.md`, agreement §2.1.3: maybe no commission on a visitor's own image). So two things matter most:
 getting that answer, and the traffic that the 1 December shutdown brings. Everything else waits.
 
-1. **Zazzle's answer (Kevin, this week).** Follow up on the 2026-11-21 question to api.help@zazzle.com. Also log in
+1. **Zazzle's answer (Kevin, this week).** Zazzle replied 2026-11-23: the exclusion is about marketplace content someone
+   else earns a royalty on, so it likely doesn't apply, but the reply says "does include" and names no rate. Confirm both. Also log in
    to the Ambassador dashboard after the first clicks and see whether any referral or royalty shows up. If the answer
    is no, the fallback is EthicalAds (needs about 50,000 page views a month; exceptions for fast growth) and a
    direct sponsor; both are in `docs/ads.md`.
