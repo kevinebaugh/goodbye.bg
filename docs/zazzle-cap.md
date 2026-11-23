@@ -56,8 +56,14 @@ Name (we use `image1`) and fit or fill. Then Done → Sell It, and set "Make pro
    they already had an attribution (for example, shopping on Zazzle a week earlier through someone else's link).
    The links as built are right.
 3. Direct-only templates are fine (Public works too).
-4. Zazzle downloads the image on first fetch and it is stored in the visitor's account. Unknown: what happens when
-   someone returns through the same Zazzle link after our copy is deleted (20 s after the fetch). Test it.
+4. Zazzle downloads the image on first fetch and it is stored in the visitor's account. Unknown to him: what happens
+   when someone returns through the same Zazzle link after our copy is deleted. **Tested 2026-11-23 on goodbye.bg
+   (ornament, Kevin signed in): it works.** Zazzle redirects the create link to the product page with its own image ID
+   (`t_image1_iid=<uuid>`). After our copy was gone (404), reloading that product page and reopening the original
+   create link (with our dead image URL) both showed the photo: Zazzle maps the original URL to its copy and doesn't
+   fetch again. Switching the ornament style keeps the photo; only Zazzle's style thumbnails show the template's
+   placeholder figure. goodbye.bg is in the declared domains. One failure during the test was our 1-hour TTL: Zazzle
+   first asked for the image over an hour after it was sent ("Image failed to upload"); real clicks open Zazzle at once.
 
 **Commission (before 2026-11-23): this was the big open question.**
 - The Associates program became the **Ambassador program on 2025-04-01**.
