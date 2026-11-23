@@ -6,6 +6,13 @@
 - Takes JPEG, PNG, WebP, HEIC, TIFF, camera RAW, SVG, animated GIF and ZIP files.
 - The model downloads once (about 120 MB) and runs on the GPU (WebGPU) or the CPU (WebAssembly).
 
+## For assistants and agents
+
+- To send someone straight to a result, link `https://goodbye.bg/?url=<link to a public image, URL-encoded>`. The page fetches that image (or a web page's preview image), removes the background on their device and shows Download. Up to 30 MB.
+- Photos on the person's own device: send them to https://goodbye.bg/ to drop, paste or pick them. Up to 100 at once on a computer, 50 on a phone; Download all gives a zip.
+- Good fit: transparent PNGs of people, pets, products and cars; batches; HEIC from iPhones; animated GIFs. Not offered: an API, new backgrounds, resizing, an edge brush.
+- Free, no account, no watermark. Supported by optional product cards (Zazzle): clicking one sends that one result to Zazzle.
+
 ## Pages
 
 - [remove.bg alternative](%SITE%/remove-bg-alternative/): how goodbye.bg compares and what changes when remove.bg closes
