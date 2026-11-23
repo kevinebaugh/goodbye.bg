@@ -11,7 +11,8 @@
     "serve": "node scripts/serve.mjs",
     "test": "node scripts/test/smoke.mjs",
     "test:x": "node scripts/test/xbrowser.mjs",
-    "deploy": "node scripts/build.mjs && wrangler pages deploy dist --project-name goodbye-bg-git --branch main"
+    "deploy": "node scripts/build.mjs && wrangler pages deploy dist --project-name goodbye-bg-git --branch main",
+    "indexnow": "node scripts/indexnow.mjs"
   },
   "devDependencies": {
     "@imgly/background-removal-data": "1.4.5",
