@@ -67,6 +67,18 @@ left for whoever owns that file. Recommended:
 
 ## 5. Off-site (where most of the ranking comes from)
 
+Status 2026-11-23:
+- **Done:** Google Search Console and Bing Webmaster Tools (verified by DNS records, sitemap in, Google indexing
+  requested for the five English pages); IndexNow (`npm run indexnow` after a deploy that changes text pages: sends
+  the pages whose sitemap `<lastmod>` is today; `-- --all` sends every page); sitemap `<lastmod>` dates from git;
+  GitHub description, homepage and topics; `llms.txt` has a section for assistants (the `?url=` link); AI crawlers
+  are all allowed (Cloudflare's AI-bot blocking is off).
+- **Lists, ready for pull requests (Kevin's GitHub, his OK first):** diegoleme/awesome-open-source-alternatives
+  (its Remove.bg section lists only rembg), atakanaltok/awesome-useful-websites (background removal entries),
+  mikbry/awesome-webgpu (projects).
+- **Need Kevin's accounts:** AlternativeTo (add goodbye.bg as an alternative to remove.bg: the page assistants and
+  searchers land on), There's An AI For That, SaaSHub, Futurepedia, Toolify. Product Hunt is in the launch plan.
+
 In order:
 
 1. **Directories and lists of remove.bg alternatives.** Search "remove.bg alternative", "remove.bg shutting

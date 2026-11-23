@@ -17,6 +17,7 @@ Measurements and the history behind the decisions below: `docs/history.md`. Othe
     npm run deploy       # manual fallback: wrangler pages deploy to project goodbye-bg-git
     npm run test         # smoke tests (about 40 s): build, serve, headless Chrome; run before pushing
     node scripts/test/offline.mjs   # offline/install test (about 1.5 min); its upgrade step edits dist/: rebuild after
+    npm run indexnow     # after a deploy that changed text pages: tells Bing and others (IndexNow); -- --all for every page
     npm run test:x       # WebKit (computer + iPhone) and Firefox via Playwright (about 2 min); once: npx playwright install webkit firefox
 
 Deploys: Cloudflare Pages project `goodbye-bg-git` builds from GitHub. Every push to `main`
@@ -416,7 +417,7 @@ a difference.
 - Zazzle: the commission question (Ambassador agreement §2.1.3, asked of api.help@zazzle.com 2026-11-21) is unanswered.
 - Domain: goodbye.bg live since 2026-11-23 (Netim, trustee service; Cloudflare nameservers). Custom domain on
   `goodbye-bg-git`; zone settings: SSL Full, Always Use HTTPS on, Email Obfuscation off, Browser Cache TTL "respect
-  existing headers" (it forced 4 h on sw.js), minimum TLS 1.2, HSTS 6 months (no preload); pages.dev redirects to it (Bulk Redirect, branch previews excluded); www 301s to it (placeholder A record + Single Redirect). Mail: receive only, Cloudflare Email Routing (bing@goodbye.bg forwards to Kevin's Gmail; Cloudflare's MX, SPF and DKIM records); DMARC reject, so nobody can send as goodbye.bg. DNSSEC: Cloudflare signs (key tag 2371, alg 13, digest 2); live once the DS record is at Netim. Google Search Console: domain property goodbye.bg, verified by a google-site-verification TXT record (keep it), sitemap submitted 2026-11-23 (15 pages), indexing requested for the five English pages. Bing Webmaster Tools: goodbye.bg added by hand (Kevin's Google sign-in; Microsoft blocked a new account for bing@goodbye.bg), verified by a CNAME record (keep it), sitemap submitted 2026-11-23.
+  existing headers" (it forced 4 h on sw.js), minimum TLS 1.2, HSTS 6 months (no preload); pages.dev redirects to it (Bulk Redirect, branch previews excluded); www 301s to it (placeholder A record + Single Redirect). Mail: receive only, Cloudflare Email Routing (bing@goodbye.bg forwards to Kevin's Gmail; Cloudflare's MX, SPF and DKIM records); DMARC reject, so nobody can send as goodbye.bg. DNSSEC: Cloudflare signs (key tag 2371, alg 13, digest 2); live once the DS record is at Netim. Google Search Console: domain property goodbye.bg, verified by a google-site-verification TXT record (keep it), sitemap submitted 2026-11-23 (15 pages), indexing requested for the five English pages. IndexNow key: `src/<32 hex>.txt` (see `docs/seo.md` §5). Bing Webmaster Tools: goodbye.bg added by hand (Kevin's Google sign-in; Microsoft blocked a new account for bing@goodbye.bg), verified by a CNAME record (keep it), sitemap submitted 2026-11-23.
   `SITE` in scripts/build.mjs is the one place the origin lives. Steps and rollback: `docs/domain-cutover.md`.
 - Git email: repo uses the GitHub noreply address. The first commit (aa3d4bd) still has the work email;
   fix with `git commit --amend --reset-author --no-edit && git push --force-with-lease` if wanted.
