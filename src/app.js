@@ -366,6 +366,31 @@ function saveNote() { try { localStorage.setItem(CRASH_KEY, JSON.stringify({ ...
 function report(step, e, it) {
   postJSON("/api/crash", JSON.stringify({ ...noteFor(step, it), error: String(e?.message || e).slice(0, 160), trail: trailText() }));
 }
+// Script errors the page survives, which nobody would otherwise hear about (a dead button, a stalled photo): where
+// (file:line:col of this site's own scripts; extensions and other sites are skipped) and the message, at most 5
+// different ones a visit, as "js-error" crash reports. No photo data.
+const jsSeen = new Set();
+function jsError(msg, stack) {
+  if (/ResizeObserver loop/.test(msg)) return; // the browser's harmless notice, not an error
+  const at = String(stack || "").match(new RegExp(`${location.origin.replace(/[.]/g, "\\.")}/([^\\s)?#]+\\.m?js:\\d+:\\d+)`));
+  if (!at) return; // not one of this site's scripts
+  const error = `${at[1]} ${msg}`;
+  if (jsSeen.has(error) || jsSeen.size >= 5) return;
+  jsSeen.add(error);
+  postJSON("/api/crash", JSON.stringify({ ...noteFor("js-error"), error: error.slice(0, 160), trail: trailText() }));
+}
+addEventListener("error", (e) => jsError(e.message, e.error?.stack || `${e.filename}:${e.lineno}:${e.colno}`));
+addEventListener("unhandledrejection", (e) => jsError(String(e.reason?.message || e.reason).slice(0, 120), e.reason?.stack));
+// How photos go (Kevin, 2026-11-23: more visibility while friends try it): done, failed, no subject, saved, all saved;
+// the engine, its run time, the time from adding the photo to its result (the visit's first photo includes the model
+// download) and megapixels (for "saveall", how many photos). Sent to /api/rate as kind "stat". Never the photo.
+let statFirst = true;
+function stat(what, it, n) {
+  const first = it && ["done", "failed", "nosubject"].includes(what) && statFirst;
+  if (first) statFirst = false;
+  postJSON("/api/rate", JSON.stringify({ kind: "stat", what, engine: it?.engine || engineTag(), first, ms: it?.ms || 0,
+    wait: it?.t0 ? Math.round(performance.now() - it.t0) : 0, mp: n ?? (it ? mpOf(it) : 0), ...(TEST && { t: 1 }) }));
+}
 // Cleared only once nothing is working: no batch, no 👎 retry, no PNG being built.
 let retrying = 0, pngBusy = 0;
 function rested() { if (running || retrying || pngBusy) return; note = null; try { localStorage.removeItem(CRASH_KEY); } catch {} }
@@ -1103,7 +1128,7 @@ async function addSources(list, origin = "") {
   // All cards appear at once, so the layout settles once instead of jumping with every photo.
   const cards = document.createDocumentFragment(); // the batch goes on top, in the order it was picked
   const batch = list.map((src, i) => {
-    const it = { id: ++uid, key: top + i, name: "image", bmp: null, blob: null, w: 0, h: 0, mask: null };
+    const it = { id: ++uid, key: top + i, name: "image", bmp: null, blob: null, w: 0, h: 0, mask: null, t0: performance.now() };
     items.push(it);
     cards.append(makeCard(it));
     named(it, src instanceof Blob ? baseName(src.name) : baseName(String(src).startsWith("data:") ? "pasted" : String(src), true));
@@ -1286,6 +1311,7 @@ function makeCard(it) {
     else if (near) near.focus({ preventScroll: true }); else $("pick").focus({ preventScroll: true }); });
   dl.addEventListener("click", async () => {
     if (it.saving) return; // already on it
+    stat("save", it);
     it.saving = true; tick();
     // A big photo takes a few seconds to build at full size: the button shimmers meanwhile (not for a quick one).
     const slow = setTimeout(() => dl.setAttribute("aria-busy", "true"), 150);
@@ -1462,16 +1488,16 @@ async function run() {
         // The model didn't arrive (offline, a dropped connection): nothing wrong with the photos. They wait, still
         // kept, and the batch starts again when the connection is back (they used to fail one by one and be forgotten).
         if (e?.pre) { clearInterval(it.quip); it.el.card.classList.remove("working"); it.el.card.classList.add("queued"); noModel = true; break; }
-        console.error(e); report("run-failed", e, it); fail(it, t("Could not process this image.")); continue;
+        console.error(e); report("run-failed", e, it); stat("failed", it); fail(it, t("Could not process this image.")); continue;
       }
       finally { inPhoto = false; }
-      if (!it.mask.box) { it.mask = null; fail(it, t("No clear subject.")); continue; }
+      if (!it.mask.box) { it.mask = null; stat("nosubject", it); fail(it, t("No clear subject.")); continue; }
       it.ms = lastMs; it.engine = lastEngine;
       // Removed meanwhile: Undo finishes it (undoRemove). A GIF cut short starts over (its frames were let go).
       if (!items.includes(it)) { it.unfinished = true; if (it.anim) it.mask = null; continue; }
       if (it.anim) try { await animate(it); } catch (e) { console.error(e); report("gif-failed", e, it); it.anim = null; it.png = null; }
       if (!items.includes(it)) { it.unfinished = true; if (it.anim && !it.gifUrl) it.mask = null; continue; }
-      ready(it); dbg("shown"); keep(it);
+      ready(it); dbg("shown"); keep(it); stat("done", it);
       { const left = items.filter((i) => i.bmp && !i.mask && !i.failed).length; announce(left ? t("{name}: background removed. {n} to go.", { name: it.name, n: left }) : t("{name}: background removed.", { name: it.name })); }
       dbg("reveal"); reveal(it); sync(); tick(); milestone(it);
     }
@@ -2266,6 +2292,7 @@ $("all").addEventListener("click", async () => {
 async function saveAll() {
   // In the order on screen (newest batch first), not the order they were added: the zip lists them as the grid shows them.
   const done = [...$("grid").children].map((card) => items.find((i) => i.el.card === card)).filter((i) => i?.mask), used = new Set();
+  stat("saveall", null, done.length);
   const names = done.map((it) => { // photos with the same name get -2, -3, ...
     let name = outName(it);
     for (let k = 2; used.has(name); k++) name = outName(it, k);

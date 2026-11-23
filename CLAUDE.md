@@ -348,6 +348,12 @@ Anonymous counts the page sends (never photo data), to Workers Analytics Engine 
 - Crash reports to `/api/crash`: the page leaves a note in localStorage while working on a photo; the next visit sends
   it if the tab died (blob2 engine, blob3 step, blob4 device, blob6 the last 20 steps, double1 photos done, double2
   megapixels). GPU step-downs are sent at once.
+- How photos go (`stat()` in app.js, `/api/rate` with `kind: "stat"`; Kevin, 2026-11-23): blob1 done/failed/nosubject/save/saveall,
+  blob2 engine, blob3 first/next (the visit's first photo includes the model download), blob4 device; double1 model ms,
+  double2 ms from adding the photo to its result, double3 megapixels (saveall: how many photos).
+- Script errors the page survives go to `/api/crash` as step `js-error`: blob5 starts with file:line:col (minified build:
+  look up the column in that deploy's file), only this site's scripts, at most 5 a visit, "ResizeObserver loop" skipped.
+  The smoke test fails on any crash report, so a new script error shows up there first.
 - Page views: the first GET `/api/count?view=1&from=<host>` writes blob1 'view', blob2 device, blob3 referring host,
   blob4 country (no IP, no cookies). Launch links can carry `?ref=<tag>` (or `utm_source`), sent as `from=ref.<tag>`
   and then taken out of the address bar. A Pages Function on `/` was avoided: `_headers` (COEP/COOP) would not apply.
@@ -373,6 +379,8 @@ Queries (`POST /accounts/<account>/analytics_engine/sql`, text/plain body):
     FROM goodbye_bg_ratings WHERE blob1 = 'view' GROUP BY day, device, from_site ORDER BY day DESC
     SELECT blob1 AS kind, blob2 AS partner, blob5 AS variant, count() AS n
     FROM goodbye_bg_ratings WHERE blob1 IN ('adseen','adclick') GROUP BY kind, partner, variant
+    SELECT blob1 AS what, blob3 AS first, blob4 AS device, blob2 AS engine, count() AS n, avg(double2) AS wait_ms
+    FROM goodbye_bg_ratings WHERE index1 = 'stat' GROUP BY what, first, device, engine ORDER BY n DESC
     SELECT blob2 AS lang, blob1 AS vote, count() AS n
     FROM goodbye_bg_ratings WHERE blob1 IN ('tr-up','tr-down') GROUP BY lang, vote
 
