@@ -12,9 +12,9 @@ const PART = 20 * 1024 * 1024; // Cloudflare Pages allows 25 MiB per file
 rmSync(dist, { recursive: true, force: true });
 cpSync(join(root, "src"), dist, { recursive: true });
 
-// Public origin for canonical links, the sitemap and structured data. Switch to https://goodbye.bg
-// once the domain resolves (and 301 pages.dev to it; see docs/seo.md).
-const SITE = process.env.SITE || "https://goodbye-bg-git.pages.dev";
+// Public origin for canonical links, the sitemap, structured data and link previews (live since 2026-11-23;
+// pages.dev redirects to it, see docs/domain-cutover.md).
+const SITE = process.env.SITE || "https://goodbye.bg";
 // The text pages, English and translated (src/<lang>/<page>/index.html, see docs/i18n.md).
 // A text page is any <slug>/index.html (or <lang>/<slug>/index.html) that holds the hreflang placeholder.
 const TEXT_PAGES = readdirSync(dist, { recursive: true }).filter((f) => /^([a-z-]+\/){1,2}index\.html$/.test(f) && readFileSync(join(dist, f), "utf8").includes("<!--%HREFLANG%-->")).sort();

@@ -1,6 +1,6 @@
 # Moving goodbye.bg from pages.dev to goodbye.bg
 
-Written 2026-11-22 against `origin/main` (9278576). Nothing here has been done. Do it when Netim says the domain is registered
+**Done 2026-11-23** (custom domain, zone settings including Browser Cache TTL, code, Bulk Redirect). Written 2026-11-22 against `origin/main` (9278576). Do it when Netim says the domain is registered
 (the trustee ID check is the only thing it waits on). Budget 15 minutes of your time, plus waiting for DNS and the certificate.
 
 Order matters: serve the domain first, switch the site's own URLs second, redirect pages.dev last. Each step can be undone

@@ -53,13 +53,9 @@ left for whoever owns that file. Recommended:
   results only for government and health sites, so this helps understanding, not snippets.
 - **done** Strict CSP on the new pages (no scripts at all).
 - **Site origin lives in one place**: `SITE` in `scripts/build.mjs` fills `%SITE%` in the files above. It
-  is `https://goodbye-bg-git.pages.dev` until goodbye.bg resolves. When the domain is live:
-  1. Change `SITE` to `https://goodbye.bg`, and change the hard-coded `og:url` and `og:image` in
-     `src/index.html` to match. Push.
-  2. 301 every `goodbye-bg-git.pages.dev` path to the same path on goodbye.bg (a Cloudflare Bulk Redirect,
-     or a `functions/_middleware.js` host check). Without it the two hosts split ranking.
-  3. Add goodbye.bg to Google Search Console (DNS verification, no tag on the page) and Bing Webmaster Tools,
-     submit the sitemap, and use the Change of Address tool if pages.dev was verified there first.
+  is `https://goodbye.bg` since 2026-11-23 (done per `docs/domain-cutover.md`: custom domain, the site's URLs, and a
+  Bulk Redirect from pages.dev; never a `functions/_middleware.js`, it would drop COOP/COEP). Search Console and Bing:
+  see that file.
 - Preview deployments (`<branch>.goodbye-bg-git.pages.dev`) must stay out of the index. Cloudflare adds
   `X-Robots-Tag: noindex` to them; check with `curl -I` after each new branch.
 - **done** (2026-11-22) **Core Web Vitals.** Measured: LCP 1.2 s mobile / 0.3 s desktop, CLS 0, TBT 0, Lighthouse 100.

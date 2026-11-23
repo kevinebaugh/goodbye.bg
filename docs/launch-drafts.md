@@ -5,7 +5,7 @@ Superseded by `docs/launch/README.md` (2026-11-22): tighter copy, checked agains
 Drafts for Kevin to post himself. Nothing here has been posted. Written 2026-11-21.
 
 Before posting:
-- Use `https://goodbye.bg` if the domain is live, else `https://goodbye-bg-git.pages.dev`. Not both.
+- Use `https://goodbye.bg` (live since 2026-11-23).
 - Re-check every claim against the site that day (features land fast). Facts used below: free, no account, no
   watermark; cut out in the browser (WebGPU on computers, WebAssembly on phones); PNG at the photo's own resolution
   (16 MP cap in Safari/iPhone, 64 MP elsewhere); batches up to 50 per drop with a zip; HEIC, TIFF, camera RAW, ZIP

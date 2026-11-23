@@ -6,8 +6,7 @@ Pictures and demo taken 2026-11-22 (about 05:15) on `main` at 4bea605, before th
 full image editor"). **`ph-2`, `ph-3`, `ph-4`, `demo.*` and `social-square-*` show those removed features: re-shoot
 them before posting, or leave them out.** Re-shoot anything else if the page looks different on launch day. Older drafts: `docs/launch-drafts.md` (this file replaces them).
 
-**Link to use:** `https://goodbye.bg` if it resolves on the day, else `https://goodbye-bg-git.pages.dev`. Never both
-in one post. The links below use pages.dev; swap the host if the domain is live. Keep `?ref=` on the app page (`/`)
+**Link to use:** `https://goodbye.bg` (live since 2026-11-23; pages.dev redirects to it). Keep `?ref=` on the app page (`/`)
 only: the text pages run no script, so `/remove-bg-alternative/?ref=reddit` is never counted.
 
 ## Files
@@ -72,7 +71,7 @@ Honest notes about the captures:
 ## Product Hunt
 
 - **Name:** goodbye.bg
-- **Link:** `https://goodbye-bg-git.pages.dev/?ref=ph` (PH may add its own `ref=producthunt`; the page reads the first `ref`)
+- **Link:** `https://goodbye.bg/?ref=ph` (PH may add its own `ref=producthunt`; the page reads the first `ref`)
 - **Tagline** (49/60): `Free background remover that runs in your browser`
 - **Topics:** Photography, Design Tools, Privacy, Open Source
 - **Description** (228/260):
@@ -100,7 +99,7 @@ Honest notes about the captures:
 ## Show HN
 
 - **Title** (68/80): `Show HN: goodbye.bg – a background remover that runs in your browser`
-- **URL:** `https://goodbye-bg-git.pages.dev/?ref=hn`
+- **URL:** `https://goodbye.bg/?ref=hn`
 - **First comment** (post it right after submitting):
 
   > remove.bg closes on 1 December (its background removal moves to Leonardo.Ai), and I used it all the time, so I
@@ -156,33 +155,33 @@ Answer the question first, say it's yours, one reply per thread, no follow-ups p
    > I built goodbye.bg for this (disclosure: it's mine). Free, no account, no watermark, and the cut-out happens in
    > your browser instead of on a server. Transparent PNG at full resolution. Up to
    > 100 at a time on a computer with 8 GB or more, with a zip. No API.
-   > https://goodbye-bg-git.pages.dev/?ref=reddit
+   > https://goodbye.bg/?ref=reddit
 
 2. **Someone who used the API (HN or Reddit):**
 
    > remove.bg's API page says background removal moves to Leonardo.Ai on 1 Dec, so that's the drop-in path. If you'd
    > rather self-host, rembg (Python, open source) is the usual pick. I made a web version that runs the model in the
    > browser, goodbye.bg; it has no API, but the source shows how to run BiRefNet/ISNet with ONNX Runtime Web.
-   > https://goodbye-bg-git.pages.dev/?ref=hn
+   > https://goodbye.bg/?ref=hn
 
 3. **Privacy-minded thread (Reddit r/privacy, Privacy Guides forum):**
 
    > Mine, so take it with salt: goodbye.bg runs the model in your browser (WebGPU or WebAssembly), and the page's CSP
    > only lets it talk to its own server, so photos aren't sent anywhere to be cut out. It's AGPL, so you can read the
-   > code or host it yourself. https://goodbye-bg-git.pages.dev/?ref=reddit
+   > code or host it yourself. https://goodbye.bg/?ref=reddit
 
 4. **Online sellers, product photos (r/Etsy, r/ecommerce, r/smallbusiness):**
 
    > For product shots, try goodbye.bg (I made it). Drop a folder (up to 100 on a computer with 8 GB or more) and
    > Download all gives you one zip of transparent PNGs at full resolution, cropped to each product. It doesn't add a
    > white background or a shadow. Free, no account. Check the edges on shiny or see-through items before you list them.
-   > https://goodbye-bg-git.pages.dev/?ref=reddit
+   > https://goodbye.bg/?ref=reddit
 
 5. **iPhone users (r/iphone, r/photography, forums):**
 
    > iOS can lift a subject itself: press and hold it in Photos. If you need a batch or a file you can share, I built goodbye.bg: it works in Safari, takes HEIC straight from the camera roll, about
    > 5 seconds a photo, and press-and-hold saves the result to Photos. Disclosure: it's mine.
-   > https://goodbye-bg-git.pages.dev/?ref=forum
+   > https://goodbye.bg/?ref=forum
 
 ## Posting checklist
 
@@ -223,10 +222,3 @@ Today is Sunday 22 November 2026. remove.bg's background removal ends on Tuesday
       `ref.forum`).
 - [ ] Note crashes (the `crashes` query) and fix the top one the same day.
 
-**If goodbye.bg isn't live yet**
-- Post on `https://goodbye-bg-git.pages.dev` rather than miss 1 December. It looks less polished but it works.
-- HN links can't be changed after posting, so if the domain is likely within a day, wait for it for HN. PH lets makers
-  edit the product's links later (check in the PH dashboard before relying on it); Reddit replies can be edited too.
-- When the domain goes live, do the steps in `docs/seo.md` §4: change `SITE` in `scripts/build.mjs` and the `og:url`
-  and `og:image` lines in `src/index.html`, then 301 every pages.dev path to goodbye.bg so old links keep working.
-- Say "goodbye.bg (domain still propagating, here's the working link)" only if someone asks; don't lead with it.

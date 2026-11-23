@@ -27,7 +27,7 @@ const CAP = {
 };
 const waitUntil = (p) => { p.catch(() => {}); }; // like Pages: work that goes on after the response (the 20 s delete after Zazzle's fetch)
 const readBody = (req) => new Promise((ok) => { const d = []; req.on("data", (c) => d.push(c)); req.on("end", () => ok(Buffer.concat(d))); });
-const LIVE = process.env.LIVE || "https://goodbye-bg-git.pages.dev";
+const LIVE = process.env.LIVE || "https://goodbye.bg";
 
 const dist = new URL("../dist/", import.meta.url).pathname;
 const port = Number(process.env.PORT) || 8788;

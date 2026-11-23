@@ -7,7 +7,7 @@ A free background remover that cuts photos out in your browser, on your device.
   <img src="docs/launch/before-after-strip-light.png" alt="A photo before and after goodbye.bg removed its background" width="800">
 </picture>
 
-Live: https://goodbye-bg-git.pages.dev (the page and the model are cached after the first cut-out).
+Live: https://goodbye.bg (the page and the model are cached after the first cut-out).
 Demo photos are CC0 (credits in [`docs/launch/CREDITS.md`](docs/launch/CREDITS.md)). The demo was recorded on an
 M-series Mac with the model already cached.
 
@@ -172,7 +172,7 @@ photos are laid out as four cells), are marked "Ad", are not in Download all and
 - A separate network slot (`src/ad.html`, a sandboxed iframe) is switched off (`ADS = false` in `src/app.js`).
 
 To block the cards: they carry the class `adcard`, and an ad blocker hides them (a filter such as
-`goodbye.bg,goodbye-bg-git.pages.dev##.adcard`). Blocking `/go/` stops the click and show counts. That is your choice and the site does
+`goodbye.bg##.adcard`). Blocking `/go/` stops the click and show counts. That is your choice and the site does
 not work around it. Nothing else on the page depends on the cards.
 
 ## Run it locally

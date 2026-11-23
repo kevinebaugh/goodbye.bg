@@ -403,9 +403,10 @@ a difference.
 ## Open items outside the code
 
 - Zazzle: the commission question (Ambassador agreement §2.1.3, asked of api.help@zazzle.com 2026-11-21) is unanswered.
-- Domain goodbye.bg ordered at Netim (trustee service) on 2026-11-19, waiting on the trustee ID check.
-  Nameservers are set to Cloudflare (`lou.ns.cloudflare.com`, `mira.ns.cloudflare.com`). When it registers, follow
-  `docs/domain-cutover.md` (check nameservers on the zone, add goodbye.bg as a custom domain on `goodbye-bg-git`).
+- Domain: goodbye.bg live since 2026-11-23 (Netim, trustee service; Cloudflare nameservers). Custom domain on
+  `goodbye-bg-git`; zone settings: SSL Full, Always Use HTTPS on, Email Obfuscation off, Browser Cache TTL "respect
+  existing headers" (it forced 4 h on sw.js); pages.dev redirects to it (Bulk Redirect, branch previews excluded).
+  `SITE` in scripts/build.mjs is the one place the origin lives. Steps and rollback: `docs/domain-cutover.md`.
 - Git email: repo uses the GitHub noreply address. The first commit (aa3d4bd) still has the work email;
   fix with `git commit --amend --reset-author --no-edit && git push --force-with-lease` if wanted.
 - License: repo is AGPL-3.0 because the ISNet model is AGPL. BiRefNet (MIT) runs on computer GPUs

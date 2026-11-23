@@ -134,7 +134,7 @@ display went off at 23:43, before the test, so the tab was most likely suspended
     npx wrangler pages deployment list --project-name goodbye-bg-git        # newest Production ID
     npx wrangler pages deployment tail <id> --project-name goodbye-bg-git --format json | grep diag
 
-Open `https://goodbye-bg-git.pages.dev/?debug=1` in Safari and drop 4 photos. Look for, in order: `worker:session`,
+Open `https://goodbye.bg/?debug=1` in Safari and drop 4 photos. Look for, in order: `worker:session`,
 `worker:warm` (ms), `ready` with engine `gpu`, then one `run-done` per photo. `gpu-start-failed` or `gpu-run-failed`
 means it fell back to the CPU. Then also check Activity Monitor: Safari's GPU process memory during the run.
 

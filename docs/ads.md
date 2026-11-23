@@ -14,9 +14,7 @@ is ready for when that happens.
 Ad-management tools such as Dextrum (dextrum.app) don't fit. It's a Google Ads optimizer for advertisers,
 not an ad network, and costs $99/month for 1 to 3 accounts, far more than this budget.
 
-**Wait for the domain.** An ad that lands on `goodbye-bg-git.pages.dev` looks like a scam. The goodbye.bg
-domain is waiting on the Netim trustee check. Ask Netim to speed it up. If it isn't live by 28 November,
-run the campaign on the pages.dev URL anyway rather than miss the shutdown.
+**The domain is live** (goodbye.bg since 2026-11-23), so ads can land on it.
 
 **Google Ads, Search only.** Bid on what remove.bg users will type, not on broad terms where Adobe, Canva
 and ChatGPT outbid us:
@@ -100,7 +98,7 @@ this is a test, not a growth channel.
   `"remove.bg closing"`, `"sites like remove.bg"`, `"remove.bg replacement"`. No broad match, no
   Display or Performance Max (they burn a small budget on junk placements).
 - Negative keywords: `api`, `photoshop`, `download app`, `jobs`.
-- Final URL: `https://goodbye.bg/remove-bg-alternative/?ref=gads` (until the domain is live: `https://goodbye-bg-git.pages.dev/remove-bg-alternative/?ref=gads`).
+- Final URL: `https://goodbye.bg/remove-bg-alternative/?ref=gads`.
 - Skip Microsoft Ads at this budget; add it if Google clicks turn into repeat visits.
 - Start on 28 November, or the day goodbye.bg is live if that comes sooner. Run through December.
 
