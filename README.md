@@ -14,7 +14,6 @@ A free background remover that runs in your browser. Photos are cut out on your 
 - Batches of up to 100 photos (50 on phones), a ZIP or a folder; Download all gives a zip.
 - JPG, PNG, WebP, AVIF, SVG, HEIC, TIFF, camera RAW and animated GIFs.
 - Works offline after your first photo. Six languages.
-- Not there: an API, an edge brush, new backgrounds.
 
 ## How it works
 
