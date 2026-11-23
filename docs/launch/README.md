@@ -9,6 +9,29 @@ them before posting, or leave them out.** Re-shoot anything else if the page loo
 **Link to use:** `https://goodbye.bg` (live since 2026-11-23; pages.dev redirects to it). Keep `?ref=` on the app page (`/`)
 only: the text pages run no script, so `/remove-bg-alternative/?ref=reddit` is never counted.
 
+## 80/20 plan (2026-11-23)
+
+Goal (Kevin, 2026-11-23): **$1,000+ a year.** Today the only money is Zazzle, and whether it pays at all is unknown
+(`docs/zazzle-cap.md`, agreement §2.1.3: maybe no commission on a visitor's own image). So two things matter most:
+getting that answer, and the traffic that the 1 December shutdown brings. Everything else waits.
+
+1. **Zazzle's answer (Kevin, this week).** Follow up on the 2026-11-21 question to api.help@zazzle.com. Also log in
+   to the Ambassador dashboard after the first clicks and see whether any referral or royalty shows up. If the answer
+   is no, the fallback is EthicalAds (needs about 50,000 page views a month; exceptions for fast growth) and a
+   direct sponsor; both are in `docs/ads.md`.
+2. **Friends this week (now to Sunday).** Kevin sends the link with `?ref=friends`; the hourly check watches crashes,
+   failed photos, first-photo time and ad clicks. Fix what they hit.
+3. **Before launch (by Friday 27th).** Redirect pages.dev with a 301 (Kevin's OK). Re-shoot the outdated pictures:
+   a batch on the grid and a short demo, with ads shown (they're the business). Kevin checks the site on his iPhone.
+4. **Launch.** Show HN **Monday 30 November, 8:00 to 9:30 am ET** (Thanksgiving week is quiet). Product Hunt
+   **Tuesday 1 December, 12:01 am PT**, the day remove.bg closes (schedule it by the 27th). Reddit and forum replies
+   from now on, one per "what replaces remove.bg?" thread.
+5. **After (December).** Each week: views by source, photos done, ad clicks per 100 photos, Zazzle orders. That is
+   the first real number for how many visitors $1,000 a year takes. Then decide: more SEO pages, EthicalAds, or a
+   sponsor.
+
+Not now: native-speaker reviews, the bulk-tool PR, paid ads (`docs/ads.md`: only once the site earns).
+
 ## Files
 
 All pictures come from the local build, with the real model, on CC0 photos (sources in `CREDITS.md`). None of
@@ -42,8 +65,9 @@ Honest notes about the captures:
 ## Facts to stay inside (checked against the code on 2026-11-22)
 
 - Free, no account, no watermark. Photos from the device are cut out in the browser: WebGPU on computers that have it
-  (BiRefNet lite, about 300 ms a photo on an M5 Pro), ISNet everywhere else: on the GPU on phones that allow it, on
-  WebAssembly otherwise, which includes every iPhone (about 5 s a photo there). A computer whose GPU can't manage
+  (BiRefNet lite, about 300 ms a photo on an M5 Pro); ISNet on the GPU on phones that allow it; otherwise BiRefNet lite at
+  640 px on WebAssembly, which includes every iPhone (5 to 8 s a photo on Kevin's iPhone; a 👎 there reruns the photo
+  with ISNet). A computer whose GPU can't manage
   BiRefNet (fails, runs out of memory, starts in over 10 s or takes over 2 s for the first photo) steps down to ISNet on
   the GPU (and to the CPU if that fails too), and remembers it. The page's CSP allows network only to its own origin.
 - What leaves the device: the cut-out on a Zazzle product card, only when that card is clicked (deleted once Zazzle
@@ -88,7 +112,7 @@ Honest notes about the captures:
   > Drop one photo or a whole folder (up to 100 at a time on a computer with 8 GB or more). Each comes back as a transparent PNG at its
   > own resolution, cropped to the subject. Download all gives you a zip. It reads HEIC from iPhones, camera RAW and animated GIFs too.
   >
-  > In Chrome on a recent Mac a photo takes well under a second. iPhones run it on the CPU, a few seconds a photo.
+  > In Chrome on a recent Mac a photo takes well under a second. iPhones run it on the CPU, 5 to 8 seconds a photo.
   > The first visit downloads the model (about 120 MB), then the browser keeps it.
   >
   > It's free, with no account and no watermark. It pays for itself with product cards (put your cut-out on a mug)
@@ -106,8 +130,9 @@ Honest notes about the captures:
   > built a replacement where the model runs on your device.
   >
   > How it works: ONNX Runtime Web runs a segmentation model in a module Worker. Computers with WebGPU (shader-f16) get
-  > BiRefNet lite (MIT, fp16), about 300 ms a photo on an M5 Pro. Everything else gets IMG.LY's ISNet: on WebGPU
-  > where that is safe, else WebAssembly with threads, which is every iPhone (about 5 s a photo there). First visit
+  > BiRefNet lite (MIT, fp16), about 300 ms a photo on an M5 Pro. Phones with WebGPU get IMG.LY's ISNet on the GPU.
+  > Everything else, including every iPhone, runs BiRefNet lite at 640 px on WebAssembly with threads, 5 to 8 s a
+  > photo on an iPhone; a 👎 there reruns the photo with ISNet at full size. First visit
   > downloads about 120 MB (model plus ORT's wasm), cached after that. The CSP only allows the page's own origin.
   >
   > Harder than expected:
@@ -136,7 +161,8 @@ Honest notes about the captures:
   > I'd like to hear where it fails on your photos.
 
 Likely questions, short true answers:
-- *Why AGPL?* ISNet's weights are AGPL. BiRefNet is MIT, but phones and the CPU fallback still need ISNet.
+- *Why AGPL?* ISNet's weights are AGPL. BiRefNet is MIT, but the GPU step-down, phones with WebGPU and the 👎 retry on
+  the CPU still use ISNet.
 - *Offline?* Yes, after your first cut-out: the page and the model stay on the device.
 - *Is there an app?* No native app. Chrome shows its install icon in the address bar (there's a manifest); it's the
   same page in its own window.
