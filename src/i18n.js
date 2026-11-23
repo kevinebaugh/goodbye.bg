@@ -50,6 +50,13 @@ export const LANGS = {
       "Diesmal richtig…",
       "Zweiter Anlauf…",
     ],
+    goQuips: [ // the waiting page on the way to Zazzle (functions/go/[id].js)
+      "Dein Foto wird eingepackt…",
+      "Der Lieferwagen wird herbeigewinkt…",
+      "Wir nehmen die schöne Strecke…",
+      "Die Drucker laufen warm…",
+      "Gleich geschafft…",
+    ],
     t: {
       // index.html
       "Remove Image Background Free, Private – goodbye.bg": "Hintergrund entfernen, kostenlos und privat – goodbye.bg",
@@ -195,6 +202,13 @@ export const LANGS = {
       "Ahora sí, en serio…",
       "Segundo intento…",
     ],
+    goQuips: [ // the waiting page on the way to Zazzle (functions/go/[id].js)
+      "Empaquetando tu foto…",
+      "Llamando a la furgoneta…",
+      "Tomando la ruta panorámica…",
+      "Calentando las impresoras…",
+      "Ya casi…",
+    ],
     t: {
       "Remove Image Background Free, Private – goodbye.bg": "Quitar el fondo de una imagen gratis y en privado – goodbye.bg",
       "Say goodbye<br>to the background.": "Dile adiós<br>al fondo.",
@@ -335,6 +349,13 @@ export const LANGS = {
       "On inspecte les bords…",
       "Cette fois, c’est la bonne…",
       "Deuxième essai…",
+    ],
+    goQuips: [ // the waiting page on the way to Zazzle (functions/go/[id].js)
+      "On emballe votre photo…",
+      "On hèle la camionnette…",
+      "On prend la route panoramique…",
+      "On chauffe les imprimantes…",
+      "Presque arrivé…",
     ],
     t: {
       "Remove Image Background Free, Private – goodbye.bg": "Supprimer l’arrière-plan d’une image, gratuit et privé – goodbye.bg",
@@ -477,6 +498,13 @@ export const LANGS = {
       "Segunda tentativa…",
       "Dessa vez, com capricho…",
     ],
+    goQuips: [ // the waiting page on the way to Zazzle (functions/go/[id].js)
+      "Embalando sua foto…",
+      "Chamando a van de entrega…",
+      "Pegando o caminho mais bonito…",
+      "Esquentando as impressoras…",
+      "Quase lá…",
+    ],
     t: {
       "Remove Image Background Free, Private – goodbye.bg": "Remover fundo de imagem grátis e com privacidade – goodbye.bg",
       "Say goodbye<br>to the background.": "Diga tchau<br>para o fundo.",
@@ -617,6 +645,13 @@ export const LANGS = {
       "Kali ini pasti beres…",
       "Percobaan kedua…",
       "Pelan-pelan saja…",
+    ],
+    goQuips: [ // the waiting page on the way to Zazzle (functions/go/[id].js)
+      "Mengemas foto Anda…",
+      "Memanggil mobil kurir…",
+      "Lewat jalan yang indah…",
+      "Memanaskan printer…",
+      "Hampir sampai…",
     ],
     t: {
       "Remove Image Background Free, Private – goodbye.bg": "Hapus latar belakang gambar gratis dan privat – goodbye.bg",

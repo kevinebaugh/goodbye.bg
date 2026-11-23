@@ -313,7 +313,10 @@ and redirects; a POST there counts the card being shown ('adseen').
 - Zazzle cards take the cut-out along (Create-a-Product, Kevin 2026-11-21: the click implies it, no interstitial;
   no footer line (Kevin: the hero says "cut out right on your device" where people decide); the remove.bg page's FAQ
   has the details). The click PUTs the cut-out shown on the card (see-through, at most 2400 px) to
-  `/api/cap/<random key>` (R2 bucket goodbye-bg-cap, binding CAP) and opens `/go/zazzle?...&k=<key>`, which waits up to
+  `/api/cap/<random key>` (R2 bucket goodbye-bg-cap, binding CAP) and opens `/go/zazzle?...&k=<key>`. That tab first
+  shows a tiny waiting page (Kevin, 2026-11-22: no blank tab; "keep the whimsy"): 👋 and five messages looping in CSS
+  ("Packing your photo…", `goQuips` in i18n.js per language, `&lang=`), no script; a refresh after 1 s loads the link
+  with `&w=1`, which waits up to
   10 s for it and redirects to that product's template in Kevin's store goodbyebg. Zazzle copies the image on the
   first fetch; `/cap/<key>.png` deletes ours 20 s later (never fetched: gone after an hour; a lifecycle rule clears
   `cap/` after a day). Upload fails or times out: the usual link, and computers still get the cut-out saved. Clicks

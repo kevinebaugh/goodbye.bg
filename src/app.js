@@ -1941,7 +1941,7 @@ async function capSend(a, it) {
   a.capBusy = true; tick();
   const b = new Uint8Array(16); crypto.getRandomValues(b);
   const key = btoa(String.fromCharCode(...b)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-  const href = `${a.href}&k=${key}`;
+  const href = `${a.href}&k=${key}${LANG !== "en" ? `&lang=${LANG}` : ""}`; // lang: the waiting page in /go speaks it
   // Open Zazzle's tab straight from the tap (pop-up blockers), while the upload runs; /go waits for it.
   const w = window.open(href, "_blank");
   if (w) w.opener = null;

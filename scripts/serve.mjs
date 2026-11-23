@@ -59,7 +59,7 @@ createServer(async (req, res) => {
   if (go) {
     const fn = req.method === "POST" ? goPost : goGet;
     const r = await fn({ params: { id: go[1] }, env: { CAP }, request: new Request(new URL(req.url, `http://localhost:${port}`), { method: req.method, headers: req.headers }) });
-    res.writeHead(r.status, Object.fromEntries(r.headers)).end(); return;
+    res.writeHead(r.status, Object.fromEntries(r.headers)).end(r.body ? await r.text() : undefined); return; // the waiting page has a body
   }
   const capUp = path.match(/^\/api\/cap\/([^/]+)$/);
   if (capUp && req.method === "PUT") {
