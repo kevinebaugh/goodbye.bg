@@ -2,7 +2,7 @@
 
 > Free background remover that runs in the browser. Photos are cut out on the device, not on a server. The result is a see-through PNG of the subject, in high resolution, with no account and no watermark. A replacement for remove.bg, which shuts down on 1 December 2026.
 
-- Open %SITE%/ and add photos with Choose photos, Paste, or a drop. Each photo becomes a card; Download saves the cut-out.
+- Open %SITE%/ and add photos with Choose photos, Paste, or a drop. Each photo becomes a card; Download saves it without the background.
 - Takes JPEG, PNG, WebP, HEIC, TIFF, camera RAW, SVG, animated GIF and ZIP files.
 - The model downloads once (about 120 MB) and runs on the GPU (WebGPU) or the CPU (WebAssembly).
 

@@ -1251,7 +1251,7 @@ function makeCard(it) {
   card.classList.add("queued"); // waits quietly; only the photo being worked on waves and talks
   card.setAttribute("aria-busy", "true");
   const x = document.createElement("button"); x.type = "button"; x.className = "ico x"; x.textContent = "×"; x.setAttribute("aria-label", t("Remove")); x.title = t("Remove");
-  const img = document.createElement("img"); img.alt = t("Cut-out"); img.draggable = true;
+  const img = document.createElement("img"); img.alt = t("Background removed"); img.draggable = true;
   img.addEventListener("touchstart", () => holdFull(it), { passive: true });
   img.addEventListener("contextmenu", () => holdFull(it));
   pic.addEventListener("click", () => { if (adEls.length && it.mask) { tick(); showArt(it); } });
@@ -1883,7 +1883,7 @@ function buildAd(i, artIt = null, swap = false) { // swap: replaces a card in pl
   a.querySelector(".adtag").textContent = t(adLabel); // shown translated; the l= sent to /go stays "ad" or "sponsored"
   // The name starts with the words on screen (voice control); the rest is the description.
   a.setAttribute("aria-label", `${t(adLabel)}: ${t(cta)}`);
-  a.setAttribute("aria-description", `${t(x.line)}${CAP && p.id === "zazzle" ? " " + t("Takes this cut-out to {name}.", { name: p.name }) : ""}`);
+  a.setAttribute("aria-description", `${t(x.line)}${CAP && p.id === "zazzle" ? " " + t("Takes this photo to {name}.", { name: p.name }) : ""}`);
   $("grid").insertBefore(a, gridEnd());
   adWatch.observe(a); // the cut-out beat starts once ads are on screen
   a.tilt = { phase: i * 2.1, mix: 0, x: 0, y: 0, t: 0 }; // each card sways out of step with the others
