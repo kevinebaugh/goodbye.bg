@@ -408,7 +408,7 @@ a difference.
 - Zazzle: the commission question (Ambassador agreement §2.1.3, asked of api.help@zazzle.com 2026-11-21) is unanswered.
 - Domain: goodbye.bg live since 2026-11-23 (Netim, trustee service; Cloudflare nameservers). Custom domain on
   `goodbye-bg-git`; zone settings: SSL Full, Always Use HTTPS on, Email Obfuscation off, Browser Cache TTL "respect
-  existing headers" (it forced 4 h on sw.js), minimum TLS 1.2, HSTS 6 months (no preload); pages.dev redirects to it (Bulk Redirect, branch previews excluded); www 301s to it (placeholder A record + Single Redirect). No mail: null MX, SPF -all, DMARC reject. DNSSEC off.
+  existing headers" (it forced 4 h on sw.js), minimum TLS 1.2, HSTS 6 months (no preload); pages.dev redirects to it (Bulk Redirect, branch previews excluded); www 301s to it (placeholder A record + Single Redirect). No mail: null MX, SPF -all, DMARC reject. DNSSEC: Cloudflare signs (key tag 2371, alg 13, digest 2); live once the DS record is at Netim.
   `SITE` in scripts/build.mjs is the one place the origin lives. Steps and rollback: `docs/domain-cutover.md`.
 - Git email: repo uses the GitHub noreply address. The first commit (aa3d4bd) still has the work email;
   fix with `git commit --amend --reset-author --no-edit && git push --force-with-lease` if wanted.
