@@ -1192,7 +1192,10 @@ async function toBlob(src) {
   if (s.startsWith("blob:")) return { blob: await (await fetch(s)).blob(), name: "image" };
   const url = new URL(s);
   const res = await fetch(`/api/fetch?url=${encodeURIComponent(url.href)}`);
-  if (!res.ok) throw new Error(saidHere((await res.text()).slice(0, 200)) || t("Could not get that link ({status}).", { status: res.status }));
+  // Only our own plain-text messages are shown. Anything else (Cloudflare's HTML error page when the fetch ran too long:
+  // Kevin, 2026-11-24, a bubble full of <!DOCTYPE html>) gets the short message.
+  const plain = /^text\/plain/.test(res.headers.get("Content-Type") || "");
+  if (!res.ok) throw new Error((plain && saidHere((await res.text()).slice(0, 200))) || t("Could not get that link ({status}).", { status: res.status }));
   return { blob: await res.blob(), name: url.pathname };
 }
 

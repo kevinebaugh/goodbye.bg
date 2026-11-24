@@ -7,7 +7,7 @@
 import { crossSite, fail } from "../../lib/request.mjs";
 
 const MAX_BYTES = 30 * 1024 * 1024;
-const TIMEOUT_MS = 15_000;
+const TIMEOUT_MS = 20_000; // for the whole request (a page, then its preview image), so Cloudflare never times out first
 
 export async function onRequestGet({ request }) {
   // Only the app itself may use this. Blocks hotlinking and cross-site abuse.
@@ -18,21 +18,23 @@ export async function onRequestGet({ request }) {
   catch { return fail(400, "That is not a valid link."); }
   if (url.protocol !== "https:" && url.protocol !== "http:") return fail(400, "Only http and https links work.");
 
-  let res = await get(url);
-  if (res instanceof Response && !res.ok) return fail(502, `The other site answered ${res.status}.`);
-  if (!(res instanceof Response)) return res;
+  const signal = AbortSignal.timeout(TIMEOUT_MS);
+  let res = await get(url, signal);
+  if (res.ours) return res.ours; // our own message (the site never answered), not the other site's status
+  if (!res.ok) return fail(502, `The other site answered ${res.status}.`);
 
   let type = (res.headers.get("Content-Type") || "").split(";")[0].trim().toLowerCase();
 
   // A web page instead of an image: follow its preview image (og:image), one hop only.
   if (type === "text/html") {
-    const html = (await res.text()).slice(0, 512 * 1024);
+    const html = await readSome(res, 512 * 1024, signal);
+    if (html === null) return fail(504, "Could not reach that site.");
     const found = previewImage(html);
     if (!found) return fail(415, "That page has no image we can find. Try a direct image link.");
     let next;
     try { next = new URL(found, res.url || url); } catch { return fail(415, "That page’s image link is broken."); }
-    res = await get(next);
-    if (!(res instanceof Response)) return res;
+    res = await get(next, signal);
+    if (res.ours) return res.ours;
     if (!res.ok) return fail(502, `The other site answered ${res.status}.`);
     type = (res.headers.get("Content-Type") || "").split(";")[0].trim().toLowerCase();
   }
@@ -63,16 +65,33 @@ export async function onRequestGet({ request }) {
   });
 }
 
-async function get(url) {
+async function get(url, signal) {
   try {
     return await fetch(url, {
       headers: { Accept: "image/avif,image/webp,image/*,text/html;q=0.5", "User-Agent": "Mozilla/5.0 (compatible; goodbye.bg image fetch)" },
       redirect: "follow",
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal,
     });
   } catch {
-    return fail(504, "Could not reach that site.");
+    return { ours: fail(504, "Could not reach that site.") };
   }
+}
+
+// The start of a page, at most max bytes, or null if the deadline passes first (a slow page must not outlast it).
+async function readSome(res, max, signal) {
+  const reader = res.body.getReader(), parts = [];
+  let size = 0;
+  const late = new Promise((ok) => (signal.aborted ? ok(null) : signal.addEventListener("abort", () => ok(null), { once: true })));
+  try {
+    while (size < max) {
+      const r = await Promise.race([reader.read(), late]);
+      if (r === null) return null;
+      if (r.done) break;
+      parts.push(r.value); size += r.value.byteLength;
+    }
+  } catch { return null; }
+  finally { reader.cancel().catch(() => {}); }
+  return new TextDecoder().decode(new Uint8Array(await new Blob(parts).arrayBuffer())).slice(0, max);
 }
 
 function previewImage(html) {
