@@ -1491,7 +1491,15 @@ async function run() {
         console.error(e); report("run-failed", e, it); stat("failed", it); fail(it, t("Could not process this image.")); continue;
       }
       finally { inPhoto = false; }
-      if (!it.mask.box) { it.mask = null; stat("nosubject", it); fail(it, t("No clear subject.")); continue; }
+      // BiRefNet 640 found nothing: ISNet, which keeps what 640 loses, gets one try on the whole photo before "No clear
+      // subject" (Kevin, 2026-11-23). The engine swaps for this photo, as a 👎 does (retryModel), and back for the next.
+      if (!it.mask.box && retryModel({ engine: lastEngine, anim: it.anim }) && items.includes(it)) {
+        dbg("nosubject-isnet"); inPhoto = true;
+        try { const m = await segment(it.bmp, true, "isnet"); if (m.box) it.mask = m; }
+        catch (e) { console.warn("ISNet retry failed", e); }
+        finally { inPhoto = false; }
+      }
+      if (!it.mask.box) { it.ms = lastMs; it.engine = lastEngine; it.mask = null; stat("nosubject", it); fail(it, t("No clear subject.")); continue; }
       it.ms = lastMs; it.engine = lastEngine;
       // Removed meanwhile: Undo finishes it (undoRemove). A GIF cut short starts over (its frames were let go).
       if (!items.includes(it)) { it.unfinished = true; if (it.anim) it.mask = null; continue; }

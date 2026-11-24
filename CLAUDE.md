@@ -81,7 +81,8 @@ scales the mask back up).
   `scripts/birefnet640.sh`): the CPU engine since 2026-11-22 (`docs/phone-birefnet640.md`). Headless Chrome with the
   iPhone UA: 2.9 to 3.7 s inferred, peak about 50 MB above ISNet (under 2.0 GB). Loses thin legs, cables and frames
   that ISNet keeps (`docs/quality-products.md`), so a 👎 on its result runs **ISNet 1024 on the whole photo** (one
-  engine at a time: the 640 worker goes, 3 s gap on iPhones; `retryModel`). `?model=isnet` runs ISNet on the CPU as
+  engine at a time: the 640 worker goes, 3 s gap on iPhones; `retryModel`). A 640 result with no subject at all gets the same ISNet
+  run before "No clear subject" (Kevin, 2026-11-23; debug step `nosubject-isnet`). `?model=isnet` runs ISNet on the CPU as
   before. A 👎 during a batch cuts in line (Kevin, 2026-11-22): the photo on the engine finishes, the batch waits
   (`cutIn`, `inPhoto`), about 15 s more on an iPhone. Kevin's iPhone (2026-11-22, Safari in front): 5.3 to 8.3 s a
   photo, 24 MP photos, 8 + 2 in a tab and a 👎 right after a batch, no crash (before `refineEdge` ran on 640: not
