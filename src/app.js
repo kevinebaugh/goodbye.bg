@@ -2263,9 +2263,13 @@ function drawMug(c, src) {
 
 function sync() {
   const done = items.filter((i) => i.mask).length;
-  // Shown once every photo is done (failed ones don't count); its row is reserved from the second photo, so nothing moves.
-  $("all").style.visibility = done < 2 || items.some((i) => !i.mask && !i.failed) ? "hidden" : "";
-  if (!$("all").hasAttribute("aria-busy")) $("all").textContent = t("Download all ({n})", { n: done }); // not over "Preparing 3 of 8…"
+  // Its row is held from the second photo, so nothing moves. While photos run it is a progress bar ("3 of 8 done"),
+  // then the button, once every photo is done (failed ones don't count) (Kevin, 2026-11-25).
+  const all = $("all"), n = items.filter((i) => !i.failed).length, running = done < n;
+  all.style.visibility = n < 2 && !running ? "hidden" : "";
+  all.classList.toggle("progress", running); all.disabled = running;
+  all.style.setProperty("--pct", `${n ? (100 * done) / n : 0}%`);
+  if (!all.hasAttribute("aria-busy")) all.textContent = running ? t("{i} of {n} done", { i: done, n }) : t("Download all ({n})", { n: done }); // not over "Preparing 3 of 8…"
   $("tools").hidden = items.length < 2; // reserve the row early so the cards don't jump
   if (!items.length) document.body.classList.remove("has-work");
   try { localStorage.setItem("gb-kept", String(items.length)); } catch {} // early.js: start in the photos layout next visit
