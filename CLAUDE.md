@@ -240,6 +240,8 @@ without a visit; private windows refuse Blobs, so nothing is kept there.
   arrive. Trouble with one photo stays on its card. No bottom toast; zip progress is on Download all. Undo is the only
   thing at the bottom.
 - Download and Download all shimmer while a big PNG or the zip is built; repeat taps don't start it again.
+- The empty page grows with big windows (Kevin, 2026-11-24: "more space between elements"): headline up to 116 px, buttons
+  up to 60 px, gaps by window height (style.css, after "Empty page"); phones keep the base sizes.
 - Short screens (height 520 px or less): the wordmark sits left of the buttons, the privacy note is hidden, spacing
   tightens; the empty page shrinks the headline so the footer fits.
   Also 660 px wide or more (a phone on its side): Download all joins Choose photos / Paste up top and the footer is hidden

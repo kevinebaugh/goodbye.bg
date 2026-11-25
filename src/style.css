@@ -238,7 +238,15 @@ body.hot .c { animation: squeeze .8s ease-in-out infinite alternate; }
    hugging the bottom of a tall window. Once photos arrive, the grid takes the space. */
 body:not(.has-work) main { flex: none; margin-top: auto; }
 body:not(.has-work) .hero { margin-top: 0; }
-body:not(.has-work) .foot { margin: 56px auto auto; padding-bottom: max(24px, 8vh); }
+body:not(.has-work) .foot { margin: clamp(56px, 11vh, 128px) auto auto; padding-bottom: max(24px, 8vh); }
+/* Empty page on a big window: everything grows with the window (Kevin, 2026-11-24: "could be bigger, more space
+   between elements"), by width and height so it never crowds a short one. Phones get the base sizes. */
+body:not(.has-work) .hero { max-width: 980px; gap: clamp(18px, 3.2vh, 34px); }
+body:not(.has-work) .hero h1 { font-size: clamp(38px, min(8.4vw, 13.5vh), 116px); }
+body:not(.has-work) .sub { font-size: clamp(18px, min(1.75vw, 2.7vh), 24px); }
+body:not(.has-work) .hero .row { gap: clamp(10px, 1.6vh, 16px); margin-top: clamp(0px, 1.4vh, 14px); }
+body:not(.has-work) .hero .big { --h: clamp(48px, min(8vh, 6vw), 60px); --px: clamp(28px, 3vw, 38px); --fs: clamp(18px, min(2.7vh, 2vw), 21px); }
+body:not(.has-work) .foot { max-width: 640px; font-size: clamp(12px, 1.9vh, 14px); }
 
 /* The count's line is always there (empty until shown), so it never pushes the cards; digits are equal width. */
 .countline { min-height: 1.45em; }
