@@ -1453,7 +1453,7 @@ function fail(it, msg) {
   forget(it);
   it.el.card.classList.remove("queued");
   clearInterval(it.quip);
-  it.failed = true;
+  it.failed = true; sync(); // the last photo left: Download all can show
   it.el.card.classList.remove("working");
   it.el.card.classList.add("failed"); it.el.card.removeAttribute("aria-busy");
   it.el.busy.textContent = msg;
@@ -2263,7 +2263,8 @@ function drawMug(c, src) {
 
 function sync() {
   const done = items.filter((i) => i.mask).length;
-  $("all").style.visibility = done < 2 ? "hidden" : "";
+  // Shown once every photo is done (failed ones don't count); its row is reserved from the second photo, so nothing moves.
+  $("all").style.visibility = done < 2 || items.some((i) => !i.mask && !i.failed) ? "hidden" : "";
   if (!$("all").hasAttribute("aria-busy")) $("all").textContent = t("Download all ({n})", { n: done }); // not over "Preparing 3 of 8…"
   $("tools").hidden = items.length < 2; // reserve the row early so the cards don't jump
   if (!items.length) document.body.classList.remove("has-work");
