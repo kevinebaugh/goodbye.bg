@@ -74,7 +74,7 @@ Status 2026-11-23:
   GitHub description, homepage and topics; `llms.txt` has a section for assistants (the `?url=` link); AI crawlers
   are all allowed (Cloudflare's AI-bot blocking is off).
 - **List pull requests opened 2026-11-23** (Kevin's GitHub, disclosed as his): diegoleme/awesome-open-source-alternatives#103,
-  atakanaltok/awesome-useful-websites#405, mikbry/awesome-webgpu#145, hemanth/awesome-pwa#655,
+  atakanaltok/awesome-useful-websites#405, mikbry/awesome-webgpu#145, hemanth/awesome-pwa#655 (**added 2026-11-26**: the maintainer committed the entry himself after a merge conflict and closed the PR),
   mcuking/Awesome-WebAssembly-Applications#102 (**merged 2026-11-24**).
 - **After launch (they ask for user numbers):** ikaijua/Awesome-AITools (EN and CN READMEs, a row next to remove.bg).
 - **Skipped:** awesome-selfhosted (needs a first release over 4 months old), lissy93/pluja awesome-privacy (their image
